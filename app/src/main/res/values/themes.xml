@@ -1,0 +1,8 @@
+<resources>
+    <style name="Theme.HeadunitMusic" parent="android:Theme.Material.NoActionBar">
+        <!-- Matches the left edge of the gradient so there's no white flash on launch -->
+        <item name="android:windowBackground">@color/brand_red_dark</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>
