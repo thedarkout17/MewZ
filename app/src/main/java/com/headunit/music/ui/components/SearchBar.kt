@@ -1,5 +1,10 @@
 package com.headunit.music.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -26,7 +31,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -38,7 +46,7 @@ import com.headunit.music.ui.theme.Brand
 import com.headunit.music.ui.theme.LocalDesignScale
 
 /**
- * Frosted pill search bar from the mockup: magnifier, text field, mic.
+ * Frosted pill search bar from the mockup: magnifier, text field, clear, mic.
  * All sizes are design pixels on the 2000x1200 canvas.
  */
 @Composable
@@ -48,9 +56,10 @@ fun SearchBar(
     onSearch: (String) -> Unit,
     onVoiceSearch: () -> Unit,
     modifier: Modifier = Modifier,
+    focusRequester: FocusRequester = remember { FocusRequester() },
+    onFocusChange: (Boolean) -> Unit = {},
 ) {
     val focusManager = LocalFocusManager.current
-    val focusRequester = remember { FocusRequester() }
 
     with(LocalDesignScale.current) {
         val textStyle = TextStyle(
@@ -97,7 +106,8 @@ fun SearchBar(
                 }),
                 modifier = Modifier
                     .weight(1f)
-                    .focusRequester(focusRequester),
+                    .focusRequester(focusRequester)
+                    .onFocusChanged { onFocusChange(it.isFocused) },
                 decorationBox = { inner ->
                     Box(contentAlignment = Alignment.CenterStart) {
                         if (query.isEmpty()) {
@@ -108,25 +118,62 @@ fun SearchBar(
                 },
             )
 
-            // Mic: 150px circular touch target around a ~96px glyph.
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(150.u)
-                    .clip(CircleShape)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = ripple(color = Brand.Red),
-                        onClick = onVoiceSearch,
-                    ),
+            // Clear: only while there's text.
+            AnimatedVisibility(
+                visible = query.isNotEmpty(),
+                enter = fadeIn() + scaleIn(initialScale = 0.6f),
+                exit = fadeOut() + scaleOut(targetScale = 0.6f),
             ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_mic),
-                    contentDescription = stringResource(R.string.voice_search),
+                RoundIconButton(
+                    painter = painterResource(R.drawable.ic_close),
+                    contentDescription = stringResource(R.string.clear_search),
                     tint = Brand.RedMuted,
-                    modifier = Modifier.size(96.u),
+                    glyph = 80,
+                    onClick = {
+                        onQueryChange("")
+                        focusRequester.requestFocus()
+                    },
                 )
             }
+
+            RoundIconButton(
+                painter = painterResource(R.drawable.ic_mic),
+                contentDescription = stringResource(R.string.voice_search),
+                tint = Brand.RedMuted,
+                glyph = 96,
+                onClick = onVoiceSearch,
+            )
+        }
+    }
+}
+
+/** 150px circular touch target around a smaller glyph. */
+@Composable
+private fun RoundIconButton(
+    painter: Painter,
+    contentDescription: String,
+    tint: Color,
+    glyph: Int,
+    onClick: () -> Unit,
+) {
+    with(LocalDesignScale.current) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(150.u)
+                .clip(CircleShape)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = ripple(color = Brand.Red),
+                    onClick = onClick,
+                ),
+        ) {
+            Icon(
+                painter = painter,
+                contentDescription = contentDescription,
+                tint = tint,
+                modifier = Modifier.size(glyph.u),
+            )
         }
     }
 }
