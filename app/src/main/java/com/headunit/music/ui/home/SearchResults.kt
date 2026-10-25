@@ -99,6 +99,8 @@ private fun TrackList(tracks: List<Track>, onPlay: (Track) -> Unit) {
     with(LocalDesignScale.current) {
         val fade = 48.u
         LazyColumn(
+            // Rows are 220px plus 20px gaps: four fit, the fifth peeks in to hint at scrolling.
+            verticalArrangement = Arrangement.spacedBy(20.u),
             contentPadding = PaddingValues(top = 12.u, bottom = 48.u),
             modifier = Modifier
                 .fillMaxSize()
@@ -139,7 +141,7 @@ private fun TrackRow(track: Track, index: Int, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(196.u)
+                .height(220.u)
                 .graphicsLayer {
                     alpha = anim.value
                     translationY = (1f - anim.value) * slide.toPx()
@@ -158,21 +160,21 @@ private fun TrackRow(track: Track, index: Int, onClick: () -> Unit) {
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .width(292.u)
-                    .height(164.u)
+                    .width(348.u)
+                    .height(196.u)
                     .clip(RoundedCornerShape(22.u))
                     .background(Color.White.copy(alpha = 0.10f))
                     .border(1.5f.u, Color.White.copy(alpha = 0.18f), RoundedCornerShape(22.u)),
             )
-            Spacer(Modifier.width(40.u))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.u)) {
+            Spacer(Modifier.width(48.u))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.u)) {
                 Text(
                     text = track.title,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = TextStyle(
                         color = Color.White,
-                        fontSize = 58.usp,
+                        fontSize = 66.usp,
                         fontWeight = FontWeight.Medium,
                         shadow = TextShadow,
                     ),
@@ -181,7 +183,7 @@ private fun TrackRow(track: Track, index: Int, onClick: () -> Unit) {
                     text = listOfNotNull(track.artist, track.durationText).joinToString("  ·  "),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = TextStyle(color = Secondary, fontSize = 42.usp, shadow = TextShadow),
+                    style = TextStyle(color = Secondary, fontSize = 46.usp, shadow = TextShadow),
                 )
             }
         }
@@ -198,28 +200,28 @@ private fun LoadingRows() {
         label = "pulse",
     )
     with(LocalDesignScale.current) {
-        Column(Modifier.fillMaxSize().padding(top = 12.u)) {
+        Column(Modifier.fillMaxSize().padding(top = 12.u), verticalArrangement = Arrangement.spacedBy(20.u)) {
             repeat(5) { i ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(196.u)
+                        .height(220.u)
                         .padding(horizontal = 16.u)
                         .graphicsLayer { alpha = 1f - i * 0.15f },
                 ) {
                     Box(
-                        Modifier.width(292.u).height(164.u)
+                        Modifier.width(348.u).height(196.u)
                             .background(Color.White.copy(alpha = pulse), RoundedCornerShape(22.u))
                     )
-                    Spacer(Modifier.width(40.u))
-                    Column(verticalArrangement = Arrangement.spacedBy(22.u)) {
+                    Spacer(Modifier.width(48.u))
+                    Column(verticalArrangement = Arrangement.spacedBy(26.u)) {
                         Box(
-                            Modifier.width((640 - i * 60).u).height(44.u)
+                            Modifier.width((720 - i * 60).u).height(50.u)
                                 .background(Color.White.copy(alpha = pulse), RoundedCornerShape(22.u))
                         )
                         Box(
-                            Modifier.width(360.u).height(32.u)
+                            Modifier.width(400.u).height(36.u)
                                 .background(Color.White.copy(alpha = pulse * 0.7f), RoundedCornerShape(16.u))
                         )
                     }

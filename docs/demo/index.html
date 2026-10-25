@@ -139,9 +139,10 @@ body {
   mask-image: linear-gradient(transparent, #000 calc(48 * var(--u)));
 }
 .results::-webkit-scrollbar { display: none; }
+.results > * + * { margin-top: calc(20 * var(--u)); }   /* 220 rows + 20 gaps: four fit */
 .track {
-  display: flex; align-items: center; gap: calc(40 * var(--u)); width: 100%;
-  height: calc(196 * var(--u)); padding: 0 calc(16 * var(--u)); box-sizing: border-box;
+  display: flex; align-items: center; gap: calc(48 * var(--u)); width: 100%;
+  height: calc(220 * var(--u)); padding: 0 calc(16 * var(--u)); box-sizing: border-box;
   border: 0; border-radius: calc(28 * var(--u)); background: transparent; cursor: pointer;
   text-align: left; color: #fff; font-family: var(--font-app);
   animation: rise .32s var(--ease) both; animation-delay: calc(var(--i) * 50ms);
@@ -149,23 +150,23 @@ body {
 .track:hover, .track:focus-visible { background: rgba(255,255,255,.10); outline: 0; }
 .track:active { background: rgba(255,255,255,.16); }
 .thumb {
-  flex: none; width: calc(292 * var(--u)); height: calc(164 * var(--u));
+  flex: none; width: calc(348 * var(--u)); height: calc(196 * var(--u));
   border-radius: calc(22 * var(--u)); border: calc(1.5 * var(--u)) solid rgba(255,255,255,.18);
   box-sizing: border-box; position: relative; overflow: hidden;
 }
 .thumb span {   /* sample-art monogram */
   position: absolute; inset: 0; display: grid; place-items: center;
-  font: 700 calc(72 * var(--u)) var(--font-app); color: rgba(255,255,255,.85);
+  font: 700 calc(84 * var(--u)) var(--font-app); color: rgba(255,255,255,.85);
 }
-.meta { min-width: 0; display: grid; gap: calc(10 * var(--u)); }
-.meta .t { font-size: calc(58 * var(--u)); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 8px rgba(0,0,0,.33); }
-.meta .a { font-size: calc(42 * var(--u)); color: rgba(255,255,255,.72); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 8px rgba(0,0,0,.33); }
-.skeleton { display: flex; align-items: center; gap: calc(40 * var(--u)); height: calc(196 * var(--u)); padding: 0 calc(16 * var(--u)); }
+.meta { min-width: 0; display: grid; gap: calc(14 * var(--u)); }
+.meta .t { font-size: calc(66 * var(--u)); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 8px rgba(0,0,0,.33); }
+.meta .a { font-size: calc(46 * var(--u)); color: rgba(255,255,255,.72); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 8px rgba(0,0,0,.33); }
+.skeleton { display: flex; align-items: center; gap: calc(48 * var(--u)); height: calc(220 * var(--u)); padding: 0 calc(16 * var(--u)); }
 .skeleton i { display: block; background: rgba(255,255,255,.12); animation: pulse2 1.4s ease-in-out infinite alternate; }
-.skeleton .sk-thumb { width: calc(292 * var(--u)); height: calc(164 * var(--u)); border-radius: calc(22 * var(--u)); flex: none; }
-.skeleton .sk-lines { display: grid; gap: calc(22 * var(--u)); }
-.skeleton .sk-1 { height: calc(44 * var(--u)); border-radius: calc(22 * var(--u)); }
-.skeleton .sk-2 { width: calc(360 * var(--u)); height: calc(32 * var(--u)); border-radius: calc(16 * var(--u)); opacity: .7; }
+.skeleton .sk-thumb { width: calc(348 * var(--u)); height: calc(196 * var(--u)); border-radius: calc(22 * var(--u)); flex: none; }
+.skeleton .sk-lines { display: grid; gap: calc(26 * var(--u)); }
+.skeleton .sk-1 { height: calc(50 * var(--u)); border-radius: calc(22 * var(--u)); }
+.skeleton .sk-2 { width: calc(400 * var(--u)); height: calc(36 * var(--u)); border-radius: calc(16 * var(--u)); opacity: .7; }
 @keyframes pulse2 { from { background: rgba(255,255,255,.08); } to { background: rgba(255,255,255,.18); } }
 .msg { display: grid; justify-items: center; gap: calc(24 * var(--u)); padding: calc(200 * var(--u)) calc(120 * var(--u)) 0; text-align: center; }
 .msg .t { font: 500 calc(64 * var(--u)) / 1.2 var(--font-app); color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,.33); }
@@ -367,7 +368,7 @@ body {
       <span class="chip">Canvas <b>2000×1200</b></span>
       <span class="chip">Scale <b id="scale">–</b></span>
       <span class="chip">Back <b>Esc</b></span>
-      <span class="chip">Build <b>home v0.9</b></span>
+      <span class="chip">Build <b>home v0.10</b></span>
       <label class="chip" for="mode">Results
         <select class="sel" id="mode">
           <option value="ok">Sample songs</option>
@@ -556,7 +557,7 @@ function renderResults() {
   if (results.kind === 'loading') {
     for (let i = 0; i < 5; i++) {
       const r = document.createElement('div'); r.className = 'skeleton'; r.style.opacity = 1 - i * .15;
-      r.innerHTML = `<i class="sk-thumb"></i><div class="sk-lines"><i class="sk-1" style="width:calc(${640 - i * 60} * var(--u))"></i><i class="sk-2"></i></div>`;
+      r.innerHTML = `<i class="sk-thumb"></i><div class="sk-lines"><i class="sk-1" style="width:calc(${720 - i * 60} * var(--u))"></i><i class="sk-2"></i></div>`;
       resultsEl.append(r);
     }
   } else if (results.kind === 'failed') {
