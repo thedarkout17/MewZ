@@ -37,7 +37,7 @@ class LocalSuggestionProvider(
 
         val DEFAULT_CATALOGUE = listOf(
             "Taylor Swift", "Taylor Swift Cruel Summer", "Taylor Swift Anti-Hero",
-            "The Weeknd", "The Weeknd Blinding Lights", "The Weeknd Save Your Tears",
+            "The Weeknd", "The Weeknd Blinding Lights", "The Weeknd Save Your Tears", "The Weeknd Starboy",
             "Drake", "Drake One Dance", "Drake God's Plan",
             "Billie Eilish", "Billie Eilish Birds of a Feather", "Billie Eilish Lovely",
             "Sabrina Carpenter Espresso", "Sabrina Carpenter Please Please Please",
