@@ -72,7 +72,7 @@ class MainActivity : ComponentActivity() {
                                 voiceLauncher.launch(intent)
                             } catch (e: ActivityNotFoundException) {
                                 Toast.makeText(
-                                    this, "No voice recognizer on this headunit", Toast.LENGTH_SHORT
+                                    this@MainActivity, "No voice recognizer on this headunit", Toast.LENGTH_SHORT
                                 ).show()
                             }
                         },
