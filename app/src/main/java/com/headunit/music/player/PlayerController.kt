@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -134,10 +135,25 @@ class PlayerController(context: Context) {
         }
     }
 
+    /**
+     * Play/pause. The screen flips straight away instead of waiting for YouTube's
+     * player to report back (that round trip through the WebView takes a moment,
+     * which made the button feel laggy).
+     */
     fun togglePlay() {
         if (current == null) return
-        js(if (isPlaying) "pause()" else "play()")
+        val play = !isPlaying
+        isPlaying = play
+        if (!play) isBuffering = false
+        webView.keepScreenOn = play
+        requestedPlaying = play
+        requestedAt = SystemClock.uptimeMillis()
+        js(if (play) "play()" else "pause()")
     }
+
+    /** What the user last tapped (play = true), until YouTube's state catches up. */
+    private var requestedPlaying: Boolean? = null
+    private var requestedAt = 0L
 
     fun next() {
         when {
@@ -163,6 +179,7 @@ class PlayerController(context: Context) {
 
     private fun playAt(i: Int) {
         val track = queue.getOrNull(i) ?: return
+        requestedPlaying = null
         skipOnError?.let { main.removeCallbacks(it) }
         index = i
         error = null
@@ -201,6 +218,23 @@ class PlayerController(context: Context) {
 
         @JavascriptInterface
         fun onState(state: Int) = main.post {
+            // Right after a play/pause tap, YouTube may still send the state from
+            // before the tap. Ignore those so the button doesn't flicker back,
+            // until YouTube agrees or 2 seconds pass.
+            requestedPlaying?.let { wanted ->
+                val agrees = if (wanted) state == STATE_PLAYING || state == STATE_BUFFERING else state == STATE_PAUSED
+                val stale = SystemClock.uptimeMillis() - requestedAt > REQUEST_GRACE_MS
+                if (agrees || stale || state == STATE_ENDED) {
+                    requestedPlaying = null
+                } else {
+                    return@post
+                }
+                // Playing was asked for and it's buffering: keep showing "playing".
+                if (wanted && state == STATE_BUFFERING) {
+                    isBuffering = true
+                    return@post
+                }
+            }
             isPlaying = state == STATE_PLAYING
             isBuffering = state == STATE_BUFFERING || state == STATE_UNSTARTED
             webView.keepScreenOn = isPlaying
@@ -242,6 +276,8 @@ class PlayerController(context: Context) {
         private const val STATE_UNSTARTED = -1
         private const val STATE_ENDED = 0
         private const val STATE_PLAYING = 1
+        private const val STATE_PAUSED = 2
+        private const val REQUEST_GRACE_MS = 2000L
         private const val STATE_BUFFERING = 3
 
         private fun playerHtml(firstVideoId: String): String {
