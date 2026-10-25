@@ -75,8 +75,8 @@ private const val MAX_RECENT_SHOWN = 30
 fun HomeScreen(
     youtube: YouTubeSearch,
     history: SearchHistory,
-    /** A song was tapped: the whole result list and the tapped position. */
-    onPlay: (tracks: List<Track>, index: Int) -> Unit,
+    /** A song was tapped: the whole result list, the tapped position, and the search text. */
+    onPlay: (tracks: List<Track>, index: Int, query: String) -> Unit,
     onVoiceSearch: () -> Unit,
     voiceResult: String? = null,
     onVoiceResultConsumed: () -> Unit = {},
@@ -263,7 +263,7 @@ fun HomeScreen(
                         state = results,
                         onPlay = { track ->
                             (results as? ResultsState.Done)?.let { done ->
-                                onPlay(done.tracks, done.tracks.indexOf(track))
+                                onPlay(done.tracks, done.tracks.indexOf(track), done.query)
                             }
                         },
                         onRetry = { attempt++ },
@@ -346,7 +346,7 @@ private fun HomeScreenPreview() {
         HomeScreen(
             youtube = YouTubeSearch(apiKey = ""),
             history = remember { SearchHistory(context) },
-            onPlay = { _, _ -> },
+            onPlay = { _, _, _ -> },
             onVoiceSearch = {},
         )
     }

@@ -13,5 +13,12 @@
     <string name="pause">Pause</string>
     <string name="next_song">Next song</string>
     <string name="previous_song">Previous song</string>
+    <string name="shuffle">Shuffle</string>
+    <string name="repeat_off">Loop off</string>
+    <string name="repeat_all">Loop queue</string>
+    <string name="repeat_one">Loop this song</string>
+    <string name="add_to_library">Add to library</string>
+    <string name="show_video">Show video</string>
+    <string name="show_artwork">Show artwork</string>
     <string name="voice_prompt">Say a song, artist or album</string>
 </resources>

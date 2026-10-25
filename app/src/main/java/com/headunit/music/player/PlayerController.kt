@@ -34,10 +34,25 @@ class PlayerController(context: Context) {
         private set
     var index by mutableIntStateOf(-1)
         private set
+    /** Where the queue came from, e.g. the search text. Shown as "“starboy” — 3 of 20". */
+    var queueName by mutableStateOf<String?>(null)
+        private set
     val current: Track? by derivedStateOf { queue.getOrNull(index) }
-    val upNext: Track? by derivedStateOf { queue.getOrNull(index + 1) }
     val hasPrevious: Boolean by derivedStateOf { index > 0 }
-    val hasNext: Boolean by derivedStateOf { index in 0 until queue.size - 1 }
+    val hasNext: Boolean by derivedStateOf {
+        index in 0 until queue.size - 1 || (repeat == RepeatMode.All && queue.isNotEmpty())
+    }
+
+    /** The queue in its original order, so turning shuffle off puts it back. */
+    private var originalOrder: List<Track> = emptyList()
+
+    var shuffle by mutableStateOf(false)
+        private set
+    var repeat by mutableStateOf(RepeatMode.Off)
+        private set
+
+    /** Now Playing shows the artwork (false) or the live YouTube video (true). */
+    var showVideo by mutableStateOf(false)
 
     // ---- Playback (fed by the player's JavaScript) ----
     var isPlaying by mutableStateOf(false)
@@ -77,11 +92,43 @@ class PlayerController(context: Context) {
     // ---- Controls ----
 
     /** Plays [tracks] starting at [startIndex]; the rest become the queue. */
-    fun playQueue(tracks: List<Track>, startIndex: Int) {
+    fun playQueue(tracks: List<Track>, startIndex: Int, name: String? = null) {
         if (startIndex !in tracks.indices) return
-        queue = tracks
-        playAt(startIndex)
+        originalOrder = tracks
+        queueName = name
+        if (shuffle) {
+            // Keep the tapped song first, shuffle the rest after it.
+            val first = tracks[startIndex]
+            queue = listOf(first) + (tracks - first).shuffled()
+            playAt(0)
+        } else {
+            queue = tracks
+            playAt(startIndex)
+        }
         expanded = true
+    }
+
+    /** Shuffle the songs after the current one; turning it off restores the original order. */
+    fun toggleShuffle() {
+        val now = current
+        shuffle = !shuffle
+        if (now == null) return
+        if (shuffle) {
+            queue = listOf(now) + (originalOrder - now).shuffled()
+            index = 0
+        } else {
+            queue = originalOrder
+            index = originalOrder.indexOf(now).coerceAtLeast(0)
+        }
+    }
+
+    /** Off → loop the whole queue → loop this song → off. */
+    fun cycleRepeat() {
+        repeat = when (repeat) {
+            RepeatMode.Off -> RepeatMode.All
+            RepeatMode.All -> RepeatMode.One
+            RepeatMode.One -> RepeatMode.Off
+        }
     }
 
     fun togglePlay() {
@@ -90,7 +137,10 @@ class PlayerController(context: Context) {
     }
 
     fun next() {
-        if (hasNext) playAt(index + 1)
+        when {
+            index < queue.size - 1 -> playAt(index + 1)
+            repeat == RepeatMode.All && queue.isNotEmpty() -> playAt(0) // wrap around
+        }
     }
 
     /** Like most players: restarts the song if you're past 3 seconds, else goes back one. */
@@ -152,7 +202,11 @@ class PlayerController(context: Context) {
             isBuffering = state == STATE_BUFFERING || state == STATE_UNSTARTED
             webView.keepScreenOn = isPlaying
             if (state == STATE_ENDED) {
-                if (hasNext) playAt(index + 1) else isBuffering = false
+                when {
+                    repeat == RepeatMode.One -> { js("seek(0)"); js("play()") }
+                    hasNext -> next()
+                    else -> isBuffering = false
+                }
             }
         }
 
@@ -248,3 +302,6 @@ enum class PlayerError(val message: String, val skippable: Boolean) {
         }
     }
 }
+
+/** Loop setting: off, the whole queue, or the current song. */
+enum class RepeatMode { Off, All, One }

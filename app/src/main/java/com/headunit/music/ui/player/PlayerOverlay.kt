@@ -2,11 +2,11 @@ package com.headunit.music.ui.player
 
 import android.os.Build
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,7 +15,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraintsScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -45,11 +44,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -58,8 +59,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.headunit.music.R
+import com.headunit.music.data.Track
 import com.headunit.music.player.PlayerController
+import com.headunit.music.player.RepeatMode
 import com.headunit.music.ui.theme.Brand
 import com.headunit.music.ui.theme.DesignCanvas
 import com.headunit.music.ui.theme.LocalDesignScale
@@ -67,24 +71,38 @@ import com.headunit.music.ui.theme.LocalDesignScale
 /** Height of the mini-player dock (design px). HomeScreen keeps content clear of it. */
 const val DOCK_HEIGHT = 280f
 
-private val TextShadow = Shadow(Color(0x55000000), Offset(0f, 2f), blurRadius = 8f)
-private val Secondary = Color.White.copy(alpha = 0.72f)
+private val TextShadow = Shadow(Color(0x66000000), Offset(0f, 2f), blurRadius = 10f)
+private val Secondary = Color.White.copy(alpha = 0.78f)
+private val Tertiary = Color.White.copy(alpha = 0.62f)
 
 private object PlayerGlass {
     val SheetTint = Color(0x47300008)
     val SheetSheen = Brush.verticalGradient(listOf(Color(0x30FFFFFF), Color(0x10FFFFFF)))
     val Edge = Brush.verticalGradient(listOf(Color(0x80FFFFFF), Color(0x1FFFFFFF)))
-    val Button = Brush.verticalGradient(listOf(Color(0x21FFFFFF), Color(0x0AFFFFFF)))
+    val Tile = Brush.verticalGradient(listOf(Color(0x2EFFFFFF), Color(0x14FFFFFF)))
 }
 
+// ---- Layout (design px on the 2000x1200 canvas) ----
+private const val ART_FULL = 760f       // artwork square on Now Playing
+private const val ART_FULL_X = 150f
+private const val ART_MINI = 224f       // artwork square in the dock
+private const val ART_MINI_X = 56f
+private const val COLUMN_GAP = 120f     // artwork → right column
+
 /**
- * The player, drawn over everything:
- * - **Now Playing** (expanded): video large on the left, song, seek bar and
- *   controls on the right, "Up next" under the video.
- * - **Dock** (minimized): a glass bar along the bottom with the small video,
- *   song and controls. Tap it to open Now Playing.
+ * The player, drawn over everything.
  *
- * The same video moves and resizes between the two, so playback never restarts.
+ * **Now Playing** (expanded): artwork on the left; on the right the song,
+ * transport controls, a seek bar with elapsed / remaining time, and shuffle /
+ * loop / add tiles. The background is the artwork itself, blurred.
+ *
+ * **Dock** (minimized): a glass bar along the bottom with the artwork, song and
+ * controls. Tap it to open Now Playing.
+ *
+ * The YouTube player sits directly behind the artwork. Tapping the artwork on
+ * Now Playing flips to the live video (YouTube's terms want the player visible
+ * while it plays, so that's the compliant view). One artwork/video frame glides
+ * between dock and Now Playing, so playback never restarts.
  * [dockHidden] slides the dock away (e.g. while our keyboard is up).
  */
 @Composable
@@ -101,41 +119,25 @@ fun PlayerOverlay(player: PlayerController, dockHidden: Boolean) {
         animationSpec = tween(320, easing = FastOutSlowInEasing),
         label = "dockAway",
     )
+    // Video only ever shows on Now Playing; the dock always shows artwork.
+    val video by animateFloatAsState(
+        targetValue = if (player.showVideo && player.expanded) 1f else 0f,
+        animationSpec = tween(300),
+        label = "video",
+    )
 
     BackHandler(enabled = player.expanded) { player.expanded = false }
 
     Box(Modifier.fillMaxSize()) {
-        // ---- Now Playing backdrop ----
         if (e > 0f) {
-            Box(
-                Modifier
+            BlurredArtBackground(
+                track = track,
+                modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer { alpha = e }
                     // Swallow taps so nothing underneath reacts.
                     .pointerInput(Unit) { detectTapGestures { } },
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.home_background_blur),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-                // The song's own colors, washed through the glass (Android 12+ can blur it).
-                if (Build.VERSION.SDK_INT >= 31) {
-                    AsyncImage(
-                        model = track.thumbnailUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                alpha = 0.45f
-                                renderEffect = BlurEffect(140f, 140f, TileMode.Clamp)
-                            },
-                    )
-                }
-                Box(Modifier.fillMaxSize().background(Color(0x47200005)))
-            }
+            )
         }
 
         DesignCanvas(Modifier.fillMaxSize()) {
@@ -145,6 +147,7 @@ fun PlayerOverlay(player: PlayerController, dockHidden: Boolean) {
                 fun lerp(a: Float, b: Float) = a + (b - a) * e
                 val dockTop = h - DOCK_HEIGHT
                 val awayShift = away * (DOCK_HEIGHT + 40f)
+                val artTopFull = (h - ART_FULL) / 2f + 40f
 
                 // ---- Dock (minimized) ----
                 if (e < 1f) {
@@ -162,37 +165,93 @@ fun PlayerOverlay(player: PlayerController, dockHidden: Boolean) {
 
                 // ---- Now Playing (expanded) ----
                 if (e > 0f) {
-                    NowPlaying(player = player, width = w, height = h, alpha = e)
+                    NowPlaying(player = player, width = w, artTop = artTopFull, alpha = e)
                 }
 
-                // ---- The video: one view that glides between dock and Now Playing ----
-                val vw = lerp(448f, 1040f)
-                val vh = lerp(252f, 585f)
-                val vx = lerp(64f, 120f)
-                val vy = lerp(dockTop + 14f, (h - 585f) / 2f - 40f)
-                val radius = lerp(24f, 40f)
+                // ---- Artwork, with the YouTube player right behind it ----
+                val artSize = lerp(ART_MINI, ART_FULL)
+                val x = lerp(ART_MINI_X, ART_FULL_X)
+                val y = lerp(dockTop + (DOCK_HEIGHT - ART_MINI) / 2f, artTopFull)
+                val radius = lerp(28f, 40f)
+                val shape = RoundedCornerShape(radius.u)
                 Box(
                     modifier = Modifier
-                        .offset(x = vx.u, y = vy.u)
+                        .offset(x = x.u, y = y.u)
                         .graphicsLayer { translationY = (awayShift * (1f - e)).u.toPx() }
-                        .width(vw.u)
-                        .height(vh.u)
-                        .clip(RoundedCornerShape(radius.u))
+                        .size(artSize.u)
+                        .clip(shape)
                         .background(Color.Black)
-                        .border(1.5f.u, PlayerGlass.Edge, RoundedCornerShape(radius.u)),
+                        .border(1.5f.u, PlayerGlass.Edge, shape)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) {
+                            if (player.expanded) player.showVideo = !player.showVideo
+                            else player.expanded = true
+                        },
                 ) {
                     AndroidView(
                         factory = { player.webView.also { (it.parent as? ViewGroup)?.removeView(it) } },
                         modifier = Modifier.fillMaxSize(),
                     )
+                    if (video < 1f) {
+                        AsyncImage(
+                            model = track.thumbnailUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop, // square crop also trims YouTube's black bars
+                            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 1f - video },
+                        )
+                    }
                     VideoOverlay(player)
+                    if (e > 0f) {
+                        ArtChip(
+                            text = stringResource(if (player.showVideo) R.string.show_artwork else R.string.show_video),
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(24.u)
+                                .graphicsLayer { alpha = e },
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-/** Buffering spinner or YouTube's refusal message, over the video. */
+/**
+ * Full-screen backdrop made from the song's artwork. It's loaded tiny (48x27 px)
+ * and stretched, which blurs it on every Android version; Android 12+ adds a
+ * real blur on top so it's silky. A dark wash keeps the white text readable.
+ */
+@Composable
+private fun BlurredArtBackground(track: Track, modifier: Modifier) {
+    val context = LocalContext.current
+    val request = remember(track.thumbnailUrl) {
+        ImageRequest.Builder(context).data(track.thumbnailUrl).size(48, 27).build()
+    }
+    Box(modifier.background(Color(0xFF1A0508))) {
+        AsyncImage(
+            model = request,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            filterQuality = FilterQuality.High,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    // Slight zoom hides the soft edges the blur leaves.
+                    scaleX = 1.15f; scaleY = 1.15f
+                    if (Build.VERSION.SDK_INT >= 31) renderEffect = BlurEffect(60f, 60f, TileMode.Clamp)
+                },
+        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Brush.verticalGradient(listOf(Color(0x47000000), Color(0x80000000)))),
+        )
+    }
+}
+
+/** Buffering spinner or YouTube's refusal message, over the artwork. */
 @Composable
 private fun VideoOverlay(player: PlayerController) {
     with(LocalDesignScale.current) {
@@ -221,14 +280,28 @@ private fun VideoOverlay(player: PlayerController) {
 }
 
 @Composable
-private fun BoxWithConstraintsScope.NowPlaying(player: PlayerController, width: Float, height: Float, alpha: Float) {
-    val track = player.current ?: return
+private fun ArtChip(text: String, modifier: Modifier) {
     with(LocalDesignScale.current) {
-        val videoTop = (height - 585f) / 2f - 40f
-        val colX = 1240f
-        val colW = width - colX - 120f
+        Text(
+            text,
+            style = TextStyle(Color.White, fontSize = 30.usp, fontWeight = FontWeight.Medium),
+            modifier = modifier
+                .clip(RoundedCornerShape(50))
+                .background(Color(0x73000000))
+                .padding(horizontal = 26.u, vertical = 12.u),
+        )
+    }
+}
 
-        // Minimize
+@Composable
+private fun NowPlaying(player: PlayerController, width: Float, artTop: Float, alpha: Float) {
+    val track = player.current ?: return
+    val context = LocalContext.current
+    with(LocalDesignScale.current) {
+        val colX = ART_FULL_X + ART_FULL + COLUMN_GAP
+        val colW = width - colX - ART_FULL_X
+
+        // Minimize (top-left)
         GlassCircleButton(
             icon = R.drawable.ic_keyboard_hide,
             contentDescription = stringResource(R.string.minimize_player),
@@ -237,13 +310,27 @@ private fun BoxWithConstraintsScope.NowPlaying(player: PlayerController, width: 
             modifier = Modifier.offset(x = 56.u, y = 48.u).graphicsLayer { this.alpha = alpha },
         )
 
-        // Song, seek bar, controls — centred on the video's height
-        Column(
-            verticalArrangement = Arrangement.Center,
+        // Where we are in the queue (top-right): “starboy” — 3 of 20
+        val position = "${player.index + 1} of ${player.queue.size}"
+        Text(
+            text = player.queueName?.let { "“$it” — $position" } ?: position,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.End,
+            style = TextStyle(Tertiary, fontSize = 44.usp, shadow = TextShadow),
             modifier = Modifier
-                .offset(x = colX.u, y = videoTop.u)
+                .offset(x = colX.u, y = 82.u)
+                .width((colW + ART_FULL_X - 64f).u)
+                .graphicsLayer { this.alpha = alpha },
+        )
+
+        // Right column, the same height as the artwork
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .offset(x = colX.u, y = artTop.u)
                 .width(colW.u)
-                .height(585.u)
+                .height(ART_FULL.u)
                 .graphicsLayer {
                     this.alpha = alpha
                     translationX = (1f - alpha) * 60.u.toPx()
@@ -253,53 +340,75 @@ private fun BoxWithConstraintsScope.NowPlaying(player: PlayerController, width: 
                 track.title,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                style = TextStyle(Color.White, fontSize = 80.usp, fontWeight = FontWeight.Medium, lineHeight = 92.usp, shadow = TextShadow),
+                textAlign = TextAlign.Center,
+                style = TextStyle(
+                    Color.White, fontSize = 88.usp, fontWeight = FontWeight.SemiBold,
+                    lineHeight = 100.usp, shadow = TextShadow,
+                ),
             )
-            Spacer(Modifier.height(16.u))
+            Spacer(Modifier.height(14.u))
             Text(
                 track.artist,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                style = TextStyle(Secondary, fontSize = 50.usp, shadow = TextShadow),
+                textAlign = TextAlign.Center,
+                style = TextStyle(Secondary, fontSize = 56.usp, shadow = TextShadow),
             )
-            Spacer(Modifier.height(64.u))
-            SeekBar(player, Modifier.fillMaxWidth())
-            Spacer(Modifier.height(48.u))
+
+            Spacer(Modifier.weight(1f))
+
+            // Transport: bare white glyphs (big touch areas around them)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(56.u, Alignment.CenterHorizontally),
+                horizontalArrangement = Arrangement.spacedBy(110.u, Alignment.CenterHorizontally),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                GlassCircleButton(R.drawable.ic_skip_previous, stringResource(R.string.previous_song), 150f, 72f, onClick = player::previous)
-                GlassCircleButton(
+                GlyphButton(R.drawable.ic_skip_previous, stringResource(R.string.previous_song), 170f, 110f, onClick = player::previous)
+                GlyphButton(
                     if (player.isPlaying) R.drawable.ic_pause else R.drawable.ic_play,
                     stringResource(if (player.isPlaying) R.string.pause else R.string.play),
-                    210f, 100f, accent = true, onClick = player::togglePlay,
+                    210f, 150f, onClick = player::togglePlay,
                 )
-                GlassCircleButton(
-                    R.drawable.ic_skip_next, stringResource(R.string.next_song), 150f, 72f,
+                GlyphButton(
+                    R.drawable.ic_skip_next, stringResource(R.string.next_song), 170f, 110f,
                     enabled = player.hasNext, onClick = player::next,
                 )
             }
-        }
 
-        // Up next, under the video
-        val next = player.upNext
-        if (next != null) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .offset(x = 120.u, y = (videoTop + 585f + 48f).u)
-                    .width(1040.u)
-                    .graphicsLayer { this.alpha = alpha },
-            ) {
-                Text("UP NEXT", style = TextStyle(Secondary, fontSize = 34.usp, fontWeight = FontWeight.Medium, letterSpacing = 3.usp))
-                Spacer(Modifier.width(28.u))
-                Text(
-                    "${next.title}  ·  ${next.artist}",
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = TextStyle(Color.White, fontSize = 44.usp, shadow = TextShadow),
+            Spacer(Modifier.weight(1f))
+
+            SeekBar(player, Modifier.fillMaxWidth())
+
+            Spacer(Modifier.height(44.u))
+
+            // Shuffle · Loop · Add
+            Row(horizontalArrangement = Arrangement.spacedBy(44.u, Alignment.CenterHorizontally), modifier = Modifier.fillMaxWidth()) {
+                GlassTile(
+                    icon = R.drawable.ic_shuffle,
+                    contentDescription = stringResource(R.string.shuffle),
+                    active = player.shuffle,
+                    onClick = player::toggleShuffle,
+                )
+                GlassTile(
+                    icon = if (player.repeat == RepeatMode.One) R.drawable.ic_repeat_one else R.drawable.ic_repeat,
+                    contentDescription = stringResource(
+                        when (player.repeat) {
+                            RepeatMode.Off -> R.string.repeat_off
+                            RepeatMode.All -> R.string.repeat_all
+                            RepeatMode.One -> R.string.repeat_one
+                        }
+                    ),
+                    active = player.repeat != RepeatMode.Off,
+                    onClick = player::cycleRepeat,
+                )
+                GlassTile(
+                    icon = R.drawable.ic_add,
+                    contentDescription = stringResource(R.string.add_to_library),
+                    active = false,
+                    onClick = {
+                        // Libraries come later; the button is in place for them.
+                        Toast.makeText(context, "Libraries are coming soon", Toast.LENGTH_SHORT).show()
+                    },
                 )
             }
         }
@@ -338,8 +447,8 @@ private fun Dock(player: PlayerController, width: Float, modifier: Modifier) {
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxSize()
-                    // Video sits at 64..512; text starts after it.
-                    .padding(start = 560.u, end = 64.u),
+                    // Artwork sits at 56..280; text starts after it.
+                    .padding(start = (ART_MINI_X + ART_MINI + 48f).u, end = 64.u),
             ) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.u)) {
                     Text(
@@ -369,19 +478,24 @@ private fun Dock(player: PlayerController, width: Float, modifier: Modifier) {
     }
 }
 
-/** Glass track with a red fill. Tap or drag anywhere along it to seek. */
+/** "0:12 ━━━━━━━━━━━ -2:48": elapsed, bar, time remaining. Tap or drag the bar to seek. */
 @Composable
 private fun SeekBar(player: PlayerController, modifier: Modifier) {
     var dragFraction by remember { mutableStateOf<Float?>(null) }
     val duration = player.durationSeconds
-    val shown = dragFraction ?: if (duration > 0f) player.positionSeconds / duration else 0f
+    val shown = (dragFraction ?: if (duration > 0f) player.positionSeconds / duration else 0f).coerceIn(0f, 1f)
 
     with(LocalDesignScale.current) {
-        Column(modifier) {
+        val timeStyle = TextStyle(
+            Color.White, fontSize = 42.usp, shadow = TextShadow,
+            fontFeatureSettings = "tnum", // digits don't jiggle as they change
+        )
+        Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+            Text(formatTime(shown * duration), style = timeStyle, modifier = Modifier.width(120.u))
             Box(
                 contentAlignment = Alignment.CenterStart,
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .weight(1f)
                     .height(80.u) // tall touch target around a thin bar
                     .pointerInput(duration) {
                         detectTapGestures { pos ->
@@ -402,37 +516,73 @@ private fun SeekBar(player: PlayerController, modifier: Modifier) {
                         )
                     },
             ) {
-                Box(Modifier.fillMaxWidth().height(12.u).background(Color(0x33FFFFFF), CircleShape))
-                Box(
-                    Modifier
-                        .fillMaxWidth(shown.coerceIn(0f, 1f))
-                        .height(12.u)
-                        .background(Brand.Red, CircleShape),
-                )
-                // Thumb
-                Box(
-                    Modifier
-                        .fillMaxWidth(shown.coerceIn(0f, 1f))
-                        .fillMaxHeight(),
-                    contentAlignment = Alignment.CenterEnd,
-                ) {
-                    Box(
-                        Modifier
-                            .offset(x = 18.u)
-                            .size(if (dragFraction != null) 48.u else 36.u)
-                            .background(Color.White, CircleShape),
-                    )
-                }
+                val dragging = dragFraction != null
+                val barH = if (dragging) 16f else 12f
+                Box(Modifier.fillMaxWidth().height(barH.u).background(Color(0x40FFFFFF), CircleShape))
+                Box(Modifier.fillMaxWidth(shown).height(barH.u).background(Color(0xD9FFFFFF), CircleShape))
             }
-            Row(Modifier.fillMaxWidth()) {
-                val timeStyle = TextStyle(
-                    Secondary, fontSize = 38.usp,
-                    fontFeatureSettings = "tnum", // digits don't jiggle as they change
+            Text(
+                "-" + formatTime((duration - shown * duration).coerceAtLeast(0f)),
+                style = timeStyle,
+                textAlign = TextAlign.End,
+                modifier = Modifier.width(140.u),
+            )
+        }
+    }
+}
+
+/** Shuffle / loop / add: a frosted rounded tile; red when switched on. */
+@Composable
+private fun GlassTile(icon: Int, contentDescription: String, active: Boolean, onClick: () -> Unit) {
+    with(LocalDesignScale.current) {
+        val shape = RoundedCornerShape(30.u)
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .width(190.u)
+                .height(116.u)
+                .clip(shape)
+                .then(
+                    if (active) Modifier.background(Brand.Red)
+                    else Modifier.background(PlayerGlass.Tile)
                 )
-                Text(formatTime(shown * duration), style = timeStyle)
-                Spacer(Modifier.weight(1f))
-                Text(formatTime(duration), style = timeStyle)
-            }
+                .border(1.5f.u, PlayerGlass.Edge, shape)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = ripple(color = Color.White),
+                    onClick = onClick,
+                ),
+        ) {
+            Icon(painterResource(icon), contentDescription, tint = Color.White, modifier = Modifier.size(60.u))
+        }
+    }
+}
+
+/** A bare white glyph with a generous invisible touch area, like the reference design. */
+@Composable
+private fun GlyphButton(
+    icon: Int,
+    contentDescription: String,
+    target: Float,
+    glyph: Float,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
+    with(LocalDesignScale.current) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(target.u)
+                .graphicsLayer { alpha = if (enabled) 1f else 0.35f }
+                .clip(CircleShape)
+                .clickable(
+                    enabled = enabled,
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = ripple(color = Color.White),
+                    onClick = onClick,
+                ),
+        ) {
+            Icon(painterResource(icon), contentDescription, tint = Color.White, modifier = Modifier.size(glyph.u))
         }
     }
 }
@@ -457,7 +607,7 @@ private fun GlassCircleButton(
                 .clip(CircleShape)
                 .then(
                     if (accent) Modifier.background(Brand.Red)
-                    else Modifier.background(PlayerGlass.Button).border(1.5f.u, PlayerGlass.Edge, CircleShape)
+                    else Modifier.background(PlayerGlass.Tile).border(1.5f.u, PlayerGlass.Edge, CircleShape)
                 )
                 .clickable(
                     enabled = enabled,

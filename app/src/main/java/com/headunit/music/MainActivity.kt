@@ -57,7 +57,7 @@ class MainActivity : ComponentActivity() {
                     HomeScreen(
                         youtube = youtube,
                         history = history,
-                        onPlay = { tracks, index -> player.playQueue(tracks, index) },
+                        onPlay = { tracks, index, query -> player.playQueue(tracks, index, query) },
                         dockInset = if (player.current != null) DOCK_HEIGHT else 0f,
                         onKeyboardShownChange = { keyboardUp = it },
                         onVoiceSearch = {

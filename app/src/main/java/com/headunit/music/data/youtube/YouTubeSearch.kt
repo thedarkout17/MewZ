@@ -64,10 +64,11 @@ class YouTubeSearch(
                     val id = item.optJSONObject("id")?.optString("videoId").orEmpty()
                     val snippet = item.optJSONObject("snippet") ?: continue
                     if (id.isEmpty()) continue
-                    val (title, artist) = splitArtist(
+                    val (splitTitle, splitArtistName) = splitArtist(
                         cleanTitle(unescape(snippet.optString("title"))),
                         cleanArtist(unescape(snippet.optString("channelTitle"))),
                     )
+                    val (title, artist) = moveFeaturedArtists(splitTitle, splitArtistName)
                     add(
                         Track(
                             videoId = id,
@@ -190,6 +191,31 @@ class YouTubeSearch(
                 return parts[1].trim() to parts[0].trim()
             }
             return title to channel
+        }
+
+        private val FEAT_BRACKETED = Regex("""\s*[(\[]\s*(?:ft|feat|featuring)\.?\s+([^)\]]+)[)\]]""", RegexOption.IGNORE_CASE)
+        private val FEAT_TAIL = Regex("""\s+(?:ft|feat|featuring)\.?\s+(.+)$""", RegexOption.IGNORE_CASE)
+        private val NAME_SEPARATORS = Regex("""\s+(?:ft|feat|featuring)\.?\s+|\s*,\s*|\s+&\s+""", RegexOption.IGNORE_CASE)
+
+        /**
+         * "Starboy ft. Daft Punk" by The Weeknd → "Starboy" by "The Weeknd ft. Daft Punk".
+         * Handles "(feat. X)", "ft. X & Y", and uploads that repeat the credit twice.
+         */
+        fun moveFeaturedArtists(title: String, artist: String): Pair<String, String> {
+            val credits = mutableListOf<String>()
+            var t = FEAT_BRACKETED.replace(title) { credits += it.groupValues[1]; "" }
+            FEAT_TAIL.find(t)?.let { m ->
+                credits += m.groupValues[1]
+                t = t.substring(0, m.range.first)
+            }
+            val names = credits
+                .flatMap { it.split(NAME_SEPARATORS) }
+                .map { it.trim() }
+                .filter { it.isNotEmpty() && !it.equals(artist, ignoreCase = true) }
+                .distinctBy { it.lowercase() }
+            val cleanTitle = t.trim().ifEmpty { title }
+            return if (names.isEmpty()) cleanTitle to artist
+            else cleanTitle to "$artist ft. ${names.joinToString(", ")}"
         }
 
         /** "PT1H2M3S" → 3723. Null if it can't be read. */
