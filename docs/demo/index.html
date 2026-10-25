@@ -116,6 +116,15 @@ body {
   margin: 0; padding: 0; list-style: none;
 }
 .searching .suggest { top: calc(220 * var(--u)); left: calc(126 * var(--u)); right: calc(136 * var(--u)); }
+/* Scrolls (long history); last rows can scroll clear of the keyboard. */
+.searching .suggest {
+  bottom: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
+  padding-bottom: calc(24 * var(--u)); box-sizing: border-box;
+  -webkit-mask-image: linear-gradient(transparent, #000 calc(40 * var(--u)));
+  mask-image: linear-gradient(transparent, #000 calc(40 * var(--u)));
+}
+.searching.kb-up .suggest { padding-bottom: calc(494 * var(--u)); }
+.suggest::-webkit-scrollbar { display: none; }
 /* icon slot sits under the bar's magnifier, text under the typed text, × under the mic */
 .suggest li {
   display: flex; align-items: center; height: calc(176 * var(--u));
@@ -382,7 +391,7 @@ body {
       <span class="chip">Canvas <b>2000×1200</b></span>
       <span class="chip">Scale <b id="scale">–</b></span>
       <span class="chip">Back <b>Esc</b></span>
-      <span class="chip">Build <b>home v0.11</b></span>
+      <span class="chip">Build <b>home v0.12</b></span>
       <label class="chip" for="mode">Results
         <select class="sel" id="mode">
           <option value="ok">Sample songs</option>
@@ -499,7 +508,7 @@ function matchingHistory(typed) {
   return [...starts, ...words];
 }
 function listItems() {
-  if (!query.trim()) return recent.slice(0, MAX_SUGGESTIONS).map(text => ({ text, hist: true }));
+  if (!query.trim()) return recent.slice(0, 30).map(text => ({ text, hist: true }));   // all of it, scrollable
   const past = matchingHistory(query).slice(0, MAX_HISTORY_WHILE_TYPING);
   const fresh = suggestions.filter(s => !past.some(p => p.toLowerCase() === s.toLowerCase()));
   return [...past.map(text => ({ text, hist: true })), ...fresh.map(text => ({ text, hist: false }))].slice(0, MAX_SUGGESTIONS);
@@ -652,7 +661,11 @@ const SUG_ICON = {
 };
 function renderSuggestions() {
   const list = open ? listItems() : [];
+  sugEl.hidden = list.length === 0;          // don't block taps when there's nothing to show
   const typed = query.trim();
+  const blank = !typed;
+  if (blank !== renderSuggestions.wasBlank) sugEl.scrollTop = 0;   // switching history ↔ suggestions
+  renderSuggestions.wasBlank = blank;
   const keyOf = it => `${it.hist ? 'h' : 's'}:${it.text}`;
   const old = new Map([...sugEl.children].map(li => [li.dataset.key, li]));
   sugEl.textContent = '';
@@ -694,6 +707,7 @@ function render() {
   wasSearching = s; wasKb = k;
   screen.classList.toggle('searching', s);
   kbEl.classList.toggle('up', k);
+  screen.classList.toggle('kb-up', k);
   kbEl.inert = !k;
   catcher.hidden = !s;
   clearBtn.hidden = !query;
@@ -793,6 +807,8 @@ $('bar').addEventListener('click', (e) => {
 });
 clearBtn.addEventListener('click', () => { setQuery(''); activate(); logEvent('clear', 'query cleared'); });
 catcher.addEventListener('click', tapOutside);
+// The scrolling list covers the screen; taps between/below rows count as empty space.
+sugEl.addEventListener('click', (e) => { if (e.target === sugEl) tapOutside(); });
 
 $('mic').addEventListener('click', () => {
   logEvent('onVoiceSearch', 'RecognizerIntent.ACTION_RECOGNIZE_SPEECH');

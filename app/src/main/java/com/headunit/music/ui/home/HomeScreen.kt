@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import com.headunit.music.R
@@ -49,8 +50,8 @@ private const val MAX_SUGGESTIONS = 5
 private const val MAX_HISTORY_WHILE_TYPING = 2
 private const val SUGGEST_DEBOUNCE_MS = 120L
 
-/** Suggestions from this row down sit behind the keyboard glass (rows 4–5). */
-private const val FIRST_ROW_UNDER_GLASS = 3
+/** How many past searches the empty search bar lists (scrollable). */
+private const val MAX_RECENT_SHOWN = 30
 
 /**
  * Home screen.
@@ -63,8 +64,8 @@ private const val FIRST_ROW_UNDER_GLASS = 3
  * The ⌄ key or a tap on empty space puts the keyboard away to show all five;
  * tap the bar to bring it back.
  *
- * Recent searches: opening the bar with nothing typed lists past searches
- * (clock icon, × to remove). While typing, matching past searches lead the list.
+ * Recent searches: opening the bar with nothing typed lists all past searches
+ * in a scrollable list (clock icon, × to remove). While typing, matching past searches lead the list.
  *
  * Results: sending a search (Search key, a suggestion, or voice) closes the
  * panel and lists YouTube songs under the bar. Tap the bar to search again;
@@ -89,7 +90,7 @@ fun HomeScreen(
     // What the list under the bar shows: recent searches when nothing is typed;
     // otherwise matching recent searches first, then suggestions.
     val listItems = if (query.isBlank()) {
-        recent.take(MAX_SUGGESTIONS).map { SuggestionItem(it, fromHistory = true) }
+        recent.take(MAX_RECENT_SHOWN).map { SuggestionItem(it, fromHistory = true) }
     } else {
         val past = history.matching(recent, query).take(MAX_HISTORY_WHILE_TYPING)
         val fresh = suggestions.filterNot { s -> past.any { it.equals(s, ignoreCase = true) } }
@@ -214,6 +215,8 @@ fun HomeScreen(
                 fun lerp(idle: Float, searching: Float) = idle + (searching - idle) * progress
                 val barTop = lerp(64f, 28f)
                 val barHeight = lerp(BAR_HEIGHT_IDLE, BAR_HEIGHT_COMPACT)
+                val screenHeightPx = constraints.maxHeight.toFloat()
+                val keyboardHeightPx = with(LocalDensity.current) { KEYBOARD_HEIGHT.u.toPx() }
 
                 // Taps on empty space while searching.
                 if (searching) {
@@ -261,15 +264,19 @@ fun HomeScreen(
                 }
 
                 // Suggestions line up with the text inside the bar.
-                SearchSuggestions(
+                if (open && listItems.isNotEmpty()) SearchSuggestions(
                     query = query,
-                    items = if (open) listItems else emptyList(),
+                    items = listItems,
+                    onTapEmptySpace = ::tapOutside,
                     onPick = ::submit,
                     onRemove = { recent = history.remove(it) },
-                    fog = kb,
-                    fogFromIndex = FIRST_ROW_UNDER_GLASS,
+                    // Rows blur as they pass behind the keyboard glass.
+                    glassTopPx = { screenHeightPx - keyboardHeightPx * kb },
+                    // Lets the last rows scroll up clear of the keyboard.
+                    bottomPadding = (KEYBOARD_HEIGHT * kb + 24f).u,
                     modifier = Modifier
                         .align(Alignment.TopStart)
+                        .fillMaxSize()
                         .padding(
                             top = (barTop + barHeight + lerp(40f, 24f)).u,
                             // Icons sit under the bar's magnifier, text under the typed text,
