@@ -1,7 +1,16 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+// Secrets live in local.properties (git-ignored), never in the repo:
+//   youtube.apiKey=AIza...
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
 }
 
 android {
@@ -13,7 +22,13 @@ android {
         minSdk = 24          // covers nearly all Android headunits (Android 7+)
         targetSdk = 35
         versionCode = 1
-        versionName = "0.1"
+        versionName = "0.2"
+
+        buildConfigField(
+            "String",
+            "YOUTUBE_API_KEY",
+            "\"${localProps.getProperty("youtube.apiKey", "")}\"",
+        )
     }
 
     buildTypes {
@@ -28,7 +43,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 }
 
 dependencies {
@@ -40,5 +58,6 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.core:core-ktx:1.15.0")
+    implementation("io.coil-kt:coil-compose:2.7.0") // thumbnails
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

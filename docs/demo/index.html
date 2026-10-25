@@ -129,6 +129,57 @@ body {
 .suggest button:hover, .suggest button:focus-visible { background: rgba(255,255,255,.12); outline: 0; }
 @keyframes rise { from { opacity: 0; transform: translateY(calc(24 * var(--u))); } }
 
+/* Search results (SearchResults.kt) */
+.results {
+  position: absolute; top: calc(208 * var(--u)); left: calc(80 * var(--u)); right: calc(80 * var(--u)); bottom: 0;
+  overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
+  padding: calc(12 * var(--u)) 0 calc(48 * var(--u));
+  box-sizing: border-box;
+  -webkit-mask-image: linear-gradient(transparent, #000 calc(48 * var(--u)));
+  mask-image: linear-gradient(transparent, #000 calc(48 * var(--u)));
+}
+.results::-webkit-scrollbar { display: none; }
+.track {
+  display: flex; align-items: center; gap: calc(40 * var(--u)); width: 100%;
+  height: calc(196 * var(--u)); padding: 0 calc(16 * var(--u)); box-sizing: border-box;
+  border: 0; border-radius: calc(28 * var(--u)); background: transparent; cursor: pointer;
+  text-align: left; color: #fff; font-family: var(--font-app);
+  animation: rise .32s var(--ease) both; animation-delay: calc(var(--i) * 50ms);
+}
+.track:hover, .track:focus-visible { background: rgba(255,255,255,.10); outline: 0; }
+.track:active { background: rgba(255,255,255,.16); }
+.thumb {
+  flex: none; width: calc(292 * var(--u)); height: calc(164 * var(--u));
+  border-radius: calc(22 * var(--u)); border: calc(1.5 * var(--u)) solid rgba(255,255,255,.18);
+  box-sizing: border-box; position: relative; overflow: hidden;
+}
+.thumb span {   /* sample-art monogram */
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font: 700 calc(72 * var(--u)) var(--font-app); color: rgba(255,255,255,.85);
+}
+.meta { min-width: 0; display: grid; gap: calc(10 * var(--u)); }
+.meta .t { font-size: calc(58 * var(--u)); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 8px rgba(0,0,0,.33); }
+.meta .a { font-size: calc(42 * var(--u)); color: rgba(255,255,255,.72); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 8px rgba(0,0,0,.33); }
+.skeleton { display: flex; align-items: center; gap: calc(40 * var(--u)); height: calc(196 * var(--u)); padding: 0 calc(16 * var(--u)); }
+.skeleton i { display: block; background: rgba(255,255,255,.12); animation: pulse2 1.4s ease-in-out infinite alternate; }
+.skeleton .sk-thumb { width: calc(292 * var(--u)); height: calc(164 * var(--u)); border-radius: calc(22 * var(--u)); flex: none; }
+.skeleton .sk-lines { display: grid; gap: calc(22 * var(--u)); }
+.skeleton .sk-1 { height: calc(44 * var(--u)); border-radius: calc(22 * var(--u)); }
+.skeleton .sk-2 { width: calc(360 * var(--u)); height: calc(32 * var(--u)); border-radius: calc(16 * var(--u)); opacity: .7; }
+@keyframes pulse2 { from { background: rgba(255,255,255,.08); } to { background: rgba(255,255,255,.18); } }
+.msg { display: grid; justify-items: center; gap: calc(24 * var(--u)); padding: calc(200 * var(--u)) calc(120 * var(--u)) 0; text-align: center; }
+.msg .t { font: 500 calc(64 * var(--u)) / 1.2 var(--font-app); color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,.33); }
+.msg .d { font: 400 calc(42 * var(--u)) / 1.3 var(--font-app); color: rgba(255,255,255,.72); }
+.msg button {
+  margin-top: calc(8 * var(--u)); height: calc(120 * var(--u)); padding: 0 calc(72 * var(--u));
+  border-radius: 999px; cursor: pointer; color: #fff; font: 500 calc(46 * var(--u)) var(--font-app);
+  background: linear-gradient(rgba(255,255,255,.19), rgba(255,255,255,.08));
+  border: calc(1.5 * var(--u)) solid rgba(255,255,255,.14); border-top-color: rgba(255,255,255,.5);
+}
+.bounds .track, .bounds .thumb { outline: 1px dashed #00e5ff; }
+.sel { font: 500 13px var(--font-app); color: var(--ink); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+
 /* Glass keyboard (GlassKeyboard.kt) */
 .kb {
   position: absolute; left: 0; right: 0; bottom: 0; height: calc(470 * var(--u));
@@ -286,6 +337,8 @@ body {
 
       <img class="title" src="listen_title.png" alt="Listen...">
 
+      <div class="results" id="results" hidden aria-label="Search results"></div>
+
       <ul class="suggest" id="suggest" aria-label="Suggestions"></ul>
 
       <div class="kb" id="kb" aria-label="Keyboard"></div>
@@ -314,7 +367,18 @@ body {
       <span class="chip">Canvas <b>2000×1200</b></span>
       <span class="chip">Scale <b id="scale">–</b></span>
       <span class="chip">Back <b>Esc</b></span>
-      <span class="chip">Build <b>home v0.8</b></span>
+      <span class="chip">Build <b>home v0.9</b></span>
+      <label class="chip" for="mode">Results
+        <select class="sel" id="mode">
+          <option value="ok">Sample songs</option>
+          <option value="empty">No results</option>
+          <option value="MissingKey">No API key</option>
+          <option value="BadKey">Bad API key</option>
+          <option value="QuotaExceeded">Daily limit hit</option>
+          <option value="Offline">Offline</option>
+          <option value="Other">YouTube error</option>
+        </select>
+      </label>
       <button class="btn" id="boundsBtn" type="button" aria-pressed="false">Layout bounds</button>
       <button class="btn" id="fsBtn" type="button">Fullscreen</button>
       <button class="btn" id="resetBtn" type="button">Reset</button>
@@ -361,9 +425,36 @@ function suggest(query, limit) {
   return [...new Set(out)].slice(0, limit);
 }
 
+// ---------- Sample results (the demo can't reach YouTube from the browser) ----------
+// Built from the same catalogue so results make sense for what you typed.
+const ARTISTS = ["Taylor Swift","The Weeknd","Drake","Billie Eilish","Sabrina Carpenter","Kendrick Lamar","SZA","Bad Bunny","Dua Lipa","Ed Sheeran","Harry Styles","Post Malone","Olivia Rodrigo","Arctic Monkeys","Coldplay","Imagine Dragons","Travis Scott","Bruno Mars","Lady Gaga","Chappell Roan","Hozier","Benson Boone","Queen","Michael Jackson","Fleetwood Mac","Eagles","Daft Punk","Frank Ocean","Tame Impala","Mac Miller"];
+function splitEntry(e) {
+  const a = ARTISTS.find(x => e.toLowerCase().startsWith(x.toLowerCase() + ' '));
+  return a ? { title: e.slice(a.length + 1), artist: a } : null;
+}
+function hash(str) { let h = 0; for (const c of str) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; }
+function sampleResults(q) {
+  const qq = q.toLowerCase();
+  const songs = CATALOGUE.map(splitEntry).filter(Boolean);
+  const hits = songs.filter(s => `${s.artist} ${s.title}`.toLowerCase().includes(qq) ||
+    qq.split(' ').some(w => w.length > 2 && `${s.artist} ${s.title}`.toLowerCase().includes(w)));
+  const base = hits.length ? hits : [];
+  const out = [];
+  base.forEach(s => {
+    out.push(s);
+    out.push({ title: `${s.title} (Live)`, artist: s.artist });
+  });
+  return out.slice(0, 12).map(s => {
+    const h = hash(s.artist + s.title);
+    return { ...s, duration: `${2 + h % 3}:${String(h % 60).padStart(2, '0')}`, hue: h % 360 };
+  });
+}
+
 // ---------- State (mirrors HomeScreen.kt) ----------
 let query = '', open = false, keyboard = false, suggestions = [];
-const searching = () => open || query.length > 0;
+let submitted = null, results = { kind: 'loading' }, searchTimer;
+const searching = () => open || query.length > 0 || submitted !== null;
+const showResults = () => submitted !== null && !open;
 const keyboardShown = () => open && keyboard;
 
 let debounce, wasSearching = false, wasKb = false;
@@ -380,22 +471,109 @@ function setQuery(v) {
   render();
 }
 function activate() { open = true; keyboard = true; render(); }
+function runSearch() {          // LaunchedEffect(submitted, attempt)
+  const q = submitted;
+  results = { kind: 'loading' };
+  renderResults();
+  logEvent('youtube.search', JSON.stringify(q));
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    const mode = $('mode').value;
+    if (mode === 'ok') {
+      const tracks = sampleResults(q);
+      results = { kind: 'done', query: q, tracks };
+      logEvent('result', `${tracks.length} sample songs`);
+    } else if (mode === 'empty') {
+      results = { kind: 'done', query: q, tracks: [] };
+      logEvent('result', '0 songs');
+    } else {
+      results = { kind: 'failed', reason: mode };
+      logEvent('result', `Failure(${mode})`);
+    }
+    renderResults();
+  }, 700);
+}
 function submit(text) {
-  query = text; open = false; keyboard = false;
-  logEvent('onSearch', JSON.stringify(text));
-  toast(`Searching “${text}”`);
+  query = text; open = false; keyboard = false; submitted = text;
+  clearTimeout(debounce);
+  runSearch();
   render();
 }
+function closePanel() {
+  open = false; keyboard = false;
+  if (submitted !== null) query = submitted;
+}
 function tapOutside() {
-  if (keyboard) { keyboard = false; logEvent('tap', 'outside → hide keyboard'); }
-  else { open = false; logEvent('tap', 'outside → close suggestions'); }
-  if (!query) open = false;
+  if (!open) return;
+  if (keyboard && query) { keyboard = false; logEvent('tap', 'outside → hide keyboard'); }
+  else { closePanel(); logEvent('tap', 'outside → close panel'); }
   render();
 }
 function back() {
-  query = ''; open = false; keyboard = false; suggestions = [];
-  logEvent('back', 'BackHandler → leave search');
+  if (open && submitted !== null) { closePanel(); logEvent('back', 'panel → results'); }
+  else {
+    query = ''; open = false; keyboard = false; suggestions = []; submitted = null;
+    clearTimeout(searchTimer);
+    logEvent('back', 'BackHandler → home');
+  }
   render();
+}
+function play(t) {
+  logEvent('onPlay', `${JSON.stringify(t.title)} – ${t.artist}`);
+  toast(`Picked “${t.title}” – ${t.artist}`);
+}
+
+const MESSAGES = {
+  MissingKey: ['Add a YouTube API key to search', 'Put youtube.apiKey=… in local.properties, then rebuild. See the README.'],
+  BadKey: ["YouTube didn't accept the API key", 'Check the key, and that YouTube Data API v3 is enabled for it.'],
+  QuotaExceeded: ['Search limit reached for today', "YouTube's free search allowance resets at midnight Pacific time."],
+  Offline: ['No internet connection', "Check the headunit's Wi-Fi or phone hotspot, then try again.", true],
+  Other: ["Couldn't search YouTube", "Something went wrong on YouTube's side.", true],
+};
+const resultsEl = $('results');
+function message(title, detail, retry) {
+  const m = document.createElement('div'); m.className = 'msg';
+  const t = document.createElement('div'); t.className = 't'; t.textContent = title;
+  const d = document.createElement('div'); d.className = 'd'; d.textContent = detail;
+  m.append(t, d);
+  if (retry) {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = 'Try again';
+    b.addEventListener('click', () => { logEvent('retry', ''); runSearch(); });
+    m.append(b);
+  }
+  return m;
+}
+function renderResults() {
+  resultsEl.hidden = !showResults();
+  resultsEl.textContent = '';
+  if (results.kind === 'loading') {
+    for (let i = 0; i < 5; i++) {
+      const r = document.createElement('div'); r.className = 'skeleton'; r.style.opacity = 1 - i * .15;
+      r.innerHTML = `<i class="sk-thumb"></i><div class="sk-lines"><i class="sk-1" style="width:calc(${640 - i * 60} * var(--u))"></i><i class="sk-2"></i></div>`;
+      resultsEl.append(r);
+    }
+  } else if (results.kind === 'failed') {
+    const [t, d, retry] = MESSAGES[results.reason];
+    resultsEl.append(message(t, d, retry));
+  } else if (!results.tracks.length) {
+    resultsEl.append(message(`No songs found for “${results.query}”`, "Try a different spelling or the artist's name."));
+  } else {
+    results.tracks.forEach((tr, i) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'track';
+      b.style.setProperty('--i', Math.min(i, 6));
+      const th = document.createElement('div'); th.className = 'thumb';
+      th.style.background = `linear-gradient(135deg, hsl(${tr.hue} 70% 45%), hsl(${(tr.hue + 50) % 360} 75% 30%))`;
+      const mono = document.createElement('span'); mono.textContent = tr.artist[0]; th.append(mono);
+      const meta = document.createElement('div'); meta.className = 'meta';
+      const t = document.createElement('div'); t.className = 't'; t.textContent = tr.title;
+      const a = document.createElement('div'); a.className = 'a'; a.textContent = `${tr.artist}  ·  ${tr.duration}`;
+      meta.append(t, a);
+      b.append(th, meta);
+      b.addEventListener('click', () => play(tr));
+      resultsEl.append(b);
+    });
+  }
 }
 
 // ---------- Render ----------
@@ -448,6 +626,9 @@ function render() {
   clearBtn.hidden = !query;
   renderField();
   renderSuggestions();
+  const wasHidden = resultsEl.hidden;
+  resultsEl.hidden = !showResults();
+  if (wasHidden && !resultsEl.hidden && results.kind !== 'loading') renderResults(); // replay entrance
 }
 
 // ---------- Glass keyboard ----------
@@ -569,7 +750,8 @@ $('fsBtn').addEventListener('click', async () => {
   catch { logEvent('debug', 'fullscreen not available in this view'); }
 });
 $('resetBtn').addEventListener('click', () => {
-  query = ''; open = false; keyboard = false; suggestions = []; symbols = false; voice.hidden = true; toastEl.hidden = true;
+  query = ''; open = false; keyboard = false; suggestions = []; symbols = false;
+  submitted = null; clearTimeout(searchTimer); voice.hidden = true; toastEl.hidden = true;
   buildKeyboard();
   log.textContent = '';
   wasSearching = wasKb = false;

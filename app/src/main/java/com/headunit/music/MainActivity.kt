@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.headunit.music.data.youtube.YouTubeSearch
 import com.headunit.music.ui.home.HomeScreen
 import com.headunit.music.ui.theme.HeadunitMusicTheme
 
@@ -37,10 +38,13 @@ class MainActivity : ComponentActivity() {
                         ?.firstOrNull()
                 }
 
+                val youtube = remember { YouTubeSearch(BuildConfig.YOUTUBE_API_KEY) }
+
                 HomeScreen(
-                    onSearch = { query ->
-                        // Next step: the results screen (YouTube search) goes here.
-                        Toast.makeText(this, "Searching “$query”", Toast.LENGTH_SHORT).show()
+                    youtube = youtube,
+                    onPlay = { track ->
+                        // Next step: the player screen goes here.
+                        Toast.makeText(this, "Picked “${track.title}” – ${track.artist}", Toast.LENGTH_SHORT).show()
                     },
                     onVoiceSearch = {
                         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {

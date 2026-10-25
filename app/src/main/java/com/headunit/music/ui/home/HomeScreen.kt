@@ -30,6 +30,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.headunit.music.R
 import com.headunit.music.data.LocalSuggestionProvider
 import com.headunit.music.data.SuggestionProvider
+import com.headunit.music.data.Track
+import com.headunit.music.data.youtube.SearchResult
+import com.headunit.music.data.youtube.YouTubeSearch
 import com.headunit.music.ui.components.BAR_HEIGHT_COMPACT
 import com.headunit.music.ui.components.BAR_HEIGHT_IDLE
 import com.headunit.music.ui.components.SearchBar
@@ -56,10 +59,15 @@ private const val FIRST_ROW_UNDER_GLASS = 3
  * appear as you type: three above the keyboard, the last two blurred behind it.
  * The ⌄ key or a tap on empty space puts the keyboard away to show all five;
  * tap the bar to bring it back.
+ *
+ * Results: sending a search (Search key, a suggestion, or voice) closes the
+ * panel and lists YouTube songs under the bar. Tap the bar to search again;
+ * back from results returns to the idle home screen.
  */
 @Composable
 fun HomeScreen(
-    onSearch: (String) -> Unit,
+    youtube: YouTubeSearch,
+    onPlay: (Track) -> Unit,
     onVoiceSearch: () -> Unit,
     voiceResult: String? = null,
     onVoiceResultConsumed: () -> Unit = {},
@@ -70,7 +78,13 @@ fun HomeScreen(
     var keyboard by rememberSaveable { mutableStateOf(false) }   // our keyboard showing
     var suggestions by remember { mutableStateOf(emptyList<String>()) }
 
-    val searching = open || query.isNotEmpty()
+    // Last search sent, and its results. `attempt` bumps to retry the same query.
+    var submitted by rememberSaveable { mutableStateOf<String?>(null) }
+    var attempt by remember { mutableStateOf(0) }
+    var results by remember { mutableStateOf<ResultsState>(ResultsState.Loading) }
+
+    val searching = open || query.isNotEmpty() || submitted != null
+    val showResults = submitted != null && !open
     val keyboardShown = open && keyboard
 
     val progress by animateFloatAsState(
@@ -89,12 +103,24 @@ fun HomeScreen(
         query = text
         open = false
         keyboard = false
-        onSearch(text)
+        if (text == submitted) attempt++ else submitted = text
+    }
+    /** Close the search panel; if a search is showing, the bar goes back to its query. */
+    fun closePanel() {
+        open = false
+        keyboard = false
+        submitted?.let { query = it }
     }
     fun tapOutside() {
-        if (keyboard) keyboard = false   // first tap: put the keyboard away
-        else open = false                // second tap: close suggestions
-        if (query.isEmpty()) open = false // nothing typed → back to idle
+        if (!open) return
+        if (keyboard && query.isNotEmpty()) keyboard = false // first tap: put the keyboard away
+        else closePanel()                                    // then: close suggestions
+    }
+    fun goHome() {
+        query = ""
+        submitted = null
+        open = false
+        keyboard = false
     }
 
     // When the mic returns text, drop it in the box and search straight away.
@@ -102,6 +128,16 @@ fun HomeScreen(
         if (!voiceResult.isNullOrBlank()) {
             submit(voiceResult)
             onVoiceResultConsumed()
+        }
+    }
+
+    // Run the search whenever a new query is sent (or Try again is tapped).
+    LaunchedEffect(submitted, attempt) {
+        val q = submitted ?: return@LaunchedEffect
+        results = ResultsState.Loading
+        results = when (val r = youtube.search(q)) {
+            is SearchResult.Success -> ResultsState.Done(q, r.tracks)
+            is SearchResult.Failure -> ResultsState.Failed(r.reason)
         }
     }
 
@@ -115,11 +151,9 @@ fun HomeScreen(
         }
     }
 
-    // Back leaves search mode instead of closing the app.
+    // Back: panel open over results → back to results; otherwise → idle home.
     BackHandler(enabled = searching) {
-        query = ""
-        open = false
-        keyboard = false
+        if (open && submitted != null) closePanel() else goHome()
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -192,6 +226,20 @@ fun HomeScreen(
                     )
                 }
 
+                // Results fill the space under the bar.
+                // (Not composed while the panel is open, so hidden rows can't be tapped.)
+                if (showResults) {
+                    SearchResults(
+                        state = results,
+                        onPlay = onPlay,
+                        onRetry = { attempt++ },
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .fillMaxSize()
+                            .padding(top = (barTop + barHeight + 12f).u, start = 80.u, end = 80.u),
+                    )
+                }
+
                 // Suggestions line up with the text inside the bar.
                 SearchSuggestions(
                     query = query,
@@ -248,6 +296,6 @@ fun HomeScreen(
 @Composable
 private fun HomeScreenPreview() {
     HeadunitMusicTheme {
-        HomeScreen(onSearch = {}, onVoiceSearch = {})
+        HomeScreen(youtube = YouTubeSearch(apiKey = ""), onPlay = {}, onVoiceSearch = {})
     }
 }
