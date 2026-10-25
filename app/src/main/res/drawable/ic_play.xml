@@ -1,0 +1,7 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <!-- Rounded play triangle, nudged right so it looks centred -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M8.5,5.3C8.5,4.5 9.4,4 10.1,4.4l9.3,5.9c0.7,0.4 0.7,1.5 0,1.9l-9.3,5.9c-0.7,0.4 -1.6,-0.1 -1.6,-0.9z" />
+</vector>

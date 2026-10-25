@@ -204,6 +204,101 @@ body {
 .sel { font: 500 13px var(--font-app); color: var(--ink); background: var(--panel);
   border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
 
+/* Player (PlayerOverlay.kt): dock at the bottom, Now Playing when expanded */
+.has-dock .results { bottom: calc(280 * var(--u)); }
+.searching.has-dock:not(.kb-up) .suggest { padding-bottom: calc(304 * var(--u)); }
+.np-backdrop {
+  position: absolute; inset: 0; opacity: 0; pointer-events: none;
+  background: url("home_background_blur.jpg") center / cover no-repeat;
+  transition: opacity .44s var(--ease);
+}
+.np-backdrop::before { content: ""; position: absolute; inset: 0; background: var(--song, transparent); opacity: .45; filter: blur(calc(80 * var(--u))); }
+.np-backdrop::after { content: ""; position: absolute; inset: 0; background: rgba(32, 0, 5, .28); }
+.expanded .np-backdrop { opacity: 1; pointer-events: auto; }
+
+.dock {
+  position: absolute; left: 0; right: 0; top: calc(920 * var(--u)); height: calc(280 * var(--u));
+  box-sizing: border-box; padding: 0 calc(64 * var(--u)) 0 calc(560 * var(--u));
+  display: flex; align-items: center; gap: calc(40 * var(--u));
+  border-radius: calc(56 * var(--u)) calc(56 * var(--u)) 0 0;
+  background: linear-gradient(rgba(255,255,255,.19), rgba(255,255,255,.06)), rgba(48, 0, 8, .28);
+  border: calc(2 * var(--u)) solid rgba(255,255,255,.14); border-top-color: rgba(255,255,255,.5); border-bottom: 0;
+  -webkit-backdrop-filter: blur(calc(26 * var(--u))) saturate(1.3); backdrop-filter: blur(calc(26 * var(--u))) saturate(1.3);
+  cursor: pointer;
+  transition: transform .32s var(--ease), opacity .44s var(--ease);
+}
+.dock .bar-line { position: absolute; left: calc(56 * var(--u)); top: 0; height: calc(6 * var(--u)); background: var(--red); border-radius: 3px; width: 0; }
+.dock .meta .t { font-size: calc(60 * var(--u)); }
+.dock .meta .a { font-size: calc(44 * var(--u)); }
+.dock .meta { flex: 1; }
+.kb-up .dock { transform: translateY(calc(320 * var(--u))); }
+.expanded .dock { opacity: 0; pointer-events: none; }
+
+.ctrls { display: flex; align-items: center; gap: calc(32 * var(--u)); flex: none; }
+.cbtn {
+  width: var(--s); height: var(--s); border-radius: 50%; flex: none; padding: 0; cursor: pointer;
+  display: grid; place-items: center;
+  border: calc(1.5 * var(--u)) solid rgba(255,255,255,.14); border-top-color: rgba(255,255,255,.5);
+  background: linear-gradient(rgba(255,255,255,.13), rgba(255,255,255,.04));
+}
+.cbtn svg { width: var(--g); height: var(--g); }
+.cbtn.accent { background: var(--red); border-color: rgba(255,255,255,.25); }
+.cbtn:disabled { opacity: .35; cursor: default; }
+.cbtn:not(:disabled):active { transform: scale(.94); }
+.cbtn:focus-visible { outline: calc(4 * var(--u)) solid #fff; outline-offset: calc(3 * var(--u)); }
+
+.video {
+  position: absolute; left: calc(64 * var(--u)); top: calc(934 * var(--u));
+  width: calc(448 * var(--u)); height: calc(252 * var(--u));
+  border-radius: calc(24 * var(--u)); overflow: hidden; background: #000;
+  border: calc(1.5 * var(--u)) solid rgba(255,255,255,.3);
+  transition-property: left, top, width, height, border-radius, transform;
+  transition-duration: .44s, .44s, .44s, .44s, .44s, .32s; transition-timing-function: var(--ease);
+  cursor: pointer;
+}
+.kb-up:not(.expanded) .video { transform: translateY(calc(320 * var(--u))); }
+.expanded .video { left: calc(120 * var(--u)); top: calc(267.5 * var(--u)); width: calc(1040 * var(--u)); height: calc(585 * var(--u)); border-radius: calc(40 * var(--u)); cursor: default; }
+.video .art { position: absolute; inset: 0; }
+.video .art span { position: absolute; inset: 0; display: grid; place-items: center; font: 700 calc(160 * var(--u)) var(--font-app); color: rgba(255,255,255,.85); }
+.video .art span { transition: font-size .44s var(--ease); }
+.video:not(.big) .art span { font-size: calc(90 * var(--u)); }
+.video:not(.big) .tag { display: none; }
+.video .tag {
+  position: absolute; left: 50%; bottom: 6%; transform: translateX(-50%);
+  font: 500 calc(30 * var(--u)) var(--font-app); color: rgba(255,255,255,.8);
+  background: rgba(0,0,0,.45); padding: .3em .9em; border-radius: 999px; white-space: nowrap;
+}
+
+.np { opacity: 0; pointer-events: none; transition: opacity .44s var(--ease); }
+.expanded .np { opacity: 1; pointer-events: auto; }
+.np-min { position: absolute; left: calc(56 * var(--u)); top: calc(48 * var(--u)); --s: calc(130 * var(--u)); --g: calc(64 * var(--u)); }
+.np-col {
+  position: absolute; left: calc(1240 * var(--u)); right: calc(120 * var(--u));
+  top: calc(267.5 * var(--u)); height: calc(585 * var(--u));
+  display: flex; flex-direction: column; justify-content: center; color: #fff;
+  transform: translateX(calc(60 * var(--u))); transition: transform .44s var(--ease);
+}
+.expanded .np-col { transform: none; }
+.np-title { font: 500 calc(80 * var(--u)) / 1.22 var(--font-app); padding-bottom: .06em; text-shadow: 0 2px 8px rgba(0,0,0,.33);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.np-artist { margin-top: calc(16 * var(--u)); font-size: calc(50 * var(--u)); color: rgba(255,255,255,.72);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 8px rgba(0,0,0,.33); }
+.seek { margin-top: calc(64 * var(--u)); position: relative; height: calc(80 * var(--u)); cursor: pointer; touch-action: none; }
+.seek .track { position: absolute; left: 0; right: 0; top: 50%; height: calc(12 * var(--u)); margin-top: calc(-6 * var(--u)); border-radius: 99px; background: rgba(255,255,255,.2); }
+.seek .fill { position: absolute; left: 0; top: 50%; height: calc(12 * var(--u)); margin-top: calc(-6 * var(--u)); border-radius: 99px; background: var(--red); }
+.seek .thumb { position: absolute; top: 50%; width: calc(36 * var(--u)); height: calc(36 * var(--u)); margin: calc(-18 * var(--u)) 0 0 calc(-18 * var(--u)); border-radius: 50%; background: #fff; }
+.seek.drag .thumb { transform: scale(1.33); }
+.times { display: flex; justify-content: space-between; font-size: calc(38 * var(--u)); color: rgba(255,255,255,.72); font-variant-numeric: tabular-nums; }
+.np-ctrls { margin-top: calc(48 * var(--u)); display: flex; justify-content: center; align-items: center; gap: calc(56 * var(--u)); }
+.upnext {
+  position: absolute; left: calc(120 * var(--u)); width: calc(1040 * var(--u)); top: calc(900 * var(--u));
+  display: flex; align-items: baseline; gap: calc(28 * var(--u)); color: #fff; white-space: nowrap;
+}
+.upnext b { font: 500 calc(34 * var(--u)) var(--font-app); letter-spacing: calc(3 * var(--u)); color: rgba(255,255,255,.72); }
+.upnext span { font-size: calc(44 * var(--u)); overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 8px rgba(0,0,0,.33); }
+@media (prefers-reduced-motion: reduce) { .video, .dock, .np, .np-col, .np-backdrop { transition: none; } }
+.bounds .video, .bounds .dock, .bounds .cbtn, .bounds .np-col { outline: 1px dashed #00e5ff; }
+
 /* Glass keyboard (GlassKeyboard.kt) */
 .kb {
   position: absolute; left: 0; right: 0; bottom: 0; height: calc(470 * var(--u));
@@ -367,6 +462,41 @@ body {
 
       <div class="kb" id="kb" aria-label="Keyboard"></div>
 
+      <!-- Player (PlayerOverlay.kt) -->
+      <div id="player" hidden>
+        <div class="np-backdrop" id="npBackdrop"></div>
+        <div class="dock" id="dock" role="button" aria-label="Open Now Playing">
+          <div class="bar-line" id="dockLine"></div>
+          <div class="meta"><div class="t" id="dockTitle"></div><div class="a" id="dockArtist"></div></div>
+          <div class="ctrls">
+            <button class="cbtn" type="button" data-act="prev" aria-label="Previous song" style="--s:calc(124 * var(--u));--g:calc(60 * var(--u))"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.2c0-.8-.9-1.3-1.6-.8l-8.2 5.8c-.6.4-.6 1.2 0 1.6l8.2 5.8c.7.5 1.6 0 1.6-.8zM7 5.5H5.5a.5.5 0 0 0-.5.5v12a.5.5 0 0 0 .5.5H7a.5.5 0 0 0 .5-.5V6a.5.5 0 0 0-.5-.5z" fill="#fff"/></svg></button>
+            <button class="cbtn accent" type="button" data-act="toggle" aria-label="Play" style="--s:calc(160 * var(--u));--g:calc(80 * var(--u))"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 5.3c0-.8.9-1.3 1.6-.9l9.3 5.9c.7.4.7 1.5 0 1.9l-9.3 5.9c-.7.4-1.6-.1-1.6-.9z" fill="#fff"/></svg></button>
+            <button class="cbtn" type="button" data-act="next" aria-label="Next song" style="--s:calc(124 * var(--u));--g:calc(60 * var(--u))"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6.2c0-.8.9-1.3 1.6-.8l8.2 5.8c.6.4.6 1.2 0 1.6l-8.2 5.8c-.7.5-1.6 0-1.6-.8zM17 5.5h1.5a.5.5 0 0 1 .5.5v12a.5.5 0 0 1-.5.5H17a.5.5 0 0 1-.5-.5V6a.5.5 0 0 1 .5-.5z" fill="#fff"/></svg></button>
+          </div>
+        </div>
+        <div class="np" id="np">
+          <button class="cbtn np-min" type="button" data-act="min" aria-label="Minimize player"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9.5l6 6 6-6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <div class="np-col">
+            <div class="np-title" id="npTitle"></div>
+            <div class="np-artist" id="npArtist"></div>
+            <div class="seek" id="seek" role="slider" aria-label="Seek" tabindex="0">
+              <div class="track"></div><div class="fill" id="seekFill"></div><div class="thumb" id="seekThumb"></div>
+            </div>
+            <div class="times"><span id="tPos">0:00</span><span id="tDur">0:00</span></div>
+            <div class="np-ctrls">
+              <button class="cbtn" type="button" data-act="prev" aria-label="Previous song" style="--s:calc(150 * var(--u));--g:calc(72 * var(--u))"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.2c0-.8-.9-1.3-1.6-.8l-8.2 5.8c-.6.4-.6 1.2 0 1.6l8.2 5.8c.7.5 1.6 0 1.6-.8zM7 5.5H5.5a.5.5 0 0 0-.5.5v12a.5.5 0 0 0 .5.5H7a.5.5 0 0 0 .5-.5V6a.5.5 0 0 0-.5-.5z" fill="#fff"/></svg></button>
+              <button class="cbtn accent" type="button" data-act="toggle" aria-label="Play" style="--s:calc(210 * var(--u));--g:calc(100 * var(--u))"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 5.3c0-.8.9-1.3 1.6-.9l9.3 5.9c.7.4.7 1.5 0 1.9l-9.3 5.9c-.7.4-1.6-.1-1.6-.9z" fill="#fff"/></svg></button>
+              <button class="cbtn" type="button" data-act="next" aria-label="Next song" style="--s:calc(150 * var(--u));--g:calc(72 * var(--u))"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6.2c0-.8.9-1.3 1.6-.8l8.2 5.8c.6.4.6 1.2 0 1.6l-8.2 5.8c-.7.5-1.6 0-1.6-.8zM17 5.5h1.5a.5.5 0 0 1 .5.5v12a.5.5 0 0 1-.5.5H17a.5.5 0 0 1-.5-.5V6a.5.5 0 0 1 .5-.5z" fill="#fff"/></svg></button>
+            </div>
+          </div>
+          <div class="upnext" id="upnext"><b>UP NEXT</b><span id="upnextText"></span></div>
+        </div>
+        <div class="video" id="video">
+          <div class="art" id="videoArt"><span></span></div>
+          <div class="tag">YouTube video plays here in the app</div>
+        </div>
+      </div>
+
       <div class="toast" id="toast" hidden></div>
 
       <div class="voice" id="voice" hidden>
@@ -391,7 +521,7 @@ body {
       <span class="chip">Canvas <b>2000×1200</b></span>
       <span class="chip">Scale <b id="scale">–</b></span>
       <span class="chip">Back <b>Esc</b></span>
-      <span class="chip">Build <b>home v0.12</b></span>
+      <span class="chip">Build <b>v0.13 · player</b></span>
       <label class="chip" for="mode">Results
         <select class="sel" id="mode">
           <option value="ok">Sample songs</option>
@@ -534,7 +664,11 @@ function setQuery(v) {
   }, DEBOUNCE_MS);
   render();
 }
-function activate() { open = true; keyboard = true; render(); }
+function activate() {
+  open = true; keyboard = true;
+  if (query.trim() && !suggestions.length) suggestions = suggest(query, MAX_SUGGESTIONS);
+  render();
+}
 function runSearch() {          // LaunchedEffect(submitted, attempt)
   const q = submitted;
   results = { kind: 'loading' };
@@ -583,10 +717,102 @@ function back() {
   }
   render();
 }
-function play(t) {
-  logEvent('onPlay', `${JSON.stringify(t.title)} – ${t.artist}`);
-  toast(`Picked “${t.title}” – ${t.artist}`);
+// ---------- Player (mirrors PlayerController.kt; playback is simulated here) ----------
+const P = { queue: [], index: -1, playing: false, pos: 0, dur: 0, expanded: false, timer: null };
+const ICON_PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 5.3c0-.8.9-1.3 1.6-.9l9.3 5.9c.7.4.7 1.5 0 1.9l-9.3 5.9c-.7.4-1.6-.1-1.6-.9z" fill="#fff"/></svg>', ICON_PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5h2.6a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1zM14.4 4.5H17a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-2.6a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z" fill="#fff"/></svg>';
+const cur = () => P.queue[P.index];
+const toSec = d => { const [m, s] = d.split(':').map(Number); return m * 60 + s; };
+const fmt = s => { s = Math.max(0, Math.floor(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+function playQueue(tracks, i) {
+  P.queue = tracks; P.expanded = true;
+  logEvent('player.playQueue', `${tracks.length} songs, start at #${i + 1}`);
+  playAt(i);
 }
+function playAt(i) {
+  P.index = i; P.pos = 0; P.dur = toSec(cur().duration); P.playing = true;
+  logEvent('player.load', `${JSON.stringify(cur().title)} – ${cur().artist}`);
+  tick(); renderPlayer();
+}
+function tick() {
+  clearInterval(P.timer);
+  P.timer = setInterval(() => {
+    if (!P.playing) return;
+    P.pos += 0.25;
+    if (P.pos >= P.dur) {                         // STATE_ENDED → auto-advance
+      if (P.index < P.queue.length - 1) { logEvent('player.ended', 'next in queue'); playAt(P.index + 1); return; }
+      P.pos = P.dur; P.playing = false; logEvent('player.ended', 'end of queue');
+    }
+    renderProgress();
+    if (!P.playing) renderPlayer();
+  }, 250);
+}
+function togglePlay() { P.playing = !P.playing; logEvent('player', P.playing ? 'play' : 'pause'); renderPlayer(); }
+function next() { if (P.index < P.queue.length - 1) playAt(P.index + 1); }
+function previous() { if (P.pos > 3 || P.index === 0) { P.pos = 0; logEvent('player', 'restart'); renderProgress(); } else playAt(P.index - 1); }
+function setExpanded(v) { P.expanded = v; logEvent('player', v ? 'expand' : 'minimize'); renderPlayer(); }
+function play(t) {
+  const i = results.tracks.indexOf(t);
+  playQueue(results.tracks, i);
+}
+
+const playerEl = $('player');
+function renderProgress() {
+  const f = P.dur ? Math.min(1, P.pos / P.dur) : 0;
+  $('dockLine').style.width = `calc(${f} * (100% - 112 * var(--u)))`;
+  if (!seekDrag) {
+    $('seekFill').style.width = `${f * 100}%`; $('seekThumb').style.left = `${f * 100}%`;
+    $('tPos').textContent = fmt(P.pos);
+  }
+  $('tDur').textContent = fmt(P.dur);
+}
+function renderPlayer() {
+  const t = cur();
+  playerEl.hidden = !t;
+  screen.classList.toggle('has-dock', !!t);
+  screen.classList.toggle('expanded', !!t && P.expanded);
+  if (!t) return;
+  $('dockTitle').textContent = $('npTitle').textContent = t.title;
+  $('dockArtist').textContent = $('npArtist').textContent = t.artist;
+  const art = `linear-gradient(135deg, hsl(${t.hue} 70% 45%), hsl(${(t.hue + 50) % 360} 75% 30%))`;
+  $('videoArt').style.background = art;
+  $('videoArt').firstChild.textContent = t.artist[0];
+  $('npBackdrop').style.setProperty('--song', art);
+  $('video').classList.toggle('big', P.expanded);
+  playerEl.querySelectorAll('[data-act="toggle"]').forEach(b => {
+    b.innerHTML = P.playing ? ICON_PAUSE : ICON_PLAY; b.setAttribute('aria-label', P.playing ? 'Pause' : 'Play');
+  });
+  playerEl.querySelectorAll('[data-act="next"]').forEach(b => { b.disabled = P.index >= P.queue.length - 1; });
+  const nx = P.queue[P.index + 1];
+  $('upnext').hidden = !nx;
+  if (nx) $('upnextText').textContent = `${nx.title}  ·  ${nx.artist}`;
+  renderProgress();
+}
+playerEl.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-act]');
+  if (b) {
+    e.stopPropagation();
+    ({ prev: previous, next, toggle: togglePlay, min: () => setExpanded(false) })[b.dataset.act]();
+    return;
+  }
+  if (!P.expanded && e.target.closest('.dock, .video')) setExpanded(true);
+});
+// Seek: tap or drag along the bar
+let seekDrag = false;
+const seekEl = $('seek');
+function seekFrac(e) { const r = seekEl.getBoundingClientRect(); return Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)); }
+seekEl.addEventListener('pointerdown', (e) => {
+  seekDrag = true; seekEl.classList.add('drag'); seekEl.setPointerCapture(e.pointerId);
+  const f = seekFrac(e); $('seekFill').style.width = $('seekThumb').style.left = `${f * 100}%`; $('tPos').textContent = fmt(f * P.dur);
+});
+seekEl.addEventListener('pointermove', (e) => {
+  if (!seekDrag) return;
+  const f = seekFrac(e); $('seekFill').style.width = $('seekThumb').style.left = `${f * 100}%`; $('tPos').textContent = fmt(f * P.dur);
+});
+seekEl.addEventListener('pointerup', (e) => {
+  if (!seekDrag) return;
+  seekDrag = false; seekEl.classList.remove('drag');
+  P.pos = seekFrac(e) * P.dur; logEvent('player.seek', fmt(P.pos)); renderProgress();
+});
 
 const MESSAGES = {
   MissingKey: ['Add a YouTube API key to search', 'Put youtube.apiKey=… in local.properties, then rebuild. See the README.'],
@@ -792,7 +1018,11 @@ buildKeyboard();
 // Computer keyboard works too while ours is up (handy for testing).
 document.addEventListener('keydown', (e) => {
   if (!voice.hidden || e.target.closest?.('.btn, .voice')) return;
-  if (e.key === 'Escape') { if (searching()) back(); return; }
+  if (e.key === 'Escape') {
+    if (P.expanded && cur()) setExpanded(false);    // player's BackHandler wins
+    else if (searching()) back();
+    return;
+  }
   if (!keyboardShown()) return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key === 'Backspace') { e.preventDefault(); backspace(); }
@@ -841,6 +1071,7 @@ $('fsBtn').addEventListener('click', async () => {
 $('resetBtn').addEventListener('click', () => {
   query = ''; open = false; keyboard = false; suggestions = []; symbols = false;
   submitted = null; clearTimeout(searchTimer); voice.hidden = true; toastEl.hidden = true;
+  clearInterval(P.timer); Object.assign(P, { queue: [], index: -1, playing: false, expanded: false }); renderPlayer();
   buildKeyboard();
   log.textContent = '';
   wasSearching = wasKb = false;

@@ -75,11 +75,16 @@ private const val MAX_RECENT_SHOWN = 30
 fun HomeScreen(
     youtube: YouTubeSearch,
     history: SearchHistory,
-    onPlay: (Track) -> Unit,
+    /** A song was tapped: the whole result list and the tapped position. */
+    onPlay: (tracks: List<Track>, index: Int) -> Unit,
     onVoiceSearch: () -> Unit,
     voiceResult: String? = null,
     onVoiceResultConsumed: () -> Unit = {},
     suggestionProvider: SuggestionProvider = remember { LocalSuggestionProvider() },
+    /** Height (design px) of the mini player docked at the bottom; content stays clear of it. */
+    dockInset: Float = 0f,
+    /** Tells the player dock to slide away while our keyboard is up. */
+    onKeyboardShownChange: (Boolean) -> Unit = {},
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var open by rememberSaveable { mutableStateOf(false) }       // search panel open
@@ -172,6 +177,8 @@ fun HomeScreen(
         }
     }
 
+    LaunchedEffect(keyboardShown) { onKeyboardShownChange(keyboardShown) }
+
     // Back: panel open over results → back to results; otherwise → idle home.
     BackHandler(enabled = searching) {
         if (open && submitted != null) closePanel() else goHome()
@@ -254,12 +261,21 @@ fun HomeScreen(
                 if (showResults) {
                     SearchResults(
                         state = results,
-                        onPlay = onPlay,
+                        onPlay = { track ->
+                            (results as? ResultsState.Done)?.let { done ->
+                                onPlay(done.tracks, done.tracks.indexOf(track))
+                            }
+                        },
                         onRetry = { attempt++ },
                         modifier = Modifier
                             .align(Alignment.TopStart)
                             .fillMaxSize()
-                            .padding(top = (barTop + barHeight + 12f).u, start = 80.u, end = 80.u),
+                            .padding(
+                                top = (barTop + barHeight + 12f).u,
+                                start = 80.u,
+                                end = 80.u,
+                                bottom = dockInset.u, // stop above the mini player
+                            ),
                     )
                 }
 
@@ -272,8 +288,8 @@ fun HomeScreen(
                     onRemove = { recent = history.remove(it) },
                     // Rows blur as they pass behind the keyboard glass.
                     glassTopPx = { screenHeightPx - keyboardHeightPx * kb },
-                    // Lets the last rows scroll up clear of the keyboard.
-                    bottomPadding = (KEYBOARD_HEIGHT * kb + 24f).u,
+                    // Lets the last rows scroll up clear of the keyboard (or the mini player).
+                    bottomPadding = (maxOf(KEYBOARD_HEIGHT * kb, dockInset * (1f - kb)) + 24f).u,
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .fillMaxSize()
@@ -330,7 +346,7 @@ private fun HomeScreenPreview() {
         HomeScreen(
             youtube = YouTubeSearch(apiKey = ""),
             history = remember { SearchHistory(context) },
-            onPlay = {},
+            onPlay = { _, _ -> },
             onVoiceSearch = {},
         )
     }

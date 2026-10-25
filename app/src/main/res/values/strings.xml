@@ -8,5 +8,10 @@
     <string name="key_space">space</string>
     <string name="key_backspace">Delete</string>
     <string name="key_hide">Hide keyboard</string>
+    <string name="minimize_player">Minimize player</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="next_song">Next song</string>
+    <string name="previous_song">Previous song</string>
     <string name="voice_prompt">Say a song, artist or album</string>
 </resources>
