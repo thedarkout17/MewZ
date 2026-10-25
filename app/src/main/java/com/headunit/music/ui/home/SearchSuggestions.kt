@@ -86,7 +86,7 @@ private fun SuggestionRow(query: String, text: String, index: Int, onClick: () -
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(146.u)
+                .height(176.u)
                 .graphicsLayer {
                     alpha = anim.value
                     translationY = (1f - anim.value) * slide.toPx()
