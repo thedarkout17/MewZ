@@ -22,3 +22,4 @@ Use `with(LocalDesignScale.current) { 232.u }` for sizes and `92.usp` for text.
 ## Repo layout
 - `app/` — the Android app
 - `docs/design/` — original mockups and graphics
+- `docs/demo/` — live web demo of the screens (mirrors the Compose layout, with an event log for debugging)
