@@ -115,18 +115,32 @@ body {
   position: absolute; top: calc(336 * var(--u)); left: calc(282 * var(--u)); right: calc(300 * var(--u));
   margin: 0; padding: 0; list-style: none;
 }
-.searching .suggest { top: calc(220 * var(--u)); left: calc(240 * var(--u)); }
-.suggest button {
-  display: block; width: 100%; height: calc(176 * var(--u)); padding: 0 calc(24 * var(--u));
-  border: 0; border-radius: calc(24 * var(--u)); background: transparent; cursor: pointer;
-  text-align: left; color: #fff; font: 400 calc(76 * var(--u)) / 1 var(--font-app);
-  text-shadow: 0 2px 8px rgba(0,0,0,.33);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.searching .suggest { top: calc(220 * var(--u)); left: calc(126 * var(--u)); right: calc(136 * var(--u)); }
+/* icon slot sits under the bar's magnifier, text under the typed text, × under the mic */
+.suggest li {
+  display: flex; align-items: center; height: calc(176 * var(--u));
+  border-radius: calc(24 * var(--u));
   animation: rise .32s var(--ease) both;
   animation-delay: calc(var(--i) * 45ms);
 }
-.suggest button b { font-weight: 700; }
-.suggest button:hover, .suggest button:focus-visible { background: rgba(255,255,255,.12); outline: 0; }
+.suggest li:hover, .suggest li:focus-within { background: rgba(255,255,255,.12); }
+.suggest .pick {
+  flex: 1; min-width: 0; height: 100%; display: flex; align-items: center; gap: calc(30 * var(--u));
+  padding: 0 0 0 calc(24 * var(--u)); border: 0; background: transparent; cursor: pointer;
+  text-align: left; color: #fff; font: 400 calc(76 * var(--u)) / 1 var(--font-app);
+  text-shadow: 0 2px 8px rgba(0,0,0,.33); outline: 0;
+}
+.suggest .ico { flex: none; width: calc(84 * var(--u)); display: grid; place-items: center; }
+.suggest .ico svg { width: calc(52 * var(--u)); height: calc(52 * var(--u)); opacity: .45; }
+.suggest .hist .ico svg { width: calc(60 * var(--u)); height: calc(60 * var(--u)); opacity: .85; }
+.suggest .txt { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.suggest .txt b { font-weight: 700; }
+.suggest .rm {
+  flex: none; width: calc(130 * var(--u)); height: calc(130 * var(--u)); border-radius: 50%;
+  border: 0; background: transparent; cursor: pointer; display: grid; place-items: center;
+}
+.suggest .rm:hover, .suggest .rm:focus-visible { background: rgba(255,255,255,.14); outline: 0; }
+.suggest .rm svg { width: calc(56 * var(--u)); height: calc(56 * var(--u)); opacity: .6; }
 @keyframes rise { from { opacity: 0; transform: translateY(calc(24 * var(--u))); } }
 
 /* Search results (SearchResults.kt) */
@@ -225,7 +239,7 @@ body {
 .key:focus-visible { outline: calc(4 * var(--u)) solid #fff; outline-offset: calc(2 * var(--u)); }
 
 @media (prefers-reduced-motion: reduce) {
-  .suggest button { animation: none; }
+  .suggest li { animation: none; }
   .glass, .veil, .title, .kb, .key { transition: none; }
   .bar, .bar svg.search, .field, .mic, .clear, .mic svg, .clear svg, .suggest { transition: none; }
   .caret.on { animation: none; opacity: 1; }
@@ -274,7 +288,7 @@ body {
 
 /* Layout bounds overlay (like Android's "Show layout bounds") */
 .bounds .bar, .bounds .title, .bounds .mic, .bounds .clear, .bounds .bar svg.search,
-.bounds .field, .bounds .suggest button, .bounds .key {
+.bounds .field, .bounds .suggest li, .bounds .key {
   outline: 1px dashed #00e5ff; outline-offset: 0;
 }
 .bounds .screen::after {
@@ -368,7 +382,7 @@ body {
       <span class="chip">Canvas <b>2000×1200</b></span>
       <span class="chip">Scale <b id="scale">–</b></span>
       <span class="chip">Back <b>Esc</b></span>
-      <span class="chip">Build <b>home v0.10</b></span>
+      <span class="chip">Build <b>home v0.11</b></span>
       <label class="chip" for="mode">Results
         <select class="sel" id="mode">
           <option value="ok">Sample songs</option>
@@ -458,6 +472,39 @@ function sampleResults(q) {
   });
 }
 
+// ---------- Search history (mirrors SearchHistory.kt; saved in this browser) ----------
+const HISTORY_KEY = 'muz.searchHistory', MAX_HISTORY = 30, MAX_HISTORY_WHILE_TYPING = 2;
+function loadHistory() {
+  try { const v = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); return Array.isArray(v) ? v : []; }
+  catch { return []; }
+}
+function saveHistory(list) { try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); } catch {} }
+let recent = loadHistory();
+function addHistory(q) {
+  q = q.trim(); if (!q) return;
+  recent = [q, ...recent.filter(h => h.toLowerCase() !== q.toLowerCase())].slice(0, MAX_HISTORY);
+  saveHistory(recent);
+}
+function removeHistory(q) {
+  recent = recent.filter(h => h.toLowerCase() !== q.toLowerCase());
+  saveHistory(recent);
+  logEvent('history:remove', JSON.stringify(q));
+  render();
+}
+function matchingHistory(typed) {
+  const t = typed.trim().toLowerCase();
+  const same = h => h.toLowerCase() === t;
+  const starts = recent.filter(h => h.toLowerCase().startsWith(t) && !same(h));
+  const words = recent.filter(h => !starts.includes(h) && !same(h) && h.toLowerCase().split(' ').some(w => w.startsWith(t)));
+  return [...starts, ...words];
+}
+function listItems() {
+  if (!query.trim()) return recent.slice(0, MAX_SUGGESTIONS).map(text => ({ text, hist: true }));
+  const past = matchingHistory(query).slice(0, MAX_HISTORY_WHILE_TYPING);
+  const fresh = suggestions.filter(s => !past.some(p => p.toLowerCase() === s.toLowerCase()));
+  return [...past.map(text => ({ text, hist: true })), ...fresh.map(text => ({ text, hist: false }))].slice(0, MAX_SUGGESTIONS);
+}
+
 // ---------- State (mirrors HomeScreen.kt) ----------
 let query = '', open = false, keyboard = false, suggestions = [];
 let submitted = null, results = { kind: 'loading' }, searchTimer;
@@ -504,6 +551,7 @@ function runSearch() {          // LaunchedEffect(submitted, attempt)
 function submit(text) {
   query = text; open = false; keyboard = false; submitted = text;
   clearTimeout(debounce);
+  addHistory(text);
   runSearch();
   render();
 }
@@ -597,28 +645,45 @@ function renderField() {
     field.classList.toggle('long', field.scrollWidth > field.clientWidth);
   }
 }
+const SUG_ICON = {
+  hist: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.8 12a8.2 8.2 0 1 0 2.4-5.8" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M6.2 2.8v3.6h3.6" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7.5V12l3 2" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  sug: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="7.5" fill="none" stroke="#fff" stroke-width="2.6"/><path d="M16 16l5.5 5.5" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>',
+  rm: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>',
+};
 function renderSuggestions() {
-  const list = open ? suggestions : [];
+  const list = open ? listItems() : [];
   const typed = query.trim();
-  const old = new Map([...sugEl.children].map(li => [li.dataset.text, li]));
+  const keyOf = it => `${it.hist ? 'h' : 's'}:${it.text}`;
+  const old = new Map([...sugEl.children].map(li => [li.dataset.key, li]));
   sugEl.textContent = '';
-  list.forEach((text, i) => {
-    let li = old.get(text);
+  list.forEach((it, i) => {
+    let li = old.get(keyOf(it));
     if (!li) {
       li = document.createElement('li');
-      li.dataset.text = text;
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.style.setProperty('--i', i);
-      b.addEventListener('click', () => { logEvent('suggestion:pick', JSON.stringify(text)); submit(text); });
-      li.appendChild(b);
-    } else li.firstChild.style.animation = 'none';   // already shown, don't replay
-    const b = li.firstChild;
-    b.textContent = '';
-    if (typed && text.toLowerCase().startsWith(typed.toLowerCase())) {
-      const strong = document.createElement('b'); strong.textContent = text.slice(typed.length);
-      b.append(text.slice(0, typed.length), strong);
-    } else b.textContent = text;
+      li.dataset.key = keyOf(it);
+      if (it.hist) li.className = 'hist';
+      li.style.setProperty('--i', i);
+      const pick = document.createElement('button');
+      pick.type = 'button'; pick.className = 'pick';
+      pick.innerHTML = `<span class="ico">${it.hist ? SUG_ICON.hist : SUG_ICON.sug}</span><span class="txt"></span>`;
+      pick.addEventListener('click', () => {
+        logEvent(it.hist ? 'history:pick' : 'suggestion:pick', JSON.stringify(it.text)); submit(it.text);
+      });
+      li.appendChild(pick);
+      if (it.hist) {
+        const rm = document.createElement('button');
+        rm.type = 'button'; rm.className = 'rm'; rm.setAttribute('aria-label', 'Remove from recent searches');
+        rm.innerHTML = SUG_ICON.rm;
+        rm.addEventListener('click', () => removeHistory(it.text));
+        li.appendChild(rm);
+      }
+    } else li.style.animation = 'none';   // already shown, don't replay
+    const txt = li.querySelector('.txt');
+    txt.textContent = '';
+    if (typed && it.text.toLowerCase().startsWith(typed.toLowerCase())) {
+      const strong = document.createElement('b'); strong.textContent = it.text.slice(typed.length);
+      txt.append(it.text.slice(0, typed.length), strong);
+    } else txt.textContent = it.text;
     sugEl.appendChild(li);
   });
 }

@@ -3,6 +3,7 @@
     <string name="search_hint">Search</string>
     <string name="voice_search">Voice search</string>
     <string name="clear_search">Clear search</string>
+    <string name="remove_from_history">Remove from recent searches</string>
     <string name="key_search">Search</string>
     <string name="key_space">space</string>
     <string name="key_backspace">Delete</string>

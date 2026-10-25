@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.headunit.music.data.SearchHistory
 import com.headunit.music.data.youtube.YouTubeSearch
 import com.headunit.music.ui.home.HomeScreen
 import com.headunit.music.ui.theme.HeadunitMusicTheme
@@ -39,9 +40,11 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val youtube = remember { YouTubeSearch(BuildConfig.YOUTUBE_API_KEY) }
+                val history = remember { SearchHistory(applicationContext) }
 
                 HomeScreen(
                     youtube = youtube,
+                    history = history,
                     onPlay = { track ->
                         // Next step: the player screen goes here.
                         Toast.makeText(this, "Picked “${track.title}” – ${track.artist}", Toast.LENGTH_SHORT).show()

@@ -29,6 +29,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import com.headunit.music.R
 import com.headunit.music.data.LocalSuggestionProvider
+import com.headunit.music.data.SearchHistory
 import com.headunit.music.data.SuggestionProvider
 import com.headunit.music.data.Track
 import com.headunit.music.data.youtube.SearchResult
@@ -44,6 +45,8 @@ import com.headunit.music.ui.theme.LocalDesignScale
 import kotlinx.coroutines.delay
 
 private const val MAX_SUGGESTIONS = 5
+/** While typing, at most this many past searches lead the list; the rest are suggestions. */
+private const val MAX_HISTORY_WHILE_TYPING = 2
 private const val SUGGEST_DEBOUNCE_MS = 120L
 
 /** Suggestions from this row down sit behind the keyboard glass (rows 4–5). */
@@ -60,6 +63,9 @@ private const val FIRST_ROW_UNDER_GLASS = 3
  * The ⌄ key or a tap on empty space puts the keyboard away to show all five;
  * tap the bar to bring it back.
  *
+ * Recent searches: opening the bar with nothing typed lists past searches
+ * (clock icon, × to remove). While typing, matching past searches lead the list.
+ *
  * Results: sending a search (Search key, a suggestion, or voice) closes the
  * panel and lists YouTube songs under the bar. Tap the bar to search again;
  * back from results returns to the idle home screen.
@@ -67,6 +73,7 @@ private const val FIRST_ROW_UNDER_GLASS = 3
 @Composable
 fun HomeScreen(
     youtube: YouTubeSearch,
+    history: SearchHistory,
     onPlay: (Track) -> Unit,
     onVoiceSearch: () -> Unit,
     voiceResult: String? = null,
@@ -77,6 +84,18 @@ fun HomeScreen(
     var open by rememberSaveable { mutableStateOf(false) }       // search panel open
     var keyboard by rememberSaveable { mutableStateOf(false) }   // our keyboard showing
     var suggestions by remember { mutableStateOf(emptyList<String>()) }
+    var recent by remember { mutableStateOf(history.load()) }
+
+    // What the list under the bar shows: recent searches when nothing is typed;
+    // otherwise matching recent searches first, then suggestions.
+    val listItems = if (query.isBlank()) {
+        recent.take(MAX_SUGGESTIONS).map { SuggestionItem(it, fromHistory = true) }
+    } else {
+        val past = history.matching(recent, query).take(MAX_HISTORY_WHILE_TYPING)
+        val fresh = suggestions.filterNot { s -> past.any { it.equals(s, ignoreCase = true) } }
+        (past.map { SuggestionItem(it, fromHistory = true) } +
+            fresh.map { SuggestionItem(it, fromHistory = false) }).take(MAX_SUGGESTIONS)
+    }
 
     // Last search sent, and its results. `attempt` bumps to retry the same query.
     var submitted by rememberSaveable { mutableStateOf<String?>(null) }
@@ -103,6 +122,7 @@ fun HomeScreen(
         query = text
         open = false
         keyboard = false
+        recent = history.add(text)
         if (text == submitted) attempt++ else submitted = text
     }
     /** Close the search panel; if a search is showing, the bar goes back to its query. */
@@ -243,16 +263,19 @@ fun HomeScreen(
                 // Suggestions line up with the text inside the bar.
                 SearchSuggestions(
                     query = query,
-                    suggestions = if (open) suggestions else emptyList(),
+                    items = if (open) listItems else emptyList(),
                     onPick = ::submit,
+                    onRemove = { recent = history.remove(it) },
                     fog = kb,
                     fogFromIndex = FIRST_ROW_UNDER_GLASS,
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(
                             top = (barTop + barHeight + lerp(40f, 24f)).u,
-                            start = lerp(282f, 240f).u, // in line with the typed text
-                            end = 300.u,
+                            // Icons sit under the bar's magnifier, text under the typed text,
+                            // × buttons under the mic.
+                            start = 126.u,
+                            end = 136.u,
                         ),
                 )
 
@@ -296,6 +319,12 @@ fun HomeScreen(
 @Composable
 private fun HomeScreenPreview() {
     HeadunitMusicTheme {
-        HomeScreen(youtube = YouTubeSearch(apiKey = ""), onPlay = {}, onVoiceSearch = {})
+        val context = androidx.compose.ui.platform.LocalContext.current
+        HomeScreen(
+            youtube = YouTubeSearch(apiKey = ""),
+            history = remember { SearchHistory(context) },
+            onPlay = {},
+            onVoiceSearch = {},
+        )
     }
 }
