@@ -45,9 +45,16 @@ import com.headunit.music.R
 import com.headunit.music.ui.theme.Brand
 import com.headunit.music.ui.theme.LocalDesignScale
 
+/** Bar height at rest and in search mode (design px). HomeScreen uses these to place things below it. */
+const val BAR_HEIGHT_IDLE = 232f
+const val BAR_HEIGHT_COMPACT = 168f
+
 /**
  * Frosted pill search bar from the mockup: magnifier, text field, clear, mic.
  * All sizes are design pixels on the 2000x1200 canvas.
+ *
+ * [compact] runs 0 → 1 as search mode opens: the bar gets thinner and its
+ * text and icons shrink with it.
  */
 @Composable
 fun SearchBar(
@@ -58,20 +65,22 @@ fun SearchBar(
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester = remember { FocusRequester() },
     onFocusChange: (Boolean) -> Unit = {},
+    compact: Float = 0f,
 ) {
     val focusManager = LocalFocusManager.current
+    fun shrink(idle: Float, small: Float) = idle + (small - idle) * compact
 
     with(LocalDesignScale.current) {
         val textStyle = TextStyle(
             color = Brand.RedText,
-            fontSize = 92.usp,
+            fontSize = shrink(92f, 72f).usp,
             fontWeight = FontWeight.Normal,
         )
 
         Row(
             modifier = modifier
                 .fillMaxWidth()
-                .height(232.u)
+                .height(shrink(BAR_HEIGHT_IDLE, BAR_HEIGHT_COMPACT).u)
                 .clip(RoundedCornerShape(percent = 50))
                 .background(Brand.Frost)
                 // Tapping anywhere on the pill focuses the field: big target for driving.
@@ -79,17 +88,17 @@ fun SearchBar(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                 ) { focusRequester.requestFocus() }
-                .padding(start = 66.u, end = 52.u),
+                .padding(start = shrink(66f, 54f).u, end = shrink(52f, 40f).u),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 painter = painterResource(R.drawable.ic_search),
                 contentDescription = null,
                 tint = Brand.Red,
-                modifier = Modifier.size(108.u),
+                modifier = Modifier.size(shrink(108f, 84f).u),
             )
 
-            Spacer(Modifier.width(36.u))
+            Spacer(Modifier.width(shrink(36f, 30f).u))
 
             BasicTextField(
                 value = query,
@@ -128,7 +137,8 @@ fun SearchBar(
                     painter = painterResource(R.drawable.ic_close),
                     contentDescription = stringResource(R.string.clear_search),
                     tint = Brand.RedMuted,
-                    glyph = 80,
+                    glyph = shrink(80f, 66f),
+                    target = shrink(150f, 130f),
                     onClick = {
                         onQueryChange("")
                         focusRequester.requestFocus()
@@ -140,27 +150,29 @@ fun SearchBar(
                 painter = painterResource(R.drawable.ic_mic),
                 contentDescription = stringResource(R.string.voice_search),
                 tint = Brand.RedMuted,
-                glyph = 96,
+                glyph = shrink(96f, 80f),
+                target = shrink(150f, 130f),
                 onClick = onVoiceSearch,
             )
         }
     }
 }
 
-/** 150px circular touch target around a smaller glyph. */
+/** Circular touch target ([target] px, 150 at rest) around a smaller glyph. */
 @Composable
 private fun RoundIconButton(
     painter: Painter,
     contentDescription: String,
     tint: Color,
-    glyph: Int,
+    glyph: Float,
+    target: Float,
     onClick: () -> Unit,
 ) {
     with(LocalDesignScale.current) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .size(150.u)
+                .size(target.u)
                 .clip(CircleShape)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },

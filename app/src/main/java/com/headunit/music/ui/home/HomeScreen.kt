@@ -32,6 +32,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.headunit.music.R
 import com.headunit.music.data.LocalSuggestionProvider
 import com.headunit.music.data.SuggestionProvider
+import com.headunit.music.ui.components.BAR_HEIGHT_COMPACT
+import com.headunit.music.ui.components.BAR_HEIGHT_IDLE
 import com.headunit.music.ui.components.SearchBar
 import com.headunit.music.ui.theme.DesignCanvas
 import com.headunit.music.ui.theme.HeadunitMusicTheme
@@ -132,6 +134,11 @@ fun HomeScreen(
 
         DesignCanvas(Modifier.fillMaxSize()) {
             with(LocalDesignScale.current) {
+                // Bar rises and slims down as search opens; suggestions follow it.
+                fun lerp(idle: Float, searching: Float) = idle + (searching - idle) * progress
+                val barTop = lerp(64f, 28f)
+                val barHeight = lerp(BAR_HEIGHT_IDLE, BAR_HEIGHT_COMPACT)
+
                 // Tap empty space while searching → put the keyboard away.
                 // If nothing is typed, that also returns to the idle home screen.
                 if (searching) {
@@ -171,7 +178,11 @@ fun HomeScreen(
                     onPick = ::submit,
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .padding(top = 336.u, start = 282.u, end = 300.u),
+                        .padding(
+                            top = (barTop + barHeight + 40f).u,
+                            start = lerp(282f, 240f).u, // in line with the typed text
+                            end = 300.u,
+                        ),
                 )
 
                 SearchBar(
@@ -181,9 +192,10 @@ fun HomeScreen(
                     onVoiceSearch = onVoiceSearch,
                     focusRequester = focusRequester,
                     onFocusChange = { focused = it },
+                    compact = progress,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = 64.u, start = 96.u, end = 96.u),
+                        .padding(top = barTop.u, start = 96.u, end = 96.u),
                 )
             }
         }

@@ -111,6 +111,23 @@ body {
 }
 .bounds .suggest button { outline: 1px dashed #00e5ff; }
 
+/* Search mode: bar rises and slims down (same numbers as SearchBar.kt) */
+.bar, .bar svg.search, .bar input, .mic, .clear, .mic svg, .clear svg, .suggest {
+  transition-property: top, height, width, padding, margin, font-size, left;
+  transition-duration: .42s; transition-timing-function: cubic-bezier(.4,0,.2,1);
+}
+.searching .bar { top: calc(28 * var(--u)); height: calc(168 * var(--u));
+  padding: 0 calc(40 * var(--u)) 0 calc(54 * var(--u)); }
+.searching .bar svg.search { width: calc(84 * var(--u)); height: calc(84 * var(--u)); }
+.searching .bar input { font-size: calc(72 * var(--u)); margin-left: calc(30 * var(--u)); }
+.searching .mic, .searching .clear { width: calc(130 * var(--u)); height: calc(130 * var(--u)); }
+.searching .mic svg { width: calc(80 * var(--u)); height: calc(80 * var(--u)); }
+.searching .clear svg { width: calc(66 * var(--u)); height: calc(66 * var(--u)); }
+.searching .suggest { top: calc(236 * var(--u)); left: calc(240 * var(--u)); }
+@media (prefers-reduced-motion: reduce) {
+  .bar, .bar svg.search, .bar input, .mic, .clear, .mic svg, .clear svg, .suggest { transition: none; }
+}
+
 /* Android-style toast */
 .toast {
   position: absolute; left: 50%; bottom: calc(110 * var(--u));
@@ -244,7 +261,7 @@ body {
       <span class="chip">Canvas <b>2000×1200</b></span>
       <span class="chip">Scale <b id="scale">–</b></span>
       <span class="chip">Back <b>Esc</b></span>
-      <span class="chip">Build <b>home v0.2</b></span>
+      <span class="chip">Build <b>home v0.3</b></span>
       <button class="btn" id="boundsBtn" type="button" aria-pressed="false">Layout bounds</button>
       <button class="btn" id="fsBtn" type="button">Fullscreen</button>
       <button class="btn" id="resetBtn" type="button">Reset</button>
