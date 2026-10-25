@@ -56,7 +56,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Keyboard sheet height on the 2000x1200 canvas. HomeScreen uses it to place the sheet. */
-const val KEYBOARD_HEIGHT = 640f
+const val KEYBOARD_HEIGHT = 470f
 
 private object Glass {
     /** Sheet: dark-red tint for contrast, then a soft white sheen from the top. */
@@ -79,7 +79,7 @@ private const val SYMBOLS_3 = ".,?!'#+"
 
 /**
  * In-app glass keyboard. Lowercase only (search doesn't need capitals),
- * with a 123 page for digits and punctuation. Big keys for use while parked.
+ * with a 123 page for digits and punctuation. Keys are ~100px tall: big enough to hit, small enough to leave three suggestions in view.
  */
 @Composable
 fun GlassKeyboard(
@@ -92,9 +92,9 @@ fun GlassKeyboard(
     var symbols by rememberSaveable { mutableStateOf(false) }
 
     with(LocalDesignScale.current) {
-        val keyGap = 16.u
+        val keyGap = 14.u
         Column(
-            verticalArrangement = Arrangement.spacedBy(18.u),
+            verticalArrangement = Arrangement.spacedBy(14.u),
             modifier = modifier
                 .fillMaxWidth()
                 .height(KEYBOARD_HEIGHT.u)
@@ -108,7 +108,7 @@ fun GlassKeyboard(
                 )
                 // Swallow taps on the gaps so they don't fall through to the screen behind.
                 .pointerInput(Unit) { detectTapGestures { } }
-                .padding(start = 96.u, end = 96.u, top = 30.u, bottom = 36.u),
+                .padding(start = 96.u, end = 96.u, top = 22.u, bottom = 26.u),
         ) {
             val rowModifier = Modifier.fillMaxWidth().weight(1f)
             val r1 = if (symbols) SYMBOLS_1 else LETTERS_1
@@ -134,11 +134,11 @@ fun GlassKeyboard(
                     label = stringResource(R.string.key_backspace),
                     repeatOnHold = true,
                     onPress = onBackspace,
-                ) { KeyIcon(R.drawable.ic_backspace, 64.u) }
+                ) { KeyIcon(R.drawable.ic_backspace, 56.u) }
             }
             Row(rowModifier, horizontalArrangement = Arrangement.spacedBy(keyGap)) {
                 GlassKey(weight = 1.5f, label = stringResource(R.string.key_hide), onPress = onHide) {
-                    KeyIcon(R.drawable.ic_keyboard_hide, 64.u)
+                    KeyIcon(R.drawable.ic_keyboard_hide, 56.u)
                 }
                 CharKey(',', onType)
                 GlassKey(weight = 4.5f, label = stringResource(R.string.key_space), onPress = { onType(' ') }) {
@@ -152,7 +152,7 @@ fun GlassKeyboard(
                     onPress = onSearch,
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        KeyIcon(R.drawable.ic_search, 48.u)
+                        KeyIcon(R.drawable.ic_search, 42.u)
                         Spacer(Modifier.width(16.u))
                         KeyLabel(stringResource(R.string.key_search), small = true)
                     }
@@ -236,7 +236,7 @@ private fun KeyLabel(text: String, small: Boolean = false, faded: Boolean = fals
             text = text,
             style = TextStyle(
                 color = Glass.Label.copy(alpha = if (faded) 0.7f else 1f),
-                fontSize = (if (small) 44 else 58).usp,
+                fontSize = (if (small) 40 else 50).usp,
                 fontWeight = if (small) FontWeight.Medium else FontWeight.Normal,
                 shadow = Shadow(Color(0x40000000), Offset(0f, 1.5f), blurRadius = 6f),
             ),

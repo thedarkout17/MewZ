@@ -43,11 +43,8 @@ import kotlinx.coroutines.delay
 private const val MAX_SUGGESTIONS = 5
 private const val SUGGEST_DEBOUNCE_MS = 120L
 
-/** Keyboard slides away after this long without a keystroke, revealing all suggestions. */
-private const val KEYBOARD_IDLE_HIDE_MS = 2000L
-
-/** Suggestions from this row down sit behind the keyboard glass (rows 3–5). */
-private const val FIRST_ROW_UNDER_GLASS = 2
+/** Suggestions from this row down sit behind the keyboard glass (rows 4–5). */
+private const val FIRST_ROW_UNDER_GLASS = 3
 
 /**
  * Home screen.
@@ -56,9 +53,9 @@ private const val FIRST_ROW_UNDER_GLASS = 2
  *
  * Searching (bar tapped): "Listen..." zooms out, the background frosts over,
  * the bar rises and slims down, and our glass keyboard slides up. Suggestions
- * appear as you type; the last three sit blurred behind the keyboard. Pause for
- * two seconds and the keyboard slides away so all five are readable. Tap the bar
- * to bring it back.
+ * appear as you type: three above the keyboard, the last two blurred behind it.
+ * The ⌄ key or a tap on empty space puts the keyboard away to show all five;
+ * tap the bar to bring it back.
  */
 @Composable
 fun HomeScreen(
@@ -115,14 +112,6 @@ fun HomeScreen(
         } else {
             delay(SUGGEST_DEBOUNCE_MS)
             suggestions = suggestionProvider.suggest(query, MAX_SUGGESTIONS)
-        }
-    }
-
-    // Pause typing → keyboard slides away. Every keystroke restarts the timer.
-    LaunchedEffect(query, keyboardShown) {
-        if (keyboardShown && query.isNotBlank()) {
-            delay(KEYBOARD_IDLE_HIDE_MS)
-            keyboard = false
         }
     }
 
@@ -213,7 +202,7 @@ fun HomeScreen(
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(
-                            top = (barTop + barHeight + 40f).u,
+                            top = (barTop + barHeight + lerp(40f, 24f)).u,
                             start = lerp(282f, 240f).u, // in line with the typed text
                             end = 300.u,
                         ),
