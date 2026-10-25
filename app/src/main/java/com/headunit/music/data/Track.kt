@@ -5,7 +5,15 @@ data class Track(
     val videoId: String,
     val title: String,
     val artist: String,
+    /** For the results list (cropped to 16:9 there). */
     val thumbnailUrl: String,
+    /** Biggest picture for the square artwork on Now Playing. */
+    val artworkUrl: String = thumbnailUrl,
+    /**
+     * True when [artworkUrl] is one of YouTube's 4:3 images with black bars baked
+     * in above and below the picture; the artwork zooms past them before cropping.
+     */
+    val artworkLetterboxed: Boolean = false,
     /** Null until we know it (durations come from a second API call). */
     val durationSeconds: Int? = null,
 ) {

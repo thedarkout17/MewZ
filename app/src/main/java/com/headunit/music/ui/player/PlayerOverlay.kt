@@ -82,19 +82,31 @@ private object PlayerGlass {
     val Tile = Brush.verticalGradient(listOf(Color(0x2EFFFFFF), Color(0x14FFFFFF)))
 }
 
-// ---- Layout (design px on the 2000x1200 canvas) ----
-private const val ART_FULL = 760f       // artwork square on Now Playing
-private const val ART_FULL_X = 150f
+// ---- Layout (design px on the 2000x1200 canvas), after the CarPlay Now Playing ----
+//   ⌄                                         “starboy” — 3 of 20     ← y 48–178
+//   ┌──────────┐        Song title
+//   │ artwork  │        Artist
+//   │  600×600 │      ⏮     ⏸     ⏭                                  ← top row y 210–810
+//   └──────────┘
+//   0:12 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -2:48    ← full width, y ~900
+//                     [shuffle]  [loop]  [ + ]                         ← y ~1010
+private const val SIDE = 96f            // left/right margin; the seek bar spans between them
+private const val ART_FULL = 600f       // artwork square on Now Playing
+private const val ART_FULL_X = SIDE
+private const val ART_TOP = 210f
+private const val COLUMN_GAP = 96f      // artwork → title/transport column
+private const val SEEK_TOP = 862f
+private const val TILES_TOP = 1006f
 private const val ART_MINI = 224f       // artwork square in the dock
 private const val ART_MINI_X = 56f
-private const val COLUMN_GAP = 120f     // artwork → right column
 
 /**
  * The player, drawn over everything.
  *
- * **Now Playing** (expanded): artwork on the left; on the right the song,
- * transport controls, a seek bar with elapsed / remaining time, and shuffle /
- * loop / add tiles. The background is the artwork itself, blurred.
+ * **Now Playing** (expanded), laid out like CarPlay's: artwork on the left,
+ * song and transport beside it, a seek bar running the full width of the
+ * screen (elapsed / remaining time at its ends), and shuffle / loop / add tiles
+ * centred underneath. The background is the artwork itself, blurred.
  *
  * **Dock** (minimized): a glass bar along the bottom with the artwork, song and
  * controls. Tap it to open Now Playing.
@@ -147,7 +159,9 @@ fun PlayerOverlay(player: PlayerController, dockHidden: Boolean) {
                 fun lerp(a: Float, b: Float) = a + (b - a) * e
                 val dockTop = h - DOCK_HEIGHT
                 val awayShift = away * (DOCK_HEIGHT + 40f)
-                val artTopFull = (h - ART_FULL) / 2f + 40f
+                // Taller/shorter screens than 1200: keep the block centred vertically.
+                val shiftY = (h - 1200f) / 2f
+                val artTopFull = ART_TOP + shiftY
 
                 // ---- Dock (minimized) ----
                 if (e < 1f) {
@@ -165,7 +179,7 @@ fun PlayerOverlay(player: PlayerController, dockHidden: Boolean) {
 
                 // ---- Now Playing (expanded) ----
                 if (e > 0f) {
-                    NowPlaying(player = player, width = w, artTop = artTopFull, alpha = e)
+                    NowPlaying(player = player, width = w, shiftY = shiftY, alpha = e)
                 }
 
                 // ---- Artwork, with the YouTube player right behind it ----
@@ -196,10 +210,19 @@ fun PlayerOverlay(player: PlayerController, dockHidden: Boolean) {
                     )
                     if (video < 1f) {
                         AsyncImage(
-                            model = track.thumbnailUrl,
+                            model = track.artworkUrl,
                             contentDescription = null,
-                            contentScale = ContentScale.Crop, // square crop also trims YouTube's black bars
-                            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 1f - video },
+                            // Fill the square, cropping the sides of the 16:9 picture.
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    alpha = 1f - video
+                                    // 4:3 YouTube images have black bars taking 1/8 of the
+                                    // height top and bottom; zoom 4/3 so the picture fills
+                                    // the square and the bars fall outside it.
+                                    if (track.artworkLetterboxed) { scaleX = 4f / 3f; scaleY = 4f / 3f }
+                                },
                         )
                     }
                     VideoOverlay(player)
@@ -227,6 +250,7 @@ fun PlayerOverlay(player: PlayerController, dockHidden: Boolean) {
 private fun BlurredArtBackground(track: Track, modifier: Modifier) {
     val context = LocalContext.current
     val request = remember(track.thumbnailUrl) {
+        // medium/high thumbnail at 48x27: plenty for a blur, and stretched it's soft everywhere.
         ImageRequest.Builder(context).data(track.thumbnailUrl).size(48, 27).build()
     }
     Box(modifier.background(Color(0xFF1A0508))) {
@@ -294,12 +318,13 @@ private fun ArtChip(text: String, modifier: Modifier) {
 }
 
 @Composable
-private fun NowPlaying(player: PlayerController, width: Float, artTop: Float, alpha: Float) {
+private fun NowPlaying(player: PlayerController, width: Float, shiftY: Float, alpha: Float) {
     val track = player.current ?: return
     val context = LocalContext.current
     with(LocalDesignScale.current) {
         val colX = ART_FULL_X + ART_FULL + COLUMN_GAP
-        val colW = width - colX - ART_FULL_X
+        val colW = width - colX - SIDE
+        val fullW = width - 2 * SIDE
 
         // Minimize (top-left)
         GlassCircleButton(
@@ -307,7 +332,7 @@ private fun NowPlaying(player: PlayerController, width: Float, artTop: Float, al
             contentDescription = stringResource(R.string.minimize_player),
             size = 130f, glyph = 64f,
             onClick = { player.expanded = false },
-            modifier = Modifier.offset(x = 56.u, y = 48.u).graphicsLayer { this.alpha = alpha },
+            modifier = Modifier.offset(x = 56.u, y = (48f + shiftY).u).graphicsLayer { this.alpha = alpha },
         )
 
         // Where we are in the queue (top-right): “starboy” — 3 of 20
@@ -319,16 +344,16 @@ private fun NowPlaying(player: PlayerController, width: Float, artTop: Float, al
             textAlign = TextAlign.End,
             style = TextStyle(Tertiary, fontSize = 44.usp, shadow = TextShadow),
             modifier = Modifier
-                .offset(x = colX.u, y = 82.u)
-                .width((colW + ART_FULL_X - 64f).u)
+                .offset(x = (width / 2f).u, y = (82f + shiftY).u)
+                .width((width / 2f - 64f).u)
                 .graphicsLayer { this.alpha = alpha },
         )
 
-        // Right column, the same height as the artwork
+        // Beside the artwork: song, then transport, spread over the artwork's height
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
-                .offset(x = colX.u, y = artTop.u)
+                .offset(x = colX.u, y = (ART_TOP + shiftY).u)
                 .width(colW.u)
                 .height(ART_FULL.u)
                 .graphicsLayer {
@@ -336,6 +361,7 @@ private fun NowPlaying(player: PlayerController, width: Float, artTop: Float, al
                     translationX = (1f - alpha) * 60.u.toPx()
                 },
         ) {
+            Spacer(Modifier.height(10.u))
             Text(
                 track.title,
                 maxLines = 2,
@@ -360,57 +386,67 @@ private fun NowPlaying(player: PlayerController, width: Float, artTop: Float, al
             // Transport: bare white glyphs (big touch areas around them)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(110.u, Alignment.CenterHorizontally),
+                horizontalArrangement = Arrangement.spacedBy(150.u, Alignment.CenterHorizontally),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                GlyphButton(R.drawable.ic_skip_previous, stringResource(R.string.previous_song), 170f, 110f, onClick = player::previous)
+                GlyphButton(R.drawable.ic_skip_previous, stringResource(R.string.previous_song), 180f, 120f, onClick = player::previous)
                 GlyphButton(
                     if (player.isPlaying) R.drawable.ic_pause else R.drawable.ic_play,
                     stringResource(if (player.isPlaying) R.string.pause else R.string.play),
                     210f, 150f, onClick = player::togglePlay,
                 )
                 GlyphButton(
-                    R.drawable.ic_skip_next, stringResource(R.string.next_song), 170f, 110f,
+                    R.drawable.ic_skip_next, stringResource(R.string.next_song), 180f, 120f,
                     enabled = player.hasNext, onClick = player::next,
                 )
             }
+            Spacer(Modifier.height(30.u))
+        }
 
-            Spacer(Modifier.weight(1f))
+        // Seek bar across the whole screen, margin to margin
+        SeekBar(
+            player,
+            Modifier
+                .offset(x = SIDE.u, y = (SEEK_TOP + shiftY).u)
+                .width(fullW.u)
+                .graphicsLayer { this.alpha = alpha },
+        )
 
-            SeekBar(player, Modifier.fillMaxWidth())
-
-            Spacer(Modifier.height(44.u))
-
-            // Shuffle · Loop · Add
-            Row(horizontalArrangement = Arrangement.spacedBy(44.u, Alignment.CenterHorizontally), modifier = Modifier.fillMaxWidth()) {
-                GlassTile(
-                    icon = R.drawable.ic_shuffle,
-                    contentDescription = stringResource(R.string.shuffle),
-                    active = player.shuffle,
-                    onClick = player::toggleShuffle,
-                )
-                GlassTile(
-                    icon = if (player.repeat == RepeatMode.One) R.drawable.ic_repeat_one else R.drawable.ic_repeat,
-                    contentDescription = stringResource(
-                        when (player.repeat) {
-                            RepeatMode.Off -> R.string.repeat_off
-                            RepeatMode.All -> R.string.repeat_all
-                            RepeatMode.One -> R.string.repeat_one
-                        }
-                    ),
-                    active = player.repeat != RepeatMode.Off,
-                    onClick = player::cycleRepeat,
-                )
-                GlassTile(
-                    icon = R.drawable.ic_add,
-                    contentDescription = stringResource(R.string.add_to_library),
-                    active = false,
-                    onClick = {
-                        // Libraries come later; the button is in place for them.
-                        Toast.makeText(context, "Libraries are coming soon", Toast.LENGTH_SHORT).show()
-                    },
-                )
-            }
+        // Shuffle · Loop · Add, centred under the bar
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(48.u, Alignment.CenterHorizontally),
+            modifier = Modifier
+                .offset(y = (TILES_TOP + shiftY).u)
+                .width(width.u)
+                .graphicsLayer { this.alpha = alpha },
+        ) {
+            GlassTile(
+                icon = R.drawable.ic_shuffle,
+                contentDescription = stringResource(R.string.shuffle),
+                active = player.shuffle,
+                onClick = player::toggleShuffle,
+            )
+            GlassTile(
+                icon = if (player.repeat == RepeatMode.One) R.drawable.ic_repeat_one else R.drawable.ic_repeat,
+                contentDescription = stringResource(
+                    when (player.repeat) {
+                        RepeatMode.Off -> R.string.repeat_off
+                        RepeatMode.All -> R.string.repeat_all
+                        RepeatMode.One -> R.string.repeat_one
+                    }
+                ),
+                active = player.repeat != RepeatMode.Off,
+                onClick = player::cycleRepeat,
+            )
+            GlassTile(
+                icon = R.drawable.ic_add,
+                contentDescription = stringResource(R.string.add_to_library),
+                active = false,
+                onClick = {
+                    // Libraries come later; the button is in place for them.
+                    Toast.makeText(context, "Libraries are coming soon", Toast.LENGTH_SHORT).show()
+                },
+            )
         }
     }
 }
