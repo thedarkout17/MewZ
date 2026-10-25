@@ -35,6 +35,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -64,9 +65,11 @@ private object Glass {
     val SheetSheen = Brush.verticalGradient(listOf(Color(0x30FFFFFF), Color(0x10FFFFFF)))
     val SheetEdge = Color(0x66FFFFFF)
 
-    val Key = Brush.verticalGradient(listOf(Color(0x3DFFFFFF), Color(0x1FFFFFFF)))
-    val KeyPressed = Brush.verticalGradient(listOf(Color(0x75FFFFFF), Color(0x52FFFFFF)))
-    val KeyEdge = Color(0x52FFFFFF)
+    /** Keys: mostly clear, a faint sheen that fades toward the bottom. */
+    val Key = Brush.verticalGradient(listOf(Color(0x21FFFFFF), Color(0x0AFFFFFF)))
+    val KeyPressed = Brush.verticalGradient(listOf(Color(0x4DFFFFFF), Color(0x2EFFFFFF)))
+    /** Edge catches light at the top and fades out, like a glass bevel. */
+    val KeyEdge = Brush.verticalGradient(listOf(Color(0x80FFFFFF), Color(0x1FFFFFFF)))
     val Label = Color.White
 }
 
@@ -202,7 +205,7 @@ private fun RowScope.GlassKey(
                     if (accent) Modifier.background(if (pressed) Brand.Red.copy(alpha = 0.75f) else Brand.Red)
                     else Modifier.background(if (pressed) Glass.KeyPressed else Glass.Key)
                 )
-                .border(1.5f.u, Glass.KeyEdge, shape)
+                .border(1.5f.u, if (accent) SolidColor(Color(0x40FFFFFF)) else Glass.KeyEdge, shape)
                 .semantics {
                     role = Role.Button
                     contentDescription = label

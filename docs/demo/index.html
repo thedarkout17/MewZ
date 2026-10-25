@@ -151,8 +151,11 @@ body {
 .kb-gap { flex: .5; }
 .key {
   flex: var(--w, 1); min-width: 0; border-radius: calc(26 * var(--u));
-  border: calc(1.5 * var(--u)) solid rgba(255,255,255,.32);
-  background: linear-gradient(rgba(255,255,255,.24), rgba(255,255,255,.12));
+  /* mostly clear glass; the edge catches light at the top and fades out */
+  border: calc(1.5 * var(--u)) solid rgba(255,255,255,.14);
+  border-top-color: rgba(255,255,255,.42);
+  background: linear-gradient(rgba(255,255,255,.13), rgba(255,255,255,.04));
+  box-shadow: inset 0 calc(1.5 * var(--u)) 0 rgba(255,255,255,.18);
   color: #fff; font: 400 calc(50 * var(--u)) / 1 var(--font-app);
   text-shadow: 0 1px 6px rgba(0,0,0,.25);
   display: flex; align-items: center; justify-content: center; gap: calc(16 * var(--u));
@@ -164,8 +167,8 @@ body {
 .key.faded { color: rgba(255,255,255,.7); }
 .key svg { width: calc(56 * var(--u)); height: calc(56 * var(--u)); }
 .key.accent svg { width: calc(42 * var(--u)); height: calc(42 * var(--u)); }
-.key.pressed { transform: scale(.94); background: linear-gradient(rgba(255,255,255,.46), rgba(255,255,255,.32)); }
-.key.accent { background: var(--red); }
+.key.pressed { transform: scale(.94); background: linear-gradient(rgba(255,255,255,.30), rgba(255,255,255,.18)); }
+.key.accent { background: var(--red); border-color: rgba(255,255,255,.25); }
 .key.accent.pressed { background: rgba(219, 10, 32, .75); }
 .key:focus-visible { outline: calc(4 * var(--u)) solid #fff; outline-offset: calc(2 * var(--u)); }
 
@@ -311,7 +314,7 @@ body {
       <span class="chip">Canvas <b>2000×1200</b></span>
       <span class="chip">Scale <b id="scale">–</b></span>
       <span class="chip">Back <b>Esc</b></span>
-      <span class="chip">Build <b>home v0.7</b></span>
+      <span class="chip">Build <b>home v0.8</b></span>
       <button class="btn" id="boundsBtn" type="button" aria-pressed="false">Layout bounds</button>
       <button class="btn" id="fsBtn" type="button">Fullscreen</button>
       <button class="btn" id="resetBtn" type="button">Reset</button>
