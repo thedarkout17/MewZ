@@ -70,7 +70,7 @@ class YouTubeSearch(
                     )
                     val (title, artist) = moveFeaturedArtists(splitTitle, splitArtistName)
                     val thumbs = snippet.optJSONObject("thumbnails")
-                    val artUrl = bestArtwork(thumbs, id)
+                    val (artUrl, artLetterboxed) = bestArtwork(thumbs, id)
                     add(
                         Track(
                             videoId = id,
@@ -78,6 +78,7 @@ class YouTubeSearch(
                             artist = artist,
                             thumbnailUrl = bestThumbnail(thumbs, id),
                             artworkUrl = artUrl,
+                            artworkLetterboxed = artLetterboxed,
                         )
                     )
                 }
@@ -166,15 +167,15 @@ class YouTubeSearch(
          *   maxres 1280x720 and medium 320x180 are true 16:9 (no bars);
          *   standard 640x480, high 480x360 and default 120x90 are 4:3 with black
          *   bars above and below the picture.
-         * Prefer the biggest; the artwork trims any bars itself (TrimBarsTransformation),
-         * which also catches cinema-format videos that have bars even at 16:9.
+         * Prefer the big bar-free one; otherwise take a 4:3 one and flag it so the
+         * artwork zooms past the bars.
          */
-        private fun bestArtwork(thumbs: JSONObject?, id: String): String {
-            for (size in listOf("maxres", "standard", "high", "medium")) {
+        private fun bestArtwork(thumbs: JSONObject?, id: String): Pair<String, Boolean> {
+            for ((size, letterboxed) in listOf("maxres" to false, "standard" to true, "high" to true, "medium" to false)) {
                 val url = thumbs?.optJSONObject(size)?.optString("url")
-                if (!url.isNullOrEmpty()) return url
+                if (!url.isNullOrEmpty()) return url to letterboxed
             }
-            return "https://i.ytimg.com/vi/$id/hqdefault.jpg"
+            return "https://i.ytimg.com/vi/$id/hqdefault.jpg" to true
         }
 
         private fun bestThumbnail(thumbs: JSONObject?, id: String): String {

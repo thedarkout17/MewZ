@@ -49,10 +49,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import com.headunit.music.ui.components.TrimBarsTransformation
 import com.headunit.music.data.Track
 import com.headunit.music.data.youtube.SearchResult.Reason
 import com.headunit.music.ui.theme.LocalDesignScale
@@ -157,17 +154,9 @@ private fun TrackRow(track: Track, index: Int, onClick: () -> Unit) {
                 )
                 .padding(horizontal = 16.u),
         ) {
-            // Bars baked into the thumbnail are trimmed, then it fills the 16:9 frame.
-            val context = LocalContext.current
-            val thumbRequest = remember(track.thumbnailUrl) {
-                ImageRequest.Builder(context)
-                    .data(track.thumbnailUrl)
-                    .transformations(TrimBarsTransformation(aspect = 348f / 196f))
-                    .allowHardware(false)
-                    .build()
-            }
+            // 16:9 crop also trims the black bars YouTube bakes into 4:3 thumbnails.
             AsyncImage(
-                model = thumbRequest,
+                model = track.thumbnailUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
