@@ -94,9 +94,9 @@ body {
   margin: 0; padding: 0; list-style: none;
 }
 .suggest button {
-  display: block; width: 100%; height: calc(118 * var(--u)); padding: 0 calc(24 * var(--u));
+  display: block; width: 100%; height: calc(146 * var(--u)); padding: 0 calc(24 * var(--u));
   border: 0; border-radius: calc(24 * var(--u)); background: transparent; cursor: pointer;
-  text-align: left; color: #fff; font: 400 calc(64 * var(--u)) / 1 var(--font-app);
+  text-align: left; color: #fff; font: 400 calc(76 * var(--u)) / 1 var(--font-app);
   text-shadow: 0 2px 8px rgba(0,0,0,.33);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   animation: rise .32s cubic-bezier(.4,0,.2,1) both;
@@ -261,7 +261,7 @@ body {
       <span class="chip">Canvas <b>2000×1200</b></span>
       <span class="chip">Scale <b id="scale">–</b></span>
       <span class="chip">Back <b>Esc</b></span>
-      <span class="chip">Build <b>home v0.3</b></span>
+      <span class="chip">Build <b>home v0.4</b></span>
       <button class="btn" id="boundsBtn" type="button" aria-pressed="false">Layout bounds</button>
       <button class="btn" id="fsBtn" type="button">Fullscreen</button>
       <button class="btn" id="resetBtn" type="button">Reset</button>
@@ -297,7 +297,7 @@ function toast(msg) {          // Toast.LENGTH_SHORT ≈ 2s
 // ---- Suggestions: same logic as LocalSuggestionProvider.kt ----
 const CATALOGUE = ["Taylor Swift","Taylor Swift Cruel Summer","Taylor Swift Anti-Hero","The Weeknd","The Weeknd Blinding Lights","The Weeknd Save Your Tears","Drake","Drake One Dance","Drake God's Plan","Billie Eilish","Billie Eilish Birds of a Feather","Billie Eilish Lovely","Sabrina Carpenter Espresso","Sabrina Carpenter Please Please Please","Kendrick Lamar","Kendrick Lamar Not Like Us","Kendrick Lamar Humble","SZA","SZA Kill Bill","SZA Saturn","Bad Bunny","Bad Bunny Tití Me Preguntó","Dua Lipa","Dua Lipa Levitating","Dua Lipa Houdini","Ed Sheeran Shape of You","Ed Sheeran Perfect","Harry Styles As It Was","Harry Styles Watermelon Sugar","Post Malone","Post Malone Circles","Post Malone Sunflower","Olivia Rodrigo","Olivia Rodrigo Drivers License","Olivia Rodrigo Vampire","Arctic Monkeys Do I Wanna Know","Arctic Monkeys 505","Coldplay","Coldplay Yellow","Coldplay Viva La Vida","Imagine Dragons Believer","Imagine Dragons Thunder","Travis Scott","Travis Scott Sicko Mode","Bruno Mars","Bruno Mars Uptown Funk","Bruno Mars Die With A Smile","Lady Gaga","Chappell Roan Good Luck Babe","Chappell Roan Pink Pony Club","Hozier Too Sweet","Benson Boone Beautiful Things","Queen Bohemian Rhapsody","Michael Jackson Billie Jean","Fleetwood Mac Dreams","Eagles Hotel California","Daft Punk Get Lucky","Frank Ocean","Frank Ocean Pink + White","Tame Impala The Less I Know The Better","Mac Miller","Lofi hip hop radio","Lofi beats to study to","Road trip playlist","Driving music","Chill vibes playlist","Workout music","Top hits 2026","Throwback hits","90s hip hop","80s rock"];
 const SUFFIXES = ["songs","live","remix","playlist","acoustic"];
-const MAX_SUGGESTIONS = 6, DEBOUNCE_MS = 120;
+const MAX_SUGGESTIONS = 5, DEBOUNCE_MS = 120;
 
 function suggest(query, limit) {
   const qq = query.trim().toLowerCase();

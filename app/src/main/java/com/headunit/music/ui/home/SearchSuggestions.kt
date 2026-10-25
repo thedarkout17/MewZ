@@ -78,7 +78,7 @@ private fun SuggestionRow(query: String, text: String, index: Int, onClick: () -
             },
             style = TextStyle(
                 color = Color.White,
-                fontSize = 64.usp,
+                fontSize = 76.usp,
                 // Soft shadow keeps white readable over the light peach corner.
                 shadow = Shadow(Color(0x55000000), Offset(0f, 2f), blurRadius = 8f),
             ),
@@ -86,7 +86,7 @@ private fun SuggestionRow(query: String, text: String, index: Int, onClick: () -
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(118.u)
+                .height(146.u)
                 .graphicsLayer {
                     alpha = anim.value
                     translationY = (1f - anim.value) * slide.toPx()
