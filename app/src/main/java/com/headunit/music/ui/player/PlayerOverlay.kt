@@ -555,7 +555,7 @@ private fun SeekBar(player: PlayerController, modifier: Modifier) {
                     },
             ) {
                 val dragging = dragFraction != null
-                val barH = if (dragging) 16f else 12f
+                val barH = if (dragging) 26f else 20f
                 Box(Modifier.fillMaxWidth().height(barH.u).background(Color(0x40FFFFFF), CircleShape))
                 Box(Modifier.fillMaxWidth(shown).height(barH.u).background(Color(0xD9FFFFFF), CircleShape))
             }
