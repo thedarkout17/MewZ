@@ -1,6 +1,6 @@
 <title>MuZ Live Demo</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&family=Roboto+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap">
 <style>
 /* Layout: the headunit screen at 5:3 on a dark bench, a slim debug strip beneath it.
    Single deliberate dark look (it's a dashboard bench), every color set explicitly. */
@@ -18,6 +18,7 @@
   --ok: #7fd6a4;
   --font-app: "Roboto", system-ui, sans-serif;
   --font-mono: "Roboto Mono", ui-monospace, monospace;
+  --ease: cubic-bezier(.4, 0, .2, 1);
 }
 [hidden] { display: none !important; }
 html, body { height: 100%; }
@@ -40,34 +41,41 @@ body {
   background: #c4001a url("home_background.jpg") center / cover no-repeat;
   box-shadow: 0 0 0 1px var(--line), 0 20px 50px rgba(0,0,0,.45);
   font-family: var(--font-app);
-  user-select: none;
+  user-select: none; -webkit-user-select: none;
+  outline: none;
 }
 .screen:fullscreen { border-radius: 0; width: 100vw; height: auto; max-height: 100vh; }
 
+/* Search bar (SearchBar.kt) */
 .bar {
   position: absolute; top: calc(64 * var(--u)); left: calc(96 * var(--u)); right: calc(96 * var(--u));
   height: calc(232 * var(--u)); border-radius: 999px; background: var(--frost);
   display: flex; align-items: center;
   padding: 0 calc(52 * var(--u)) 0 calc(66 * var(--u));
-  cursor: text;
+  cursor: pointer;
 }
 .bar svg.search { width: calc(108 * var(--u)); height: calc(108 * var(--u)); flex: none; }
-.bar input {
+.field {
   flex: 1; min-width: 0; margin-left: calc(36 * var(--u));
-  border: 0; outline: 0; background: transparent; padding: 0;
+  display: flex; align-items: center; overflow: hidden; justify-content: flex-start;
   font: 400 calc(92 * var(--u)) / 1 var(--font-app); color: var(--red-text);
-  caret-color: var(--red);
+  white-space: pre;
 }
-.bar input::placeholder { color: var(--red-text); opacity: 1; }
+.field.long { justify-content: flex-end; }   /* long query: keep the end in view */
+.caret {
+  flex: none; width: calc(7 * var(--u)); height: 1.1em; margin: 0 calc(4 * var(--u));
+  background: var(--red); border-radius: calc(4 * var(--u)); opacity: 0;
+}
+.caret.on { animation: blink 1.06s step-end infinite; }
+@keyframes blink { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
+
 .mic, .clear {
   width: calc(150 * var(--u)); height: calc(150 * var(--u)); flex: none;
   border: 0; border-radius: 50%; background: transparent; cursor: pointer;
   display: grid; place-items: center; padding: 0;
-  transition: background .15s;
 }
-.clear[hidden] { display: none; }
 .mic:active, .clear:active { background: rgba(219, 10, 32, .14); }
-.mic:focus-visible { outline: 2px solid var(--red); outline-offset: -2px; }
+.mic:focus-visible, .clear:focus-visible { outline: 2px solid var(--red); outline-offset: -2px; }
 .clear svg { width: calc(80 * var(--u)); height: calc(80 * var(--u)); }
 .mic svg { width: calc(96 * var(--u)); height: calc(96 * var(--u)); }
 
@@ -80,62 +88,102 @@ body {
 
 /* Search mode: frosted glass + "Listen..." zooms out */
 .glass, .veil { position: absolute; inset: 0; pointer-events: none; opacity: 0;
-  transition: opacity .42s cubic-bezier(.4,0,.2,1), transform .42s cubic-bezier(.4,0,.2,1); }
+  transition: opacity .42s var(--ease), transform .42s var(--ease); }
 .glass { background: url("home_background_blur.jpg") center / cover no-repeat; transform: scale(1.04); }
 .veil { background: rgba(42, 0, 6, .12); }
 .searching .glass { opacity: 1; transform: scale(1); }
 .searching .veil { opacity: 1; }
-.title { transition: opacity .42s cubic-bezier(.4,0,.2,1), transform .42s cubic-bezier(.4,0,.2,1); }
+.title { transition: opacity .42s var(--ease), transform .42s var(--ease); }
 .searching .title { opacity: 0; transform: translate(-50%, calc(-50% + 20 * var(--u))) scale(.65); }
 .catcher { position: absolute; inset: 0; }
 
+/* Bar rises and slims down (same numbers as SearchBar.kt) */
+.bar, .bar svg.search, .field, .mic, .clear, .mic svg, .clear svg, .suggest {
+  transition-property: top, height, width, padding, margin, font-size, left;
+  transition-duration: .42s; transition-timing-function: var(--ease);
+}
+.searching .bar { top: calc(28 * var(--u)); height: calc(168 * var(--u));
+  padding: 0 calc(40 * var(--u)) 0 calc(54 * var(--u)); }
+.searching .bar svg.search { width: calc(84 * var(--u)); height: calc(84 * var(--u)); }
+.searching .field { font-size: calc(72 * var(--u)); margin-left: calc(30 * var(--u)); }
+.searching .mic, .searching .clear { width: calc(130 * var(--u)); height: calc(130 * var(--u)); }
+.searching .mic svg { width: calc(80 * var(--u)); height: calc(80 * var(--u)); }
+.searching .clear svg { width: calc(66 * var(--u)); height: calc(66 * var(--u)); }
+
+/* Suggestions (SearchSuggestions.kt) */
 .suggest {
   position: absolute; top: calc(336 * var(--u)); left: calc(282 * var(--u)); right: calc(300 * var(--u));
   margin: 0; padding: 0; list-style: none;
 }
+.searching .suggest { top: calc(236 * var(--u)); left: calc(240 * var(--u)); }
 .suggest button {
   display: block; width: 100%; height: calc(176 * var(--u)); padding: 0 calc(24 * var(--u));
   border: 0; border-radius: calc(24 * var(--u)); background: transparent; cursor: pointer;
   text-align: left; color: #fff; font: 400 calc(76 * var(--u)) / 1 var(--font-app);
   text-shadow: 0 2px 8px rgba(0,0,0,.33);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  animation: rise .32s cubic-bezier(.4,0,.2,1) both;
+  animation: rise .32s var(--ease) both;
   animation-delay: calc(var(--i) * 45ms);
 }
 .suggest button b { font-weight: 700; }
 .suggest button:hover, .suggest button:focus-visible { background: rgba(255,255,255,.12); outline: 0; }
 @keyframes rise { from { opacity: 0; transform: translateY(calc(24 * var(--u))); } }
+
+/* Glass keyboard (GlassKeyboard.kt) */
+.kb {
+  position: absolute; left: 0; right: 0; bottom: 0; height: calc(640 * var(--u));
+  box-sizing: border-box;
+  padding: calc(30 * var(--u)) calc(96 * var(--u)) calc(36 * var(--u));
+  display: grid; grid-template-rows: repeat(4, 1fr); gap: calc(18 * var(--u));
+  border-radius: calc(56 * var(--u)) calc(56 * var(--u)) 0 0;
+  background:
+    linear-gradient(rgba(255,255,255,.19), rgba(255,255,255,.06)),
+    rgba(48, 0, 8, .28);
+  border: calc(2 * var(--u)) solid rgba(255,255,255,.40); border-bottom: 0;
+  -webkit-backdrop-filter: blur(calc(26 * var(--u))) saturate(1.3);
+  backdrop-filter: blur(calc(26 * var(--u))) saturate(1.3);
+  transform: translateY(100%); opacity: .4;
+  transition: transform .36s var(--ease), opacity .36s var(--ease);
+  pointer-events: none;
+}
+.kb.up { transform: none; opacity: 1; pointer-events: auto; }
+.kb-row { display: flex; gap: calc(16 * var(--u)); min-height: 0; }
+.kb-gap { flex: .5; }
+.key {
+  flex: var(--w, 1); min-width: 0; border-radius: calc(26 * var(--u));
+  border: calc(1.5 * var(--u)) solid rgba(255,255,255,.32);
+  background: linear-gradient(rgba(255,255,255,.24), rgba(255,255,255,.12));
+  color: #fff; font: 400 calc(58 * var(--u)) / 1 var(--font-app);
+  text-shadow: 0 1px 6px rgba(0,0,0,.25);
+  display: flex; align-items: center; justify-content: center; gap: calc(16 * var(--u));
+  cursor: pointer; padding: 0;
+  transition: transform .09s, background .09s;
+  touch-action: manipulation;
+}
+.key.small { font-size: calc(44 * var(--u)); font-weight: 500; }
+.key.faded { color: rgba(255,255,255,.7); }
+.key svg { width: calc(64 * var(--u)); height: calc(64 * var(--u)); }
+.key.accent svg { width: calc(48 * var(--u)); height: calc(48 * var(--u)); }
+.key.pressed { transform: scale(.94); background: linear-gradient(rgba(255,255,255,.46), rgba(255,255,255,.32)); }
+.key.accent { background: var(--red); }
+.key.accent.pressed { background: rgba(219, 10, 32, .75); }
+.key:focus-visible { outline: calc(4 * var(--u)) solid #fff; outline-offset: calc(2 * var(--u)); }
+
 @media (prefers-reduced-motion: reduce) {
   .suggest button { animation: none; }
-  .glass, .veil, .title { transition: none; }
-}
-.bounds .suggest button { outline: 1px dashed #00e5ff; }
-
-/* Search mode: bar rises and slims down (same numbers as SearchBar.kt) */
-.bar, .bar svg.search, .bar input, .mic, .clear, .mic svg, .clear svg, .suggest {
-  transition-property: top, height, width, padding, margin, font-size, left;
-  transition-duration: .42s; transition-timing-function: cubic-bezier(.4,0,.2,1);
-}
-.searching .bar { top: calc(28 * var(--u)); height: calc(168 * var(--u));
-  padding: 0 calc(40 * var(--u)) 0 calc(54 * var(--u)); }
-.searching .bar svg.search { width: calc(84 * var(--u)); height: calc(84 * var(--u)); }
-.searching .bar input { font-size: calc(72 * var(--u)); margin-left: calc(30 * var(--u)); }
-.searching .mic, .searching .clear { width: calc(130 * var(--u)); height: calc(130 * var(--u)); }
-.searching .mic svg { width: calc(80 * var(--u)); height: calc(80 * var(--u)); }
-.searching .clear svg { width: calc(66 * var(--u)); height: calc(66 * var(--u)); }
-.searching .suggest { top: calc(236 * var(--u)); left: calc(240 * var(--u)); }
-@media (prefers-reduced-motion: reduce) {
-  .bar, .bar svg.search, .bar input, .mic, .clear, .mic svg, .clear svg, .suggest { transition: none; }
+  .glass, .veil, .title, .kb, .key { transition: none; }
+  .bar, .bar svg.search, .field, .mic, .clear, .mic svg, .clear svg, .suggest { transition: none; }
+  .caret.on { animation: none; opacity: 1; }
 }
 
 /* Android-style toast */
 .toast {
-  position: absolute; left: 50%; bottom: calc(110 * var(--u));
+  position: absolute; left: 50%; top: calc(560 * var(--u));
   transform: translateX(-50%);
   background: rgba(32, 32, 32, .92); color: #fff;
   font: 400 calc(40 * var(--u)) / 1.2 var(--font-app);
   padding: calc(26 * var(--u)) calc(48 * var(--u)); border-radius: 999px;
-  white-space: nowrap; transition: opacity .2s;
+  white-space: nowrap;
 }
 
 /* System voice dialog stand-in */
@@ -170,7 +218,8 @@ body {
 @media (prefers-reduced-motion: reduce) { .voice-card .dot { animation: none; } }
 
 /* Layout bounds overlay (like Android's "Show layout bounds") */
-.bounds .bar, .bounds .title, .bounds .mic, .bounds .bar svg.search, .bounds .bar input {
+.bounds .bar, .bounds .title, .bounds .mic, .bounds .clear, .bounds .bar svg.search,
+.bounds .field, .bounds .suggest button, .bounds .key {
   outline: 1px dashed #00e5ff; outline-offset: 0;
 }
 .bounds .screen::after {
@@ -182,9 +231,7 @@ body {
 }
 
 /* ---------- Debug strip ---------- */
-.strip {
-  display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: start;
-}
+.strip { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: start; }
 @media (max-width: 720px) { .strip { grid-template-columns: 1fr; } }
 .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .chip {
@@ -212,16 +259,17 @@ body {
 
 <div class="wrap" id="wrap">
   <div class="stage">
-    <div class="screen" id="screen" aria-label="Headunit screen, 2000 by 1200">
+    <div class="screen" id="screen" tabindex="0" aria-label="Headunit screen, 2000 by 1200">
       <div class="glass"></div>
       <div class="veil"></div>
       <div class="catcher" id="catcher" hidden></div>
-      <label class="bar" id="bar" for="q">
+
+      <div class="bar" id="bar" role="button" aria-label="Search">
         <svg class="search" viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="10.5" cy="10.5" r="7.5" fill="none" stroke="var(--red)" stroke-width="2.6"/>
           <path d="M16 16l5.5 5.5" stroke="var(--red)" stroke-width="2.6" stroke-linecap="round"/>
         </svg>
-        <input id="q" type="text" placeholder="Search" autocomplete="off" enterkeyhint="search" aria-label="Search">
+        <div class="field" id="field" aria-live="polite"></div>
         <button class="clear" id="clear" type="button" aria-label="Clear search" hidden>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" stroke="var(--red-muted)" stroke-width="2.4" stroke-linecap="round"/></svg>
         </button>
@@ -231,11 +279,13 @@ body {
             <path d="M5.5 10.5v1a6.5 6.5 0 0 0 13 0v-1M12 18v3M8.5 21.2h7" fill="none" stroke="var(--red-muted)" stroke-width="1.6" stroke-linecap="round"/>
           </svg>
         </button>
-      </label>
+      </div>
 
       <img class="title" src="listen_title.png" alt="Listen...">
 
       <ul class="suggest" id="suggest" aria-label="Suggestions"></ul>
+
+      <div class="kb" id="kb" aria-label="Keyboard"></div>
 
       <div class="toast" id="toast" hidden></div>
 
@@ -261,7 +311,7 @@ body {
       <span class="chip">Canvas <b>2000×1200</b></span>
       <span class="chip">Scale <b id="scale">–</b></span>
       <span class="chip">Back <b>Esc</b></span>
-      <span class="chip">Build <b>home v0.5</b></span>
+      <span class="chip">Build <b>home v0.6</b></span>
       <button class="btn" id="boundsBtn" type="button" aria-pressed="false">Layout bounds</button>
       <button class="btn" id="fsBtn" type="button">Fullscreen</button>
       <button class="btn" id="resetBtn" type="button">Reset</button>
@@ -272,20 +322,19 @@ body {
 
 <script>
 const $ = (id) => document.getElementById(id);
-const q = $('q'), log = $('log'), toastEl = $('toast'), voice = $('voice');
+const screen = $('screen'), field = $('field'), sugEl = $('suggest'), kbEl = $('kb');
+const clearBtn = $('clear'), catcher = $('catcher'), log = $('log'), toastEl = $('toast'), voice = $('voice');
 
-function stamp() {
-  return new Date().toLocaleTimeString([], { hour12: false });
-}
+// ---------- Debug log ----------
 function logEvent(name, detail = '') {
   const li = document.createElement('li');
-  li.innerHTML = `<time>${stamp()}</time><span class="ev"></span> <span class="d"></span>`;
+  li.innerHTML = `<time></time><span class="ev"></span> <span class="d"></span>`;
+  li.querySelector('time').textContent = new Date().toLocaleTimeString([], { hour12: false });
   li.querySelector('.ev').textContent = name;
   li.querySelector('.d').textContent = detail;
   log.appendChild(li);
   log.scrollTop = log.scrollHeight;
 }
-
 let toastTimer;
 function toast(msg) {          // Toast.LENGTH_SHORT ≈ 2s
   toastEl.textContent = msg;
@@ -294,10 +343,10 @@ function toast(msg) {          // Toast.LENGTH_SHORT ≈ 2s
   toastTimer = setTimeout(() => { toastEl.hidden = true; }, 2000);
 }
 
-// ---- Suggestions: same logic as LocalSuggestionProvider.kt ----
+// ---------- Suggestions: same logic as LocalSuggestionProvider.kt ----------
 const CATALOGUE = ["Taylor Swift","Taylor Swift Cruel Summer","Taylor Swift Anti-Hero","The Weeknd","The Weeknd Blinding Lights","The Weeknd Save Your Tears","Drake","Drake One Dance","Drake God's Plan","Billie Eilish","Billie Eilish Birds of a Feather","Billie Eilish Lovely","Sabrina Carpenter Espresso","Sabrina Carpenter Please Please Please","Kendrick Lamar","Kendrick Lamar Not Like Us","Kendrick Lamar Humble","SZA","SZA Kill Bill","SZA Saturn","Bad Bunny","Bad Bunny Tití Me Preguntó","Dua Lipa","Dua Lipa Levitating","Dua Lipa Houdini","Ed Sheeran Shape of You","Ed Sheeran Perfect","Harry Styles As It Was","Harry Styles Watermelon Sugar","Post Malone","Post Malone Circles","Post Malone Sunflower","Olivia Rodrigo","Olivia Rodrigo Drivers License","Olivia Rodrigo Vampire","Arctic Monkeys Do I Wanna Know","Arctic Monkeys 505","Coldplay","Coldplay Yellow","Coldplay Viva La Vida","Imagine Dragons Believer","Imagine Dragons Thunder","Travis Scott","Travis Scott Sicko Mode","Bruno Mars","Bruno Mars Uptown Funk","Bruno Mars Die With A Smile","Lady Gaga","Chappell Roan Good Luck Babe","Chappell Roan Pink Pony Club","Hozier Too Sweet","Benson Boone Beautiful Things","Queen Bohemian Rhapsody","Michael Jackson Billie Jean","Fleetwood Mac Dreams","Eagles Hotel California","Daft Punk Get Lucky","Frank Ocean","Frank Ocean Pink + White","Tame Impala The Less I Know The Better","Mac Miller","Lofi hip hop radio","Lofi beats to study to","Road trip playlist","Driving music","Chill vibes playlist","Workout music","Top hits 2026","Throwback hits","90s hip hop","80s rock"];
 const SUFFIXES = ["songs","live","remix","playlist","acoustic"];
-const MAX_SUGGESTIONS = 5, DEBOUNCE_MS = 120;
+const MAX_SUGGESTIONS = 5, DEBOUNCE_MS = 120, KEYBOARD_IDLE_HIDE_MS = 2000;
 
 function suggest(query, limit) {
   const qq = query.trim().toLowerCase();
@@ -309,14 +358,73 @@ function suggest(query, limit) {
   return [...new Set(out)].slice(0, limit);
 }
 
-const screen = $('screen'), sugEl = $('suggest'), clearBtn = $('clear'), catcher = $('catcher');
-let focused = false, current = [];
+// ---------- State (mirrors HomeScreen.kt) ----------
+let query = '', open = false, keyboard = false, suggestions = [];
+const searching = () => open || query.length > 0;
+const keyboardShown = () => open && keyboard;
 
-function renderSuggestions(list) {
-  // Keep rows that are still there; only new rows animate in (like key(text) in Compose).
-  const typed = q.value.trim();
+let debounce, idleTimer, wasSearching = false, wasKb = false;
+function setQuery(v) {
+  if (v === query) return;
+  query = v;
+  clearTimeout(debounce);
+  if (!query.trim()) suggestions = [];
+  else debounce = setTimeout(() => {
+    suggestions = suggest(query, MAX_SUGGESTIONS);
+    logEvent('suggest', `${JSON.stringify(query)} → ${suggestions.length}`);
+    render();
+  }, DEBOUNCE_MS);
+  armIdleHide();
+  render();
+}
+function armIdleHide() {       // pause typing → keyboard slides away
+  clearTimeout(idleTimer);
+  if (keyboardShown() && query.trim()) {
+    idleTimer = setTimeout(() => {
+      keyboard = false; logEvent('keyboard', 'hidden after 2s pause'); render();
+    }, KEYBOARD_IDLE_HIDE_MS);
+  }
+}
+function activate() { open = true; keyboard = true; armIdleHide(); render(); }
+function submit(text) {
+  query = text; open = false; keyboard = false;
+  clearTimeout(idleTimer);
+  logEvent('onSearch', JSON.stringify(text));
+  toast(`Searching “${text}”`);
+  render();
+}
+function tapOutside() {
+  if (keyboard) { keyboard = false; logEvent('tap', 'outside → hide keyboard'); }
+  else { open = false; logEvent('tap', 'outside → close suggestions'); }
+  if (!query) open = false;
+  clearTimeout(idleTimer);
+  render();
+}
+function back() {
+  query = ''; open = false; keyboard = false; suggestions = [];
+  clearTimeout(idleTimer);
+  logEvent('back', 'BackHandler → leave search');
+  render();
+}
+
+// ---------- Render ----------
+const caret = document.createElement('span'); caret.className = 'caret';
+function renderField() {
+  field.textContent = '';
+  const active = keyboardShown() || !searching();
+  // restart the blink so it stays solid right after a keystroke
+  caret.classList.remove('on'); void caret.offsetWidth; caret.classList.toggle('on', active);
+  if (!query) { field.append(caret, 'Search'); field.classList.remove('long'); }
+  else {
+    field.append(query, caret);
+    field.classList.toggle('long', field.scrollWidth > field.clientWidth);
+  }
+}
+function renderSuggestions() {
+  const list = open ? suggestions : [];
+  const typed = query.trim();
   const old = new Map([...sugEl.children].map(li => [li.dataset.text, li]));
-  sugEl.innerHTML = '';
+  sugEl.textContent = '';
   list.forEach((text, i) => {
     let li = old.get(text);
     if (!li) {
@@ -325,87 +433,123 @@ function renderSuggestions(list) {
       const b = document.createElement('button');
       b.type = 'button';
       b.style.setProperty('--i', i);
-      b.addEventListener('pointerdown', e => e.preventDefault()); // keep keyboard focus
       b.addEventListener('click', () => { logEvent('suggestion:pick', JSON.stringify(text)); submit(text); });
       li.appendChild(b);
-    } else {
-      li.firstChild.style.animation = 'none';     // already shown, don't replay
-    }
+    } else li.firstChild.style.animation = 'none';   // already shown, don't replay
     const b = li.firstChild;
     b.textContent = '';
     if (typed && text.toLowerCase().startsWith(typed.toLowerCase())) {
-      b.append(text.slice(0, typed.length));
       const strong = document.createElement('b'); strong.textContent = text.slice(typed.length);
-      b.append(strong);
+      b.append(text.slice(0, typed.length), strong);
     } else b.textContent = text;
     sugEl.appendChild(li);
   });
-  current = list;
+}
+function render() {
+  const s = searching(), k = keyboardShown();
+  if (s !== wasSearching) logEvent('mode', s ? 'search' : 'idle');
+  if (k !== wasKb) logEvent('keyboard', k ? 'up' : 'down');
+  wasSearching = s; wasKb = k;
+  screen.classList.toggle('searching', s);
+  kbEl.classList.toggle('up', k);
+  kbEl.inert = !k;
+  catcher.hidden = !s;
+  clearBtn.hidden = !query;
+  renderField();
+  renderSuggestions();
 }
 
-function updateMode() {
-  const searching = focused || q.value.length > 0;
-  if (screen.classList.contains('searching') !== searching) {
-    logEvent('mode', searching ? 'search (title zooms out, glass on)' : 'idle');
-  }
-  screen.classList.toggle('searching', searching);
-  catcher.hidden = !searching;
-  clearBtn.hidden = q.value.length === 0;
-  if (!focused) renderSuggestions([]);  // only while typing
-}
+// ---------- Glass keyboard ----------
+const ICON = {
+  back: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 5.5H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H8.2a1.5 1.5 0 0 1-1.1-.5l-4.5-5.5a.8.8 0 0 1 0-1L7.1 6a1.5 1.5 0 0 1 1.1-.5z" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/><path d="M11.5 9.5l5 5M16.5 9.5l-5 5" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  hide: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9.5l6 6 6-6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  search: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="7.5" fill="none" stroke="#fff" stroke-width="2.6"/><path d="M16 16l5.5 5.5" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>',
+};
+const PAGES = {
+  letters: ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'],
+  symbols: ['1234567890', '-/:;()$&@"', ".,?!'#+"],
+};
+let symbols = false;
 
-let debounce;
-q.addEventListener('input', () => {
-  updateMode();
-  clearTimeout(debounce);
-  if (!q.value.trim()) { renderSuggestions([]); return; }
-  debounce = setTimeout(() => {
-    const list = suggest(q.value, MAX_SUGGESTIONS);
-    renderSuggestions(list);
-    logEvent('suggest', `${JSON.stringify(q.value)} → ${list.length} results`);
-  }, DEBOUNCE_MS);
-});
-
-function onSearch(query) {     // mirrors MainActivity.onSearch
-  logEvent('onSearch', JSON.stringify(query));
-  toast(`Searching “${query}”`);
+function type(c) {
+  if (c === ' ' && (!query || query.endsWith(' '))) return;   // no leading/double spaces
+  setQuery(query + c);
 }
-function submit(text) {
-  q.value = text;
-  q.blur();
-  onSearch(text);
-  updateMode();
-}
+function backspace() { if (query) setQuery(query.slice(0, -1)); }
 
-q.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
+function makeKey({ label, html, w = 1, cls = '', act, repeat = false }) {
+  const k = document.createElement('button');
+  k.type = 'button';
+  k.className = `key ${cls}`;
+  k.style.setProperty('--w', w);
+  k.setAttribute('aria-label', label);
+  if (html) k.innerHTML = html; else k.textContent = label;
+  let holdTimer, repeatTimer;
+  const stop = () => { k.classList.remove('pressed'); clearTimeout(holdTimer); clearInterval(repeatTimer); };
+  k.addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    const v = q.value.trim();
-    if (v) submit(v);
-    else logEvent('ime:search', 'ignored, query is blank');
-  }
-});
-q.addEventListener('focus', () => { focused = true; logEvent('focus', 'search field (keyboard opens on device)'); updateMode(); });
-q.addEventListener('blur', () => { focused = false; logEvent('blur', 'search field'); updateMode(); });
+    k.setPointerCapture(e.pointerId);
+    k.classList.add('pressed');
+    if (repeat) {           // backspace: fire now, repeat while held
+      act();
+      holdTimer = setTimeout(() => { repeatTimer = setInterval(act, 60); }, 450);
+    }
+  });
+  k.addEventListener('pointerup', (e) => {
+    const inside = document.elementFromPoint(e.clientX, e.clientY)?.closest('.key') === k;
+    stop();
+    if (!repeat && inside) act();       // slide off = cancel
+  });
+  k.addEventListener('pointercancel', stop);
+  k.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(); } });
+  return k;
+}
+function buildKeyboard() {
+  kbEl.textContent = '';
+  const [r1, r2, r3] = symbols ? PAGES.symbols : PAGES.letters;
+  const row = () => { const r = document.createElement('div'); r.className = 'kb-row'; kbEl.appendChild(r); return r; };
+  const gap = () => { const g = document.createElement('span'); g.className = 'kb-gap'; return g; };
+  const char = (c) => makeKey({ label: c, act: () => type(c) });
 
-clearBtn.addEventListener('pointerdown', e => e.preventDefault());
-clearBtn.addEventListener('click', (e) => {
-  e.preventDefault(); e.stopPropagation();
-  q.value = ''; renderSuggestions([]); q.focus(); updateMode();
-  logEvent('clear', 'query cleared');
-});
-catcher.addEventListener('click', () => { q.blur(); logEvent('tap', 'outside bar → hide keyboard'); });
+  const a = row(); [...r1].forEach(c => a.appendChild(char(c)));
+  const b = row(); if (r2.length < 10) b.appendChild(gap());
+  [...r2].forEach(c => b.appendChild(char(c))); if (r2.length < 10) b.appendChild(gap());
+  const c = row();
+  c.appendChild(makeKey({ label: symbols ? 'abc' : '123', w: 1.5, cls: 'small',
+    act: () => { symbols = !symbols; buildKeyboard(); } }));
+  [...r3].forEach(ch => c.appendChild(char(ch)));
+  c.appendChild(makeKey({ label: 'Delete', html: ICON.back, w: 1.5, act: backspace, repeat: true }));
+  const d = row();
+  d.appendChild(makeKey({ label: 'Hide keyboard', html: ICON.hide, w: 1.5,
+    act: () => { keyboard = false; clearTimeout(idleTimer); render(); } }));
+  d.appendChild(char(','));
+  d.appendChild(makeKey({ label: 'space', w: 4.5, cls: 'small faded', act: () => type(' ') }));
+  d.appendChild(char('.'));
+  d.appendChild(makeKey({ label: 'Search', html: `${ICON.search}<span>Search</span>`, w: 2, cls: 'small accent',
+    act: () => { if (query.trim()) submit(query.trim()); } }));
+}
+buildKeyboard();
 
-// Escape = Android back: leave search mode.
+// Computer keyboard works too while ours is up (handy for testing).
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && screen.classList.contains('searching') && voice.hidden) {
-    q.value = ''; q.blur(); updateMode();
-    logEvent('back', 'BackHandler → leave search');
-  }
+  if (!voice.hidden || e.target.closest?.('.btn, .voice')) return;
+  if (e.key === 'Escape') { if (searching()) back(); return; }
+  if (!keyboardShown()) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === 'Backspace') { e.preventDefault(); backspace(); }
+  else if (e.key === 'Enter') { e.preventDefault(); if (query.trim()) submit(query.trim()); }
+  else if (e.key.length === 1) { e.preventDefault(); type(e.key.toLowerCase()); }
 });
 
-$('mic').addEventListener('click', (e) => {
-  e.preventDefault(); e.stopPropagation();
+// ---------- Wiring ----------
+$('bar').addEventListener('click', (e) => {
+  if (e.target.closest('.mic, .clear')) return;
+  activate();
+});
+clearBtn.addEventListener('click', () => { setQuery(''); activate(); logEvent('clear', 'query cleared'); });
+catcher.addEventListener('click', tapOutside);
+
+$('mic').addEventListener('click', () => {
   logEvent('onVoiceSearch', 'RecognizerIntent.ACTION_RECOGNIZE_SPEECH');
   voice.hidden = false;
   $('spoken').value = '';
@@ -421,7 +565,7 @@ $('voiceForm').addEventListener('submit', (e) => {
   voice.hidden = true;
   if (!said) { logEvent('voice:result', 'no speech'); return; }
   logEvent('voice:result', JSON.stringify(said));
-  submit(said);               // LaunchedEffect(voiceResult): fill box, then search
+  submit(said);
 });
 
 $('boundsBtn').addEventListener('click', (e) => {
@@ -430,21 +574,24 @@ $('boundsBtn').addEventListener('click', (e) => {
   logEvent('debug', `layout bounds ${on ? 'on' : 'off'}`);
 });
 $('fsBtn').addEventListener('click', async () => {
-  try { await $('screen').requestFullscreen(); }
+  try { await screen.requestFullscreen(); }
   catch { logEvent('debug', 'fullscreen not available in this view'); }
 });
 $('resetBtn').addEventListener('click', () => {
-  q.value = ''; q.blur(); voice.hidden = true; toastEl.hidden = true;
-  renderSuggestions([]); updateMode();
-  log.innerHTML = '';
+  query = ''; open = false; keyboard = false; suggestions = []; symbols = false;
+  clearTimeout(idleTimer); voice.hidden = true; toastEl.hidden = true;
+  buildKeyboard();
+  log.textContent = '';
+  wasSearching = wasKb = false;
   logEvent('app', 'MainActivity.onCreate → HomeScreen');
+  render();
 });
 
 function updateScale() {
-  const w = $('screen').getBoundingClientRect().width;
-  $('scale').textContent = `${(w / 2000 * 100).toFixed(1)}%`;
+  $('scale').textContent = `${(screen.getBoundingClientRect().width / 2000 * 100).toFixed(1)}%`;
 }
-new ResizeObserver(updateScale).observe($('screen'));
+new ResizeObserver(updateScale).observe(screen);
 updateScale();
 logEvent('app', 'MainActivity.onCreate → HomeScreen');
+render();
 </script>

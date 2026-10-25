@@ -22,11 +22,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import com.headunit.music.R
@@ -35,6 +33,8 @@ import com.headunit.music.data.SuggestionProvider
 import com.headunit.music.ui.components.BAR_HEIGHT_COMPACT
 import com.headunit.music.ui.components.BAR_HEIGHT_IDLE
 import com.headunit.music.ui.components.SearchBar
+import com.headunit.music.ui.keyboard.GlassKeyboard
+import com.headunit.music.ui.keyboard.KEYBOARD_HEIGHT
 import com.headunit.music.ui.theme.DesignCanvas
 import com.headunit.music.ui.theme.HeadunitMusicTheme
 import com.headunit.music.ui.theme.LocalDesignScale
@@ -43,11 +43,22 @@ import kotlinx.coroutines.delay
 private const val MAX_SUGGESTIONS = 5
 private const val SUGGEST_DEBOUNCE_MS = 120L
 
+/** Keyboard slides away after this long without a keystroke, revealing all suggestions. */
+private const val KEYBOARD_IDLE_HIDE_MS = 2000L
+
+/** Suggestions from this row down sit behind the keyboard glass (rows 3–5). */
+private const val FIRST_ROW_UNDER_GLASS = 2
+
 /**
  * Home screen.
+ *
  * Idle: gradient background, search pill, script "Listen..." in the middle.
- * Searching (bar focused or has text): "Listen..." zooms out and fades, the
- * background frosts over, and suggestions appear under the bar as you type.
+ *
+ * Searching (bar tapped): "Listen..." zooms out, the background frosts over,
+ * the bar rises and slims down, and our glass keyboard slides up. Suggestions
+ * appear as you type; the last three sit blurred behind the keyboard. Pause for
+ * two seconds and the keyboard slides away so all five are readable. Tap the bar
+ * to bring it back.
  */
 @Composable
 fun HomeScreen(
@@ -58,22 +69,35 @@ fun HomeScreen(
     suggestionProvider: SuggestionProvider = remember { LocalSuggestionProvider() },
 ) {
     var query by rememberSaveable { mutableStateOf("") }
-    var focused by remember { mutableStateOf(false) }
+    var open by rememberSaveable { mutableStateOf(false) }       // search panel open
+    var keyboard by rememberSaveable { mutableStateOf(false) }   // our keyboard showing
     var suggestions by remember { mutableStateOf(emptyList<String>()) }
-    val focusRequester = remember { FocusRequester() }
-    val focusManager = LocalFocusManager.current
 
-    val searching = focused || query.isNotEmpty()
+    val searching = open || query.isNotEmpty()
+    val keyboardShown = open && keyboard
+
     val progress by animateFloatAsState(
         targetValue = if (searching) 1f else 0f,
         animationSpec = tween(420, easing = FastOutSlowInEasing),
         label = "searchMode",
     )
+    val kb by animateFloatAsState(
+        targetValue = if (keyboardShown) 1f else 0f,
+        animationSpec = tween(360, easing = FastOutSlowInEasing),
+        label = "keyboard",
+    )
 
+    fun activate() { open = true; keyboard = true }
     fun submit(text: String) {
         query = text
-        focusManager.clearFocus()
+        open = false
+        keyboard = false
         onSearch(text)
+    }
+    fun tapOutside() {
+        if (keyboard) keyboard = false   // first tap: put the keyboard away
+        else open = false                // second tap: close suggestions
+        if (query.isEmpty()) open = false // nothing typed → back to idle
     }
 
     // When the mic returns text, drop it in the box and search straight away.
@@ -94,10 +118,19 @@ fun HomeScreen(
         }
     }
 
+    // Pause typing → keyboard slides away. Every keystroke restarts the timer.
+    LaunchedEffect(query, keyboardShown) {
+        if (keyboardShown && query.isNotBlank()) {
+            delay(KEYBOARD_IDLE_HIDE_MS)
+            keyboard = false
+        }
+    }
+
     // Back leaves search mode instead of closing the app.
     BackHandler(enabled = searching) {
         query = ""
-        focusManager.clearFocus()
+        open = false
+        keyboard = false
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -139,8 +172,7 @@ fun HomeScreen(
                 val barTop = lerp(64f, 28f)
                 val barHeight = lerp(BAR_HEIGHT_IDLE, BAR_HEIGHT_COMPACT)
 
-                // Tap empty space while searching → put the keyboard away.
-                // If nothing is typed, that also returns to the idle home screen.
+                // Taps on empty space while searching.
                 if (searching) {
                     Box(
                         Modifier
@@ -148,7 +180,8 @@ fun HomeScreen(
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
-                            ) { focusManager.clearFocus() },
+                                onClick = ::tapOutside,
+                            ),
                     )
                 }
 
@@ -170,12 +203,13 @@ fun HomeScreen(
                     )
                 }
 
-                // Suggestions line up with the "Search" text inside the bar.
+                // Suggestions line up with the text inside the bar.
                 SearchSuggestions(
                     query = query,
-                    // Only while typing; once a search is sent they clear away.
-                    suggestions = if (focused) suggestions else emptyList(),
+                    suggestions = if (open) suggestions else emptyList(),
                     onPick = ::submit,
+                    fog = kb,
+                    fogFromIndex = FIRST_ROW_UNDER_GLASS,
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(
@@ -187,16 +221,35 @@ fun HomeScreen(
 
                 SearchBar(
                     query = query,
-                    onQueryChange = { query = it },
-                    onSearch = ::submit,
+                    // Blinking cursor while typing, and on the idle screen like the mockup.
+                    active = keyboardShown || !searching,
+                    onActivate = ::activate,
+                    onClear = { query = ""; activate() },
                     onVoiceSearch = onVoiceSearch,
-                    focusRequester = focusRequester,
-                    onFocusChange = { focused = it },
                     compact = progress,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .padding(top = barTop.u, start = 96.u, end = 96.u),
                 )
+
+                // Glass keyboard slides up from the bottom edge.
+                if (kb > 0f) {
+                    GlassKeyboard(
+                        onType = { c ->
+                            // No leading spaces or double spaces.
+                            if (c != ' ' || (query.isNotEmpty() && !query.endsWith(' '))) query += c
+                        },
+                        onBackspace = { if (query.isNotEmpty()) query = query.dropLast(1) },
+                        onSearch = { if (query.isNotBlank()) submit(query.trim()) },
+                        onHide = { keyboard = false },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .graphicsLayer {
+                                translationY = (1f - kb) * KEYBOARD_HEIGHT.u.toPx()
+                                alpha = 0.4f + 0.6f * kb
+                            },
+                    )
+                }
             }
         }
     }
