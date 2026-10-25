@@ -335,19 +335,21 @@ private fun NowPlaying(player: PlayerController, width: Float, shiftY: Float, al
             modifier = Modifier.offset(x = 56.u, y = (48f + shiftY).u).graphicsLayer { this.alpha = alpha },
         )
 
-        // Where we are in the queue (top-right): “starboy” — 3 of 20
-        val position = "${player.index + 1} of ${player.queue.size}"
-        Text(
-            text = player.queueName?.let { "“$it” — $position" } ?: position,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.End,
-            style = TextStyle(Tertiary, fontSize = 44.usp, shadow = TextShadow),
-            modifier = Modifier
-                .offset(x = (width / 2f).u, y = (82f + shiftY).u)
-                .width((width / 2f - 64f).u)
-                .graphicsLayer { this.alpha = alpha },
-        )
+        // Where we are in a library / playlist (top-right): "Road trip — 3 of 20".
+        // Nothing for search results, which aren't a collection.
+        player.queueName?.let { name ->
+            Text(
+                text = "$name — ${player.index + 1} of ${player.queue.size}",
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.End,
+                style = TextStyle(Tertiary, fontSize = 44.usp, shadow = TextShadow),
+                modifier = Modifier
+                    .offset(x = (width / 2f).u, y = (82f + shiftY).u)
+                    .width((width / 2f - 64f).u)
+                    .graphicsLayer { this.alpha = alpha },
+            )
+        }
 
         // Beside the artwork: song, then transport, spread over the artwork's height
         Column(

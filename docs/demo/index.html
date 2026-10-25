@@ -551,7 +551,7 @@ body {
       <span class="chip">Canvas <b>2000×1200</b></span>
       <span class="chip">Scale <b id="scale">–</b></span>
       <span class="chip">Back <b>Esc</b></span>
-      <span class="chip">Build <b>v0.15 · player</b></span>
+      <span class="chip">Build <b>v0.16 · player</b></span>
       <label class="chip" for="mode">Results
         <select class="sel" id="mode">
           <option value="ok">Sample songs</option>
@@ -761,7 +761,7 @@ function playQueue(tracks, i, name) {
   P.original = tracks; P.name = name; P.expanded = true;
   if (P.shuffle) { const first = tracks[i]; P.queue = [first, ...shuffled(tracks.filter(t => t !== first))]; i = 0; }
   else P.queue = tracks;
-  logEvent('player.playQueue', `${tracks.length} songs from "${name}", start at #${i + 1}`);
+  logEvent('player.playQueue', `${tracks.length} songs${name ? ` from "${name}"` : ' from search'}, start at #${i + 1}`);
   playAt(i);
 }
 function playAt(i) {
@@ -799,7 +799,8 @@ function cycleRepeat() {
   logEvent('player', `loop ${({ off: 'off', all: 'queue', one: 'this song' })[P.repeat]}`); renderPlayer();
 }
 function setExpanded(v) { P.expanded = v; if (!v) P.showVideo = false; logEvent('player', v ? 'expand' : 'minimize'); renderPlayer(); }
-function play(t) { playQueue(results.tracks, results.tracks.indexOf(t), results.query); }
+// Search results play as a plain queue: no library/playlist name, so no "3 of 20".
+function play(t) { playQueue(results.tracks, results.tracks.indexOf(t), null); }
 
 const playerEl = $('player');
 function renderProgress() {
@@ -819,8 +820,8 @@ function renderPlayer() {
   if (!t) return;
   $('dockTitle').textContent = $('npTitle').textContent = t.title;
   $('dockArtist').textContent = $('npArtist').textContent = t.artist;
-  const pos = `${P.index + 1} of ${P.queue.length}`;
-  $('npWhere').textContent = P.name ? `“${P.name}” — ${pos}` : pos;
+  $('npWhere').hidden = !P.name;   // only for libraries / playlists
+  if (P.name) $('npWhere').textContent = `${P.name} — ${P.index + 1} of ${P.queue.length}`;
   const art = `linear-gradient(135deg, hsl(${t.hue} 70% 45%), hsl(${(t.hue + 50) % 360} 75% 30%))`;
   $('cover').style.background = art;
   $('cover').firstChild.textContent = t.artist[0];

@@ -34,7 +34,10 @@ class PlayerController(context: Context) {
         private set
     var index by mutableIntStateOf(-1)
         private set
-    /** Where the queue came from, e.g. the search text. Shown as "“starboy” — 3 of 20". */
+    /**
+     * Name of the library or playlist being played, shown as "Road trip — 3 of 20".
+     * Null when playing from search results: those aren't a collection, so no position is shown.
+     */
     var queueName by mutableStateOf<String?>(null)
         private set
     val current: Track? by derivedStateOf { queue.getOrNull(index) }

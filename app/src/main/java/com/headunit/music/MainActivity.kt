@@ -57,7 +57,8 @@ class MainActivity : ComponentActivity() {
                     HomeScreen(
                         youtube = youtube,
                         history = history,
-                        onPlay = { tracks, index, query -> player.playQueue(tracks, index, query) },
+                        // Search results play as a plain queue: no library/playlist name.
+                        onPlay = { tracks, index, _ -> player.playQueue(tracks, index) },
                         dockInset = if (player.current != null) DOCK_HEIGHT else 0f,
                         onKeyboardShownChange = { keyboardUp = it },
                         onVoiceSearch = {
