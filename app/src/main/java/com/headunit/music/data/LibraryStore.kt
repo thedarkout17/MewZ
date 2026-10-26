@@ -54,6 +54,11 @@ class LibraryStore(context: Context) {
             instance ?: synchronized(this) {
                 instance ?: LibraryStore(context.applicationContext).also { instance = it }
             }
+
+        private const val HISTORY_SIZE = 50
+        private const val KEY_LIKED = "liked"
+        private const val KEY_HISTORY = "history"
+        private const val KEY_CUSTOM = "custom"
     }
 
     private val prefs = context.getSharedPreferences("libraries", Context.MODE_PRIVATE)
@@ -204,10 +209,4 @@ class LibraryStore(context: Context) {
         prefs.edit().putString(KEY_CUSTOM, arr.toString()).apply()
     }
 
-    private companion object {
-        const val HISTORY_SIZE = 50
-        const val KEY_LIKED = "liked"
-        const val KEY_HISTORY = "history"
-        const val KEY_CUSTOM = "custom"
-    }
 }
