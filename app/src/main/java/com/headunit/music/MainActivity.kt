@@ -4,9 +4,6 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import com.headunit.music.player.PlaybackService
-import android.os.Build
-import android.content.pm.PackageManager
-import android.Manifest
 import android.speech.RecognizerIntent
 import android.view.WindowManager
 import android.widget.Toast
@@ -54,12 +51,6 @@ class MainActivity : ComponentActivity() {
         NewPipeDownloader.init()
         player = PlayerController.get(this)
         libraries = LibraryStore.get(this)
-        // Android 13+: allow the media notification (with play / pause / skip) to show.
-        if (Build.VERSION.SDK_INT >= 33 &&
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 0)
-        }
         // History: songs that played for 3 seconds or more.
         player.onPlayedLongEnough = libraries::recordPlayed
 
