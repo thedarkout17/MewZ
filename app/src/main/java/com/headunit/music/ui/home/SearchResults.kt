@@ -48,9 +48,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.headunit.music.data.youtube.Album
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -84,8 +81,6 @@ sealed interface ResultsState {
         val loadingMore: Boolean = false,
         /** Why the last "load more" failed (scrolling stops asking until Try again). */
         val moreFailed: Reason? = null,
-        /** Matching albums from YouTube Music, shown in a row above the songs (arrive a moment later). */
-        val albums: List<Album> = emptyList(),
     ) : ResultsState
     data class Failed(val reason: Reason) : ResultsState
 }
@@ -117,8 +112,6 @@ fun SearchResults(
     onLoadMore: () -> Unit = {},
     /** A tap on empty space (not a song or button): back to the home screen. */
     onTapEmptySpace: () -> Unit = {},
-    /** An album in the Albums row was tapped: open it. */
-    onOpenAlbum: (Album) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val tapEmpty by rememberUpdatedState(onTapEmptySpace)
@@ -134,13 +127,13 @@ fun SearchResults(
         when (s) {
             ResultsState.Loading -> LoadingRows()
             is ResultsState.Done ->
-                if (s.tracks.isEmpty() && s.albums.isEmpty()) {
+                if (s.tracks.isEmpty()) {
                     Message(
                         title = "No songs found for “${s.query}”",
                         detail = "Try a different spelling or the artist's name.",
                     )
                 } else {
-                    TrackList(s, onPlay, onQueue, onLoadMore, onOpenAlbum)
+                    TrackList(s, onPlay, onQueue, onLoadMore)
                 }
             is ResultsState.Failed -> FailureMessage(s.reason, onRetry)
         }
@@ -153,7 +146,6 @@ private fun TrackList(
     onPlay: (Track) -> Unit,
     onQueue: (Track) -> Unit,
     onLoadMore: () -> Unit,
-    onOpenAlbum: (Album) -> Unit,
 ) {
     val tracks = state.tracks
     val list = rememberLazyListState()
@@ -191,16 +183,6 @@ private fun TrackList(
                     )
                 },
         ) {
-            // Albums first (when any match), then the songs under their own label.
-            if (state.albums.isNotEmpty()) {
-                item(key = "albums") {
-                    Column {
-                        SectionLabel("Albums")
-                        AlbumRow(state.albums, onOpenAlbum)
-                        if (tracks.isNotEmpty()) SectionLabel("Songs", top = 28f)
-                    }
-                }
-            }
             itemsIndexed(tracks, key = { _, t -> t.videoId }) { index, track ->
                 TrackRow(track, index, onClick = { onPlay(track) }, onLongClick = { onQueue(track) })
             }
@@ -335,67 +317,9 @@ internal fun TrackRow(
     }
 }
 
-@Composable
-private fun SectionLabel(text: String, top: Float = 0f) {
-    with(LocalDesignScale.current) {
-        Text(
-            text,
-            style = TextStyle(Color.White, fontSize = 52.usp, fontWeight = FontWeight.SemiBold, shadow = TextShadow),
-            modifier = Modifier.padding(start = 16.u, top = top.u, bottom = 16.u),
-        )
-    }
-}
-
-/** Albums side by side, scrolling sideways: square cover, then title and artist. */
-@Composable
-private fun AlbumRow(albums: List<Album>, onOpen: (Album) -> Unit) {
-    with(LocalDesignScale.current) {
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(36.u),
-            contentPadding = PaddingValues(horizontal = 16.u),
-        ) {
-            items(albums, key = { it.url }) { album ->
-                val shape = RoundedCornerShape(36.u)
-                Column(
-                    Modifier
-                        .width(ALBUM_CARD.u)
-                        .clip(RoundedCornerShape(36.u))
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = ripple(color = Color.White),
-                        ) { onOpen(album) },
-                ) {
-                    AsyncImage(
-                        model = album.coverUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(ALBUM_CARD.u)
-                            .clip(shape)
-                            .background(Color.White.copy(alpha = 0.10f))
-                            .border(1.5f.u, Color.White.copy(alpha = 0.22f), shape),
-                    )
-                    Text(
-                        album.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        style = TextStyle(Color.White, fontSize = 48.usp, fontWeight = FontWeight.Medium, shadow = TextShadow),
-                        modifier = Modifier.padding(start = 8.u, top = 16.u),
-                    )
-                    Text(
-                        album.artist, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        style = TextStyle(Secondary, fontSize = 38.usp, shadow = TextShadow),
-                        modifier = Modifier.padding(start = 8.u, bottom = 8.u),
-                    )
-                }
-            }
-        }
-    }
-}
-
-private const val ALBUM_CARD = 360f
-
 /** Placeholder rows that gently pulse while YouTube answers. */
 @Composable
-internal fun LoadingRows() {
+private fun LoadingRows() {
     val pulse by rememberInfiniteTransition(label = "loading").animateFloat(
         initialValue = 0.08f,
         targetValue = 0.18f,

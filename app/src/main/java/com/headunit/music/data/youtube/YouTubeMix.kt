@@ -33,7 +33,7 @@ object YouTubeMix {
                     .getOrNull()
                     .orEmpty()
             }
-        items.mapNotNull { toTrack(it) }
+        items.mapNotNull(::toTrack)
             .filter { it.videoId != seed.videoId }
             .distinctBy { it.videoId }
     }
@@ -54,11 +54,10 @@ object YouTubeMix {
         StreamInfo.getInfo(ServiceList.YouTube, "https://www.youtube.com/watch?v=$videoId")
             .relatedItems.filterIsInstance<StreamInfoItem>()
 
-    /** A NewPipe stream item as one of our songs (also used for album tracks). Null for live streams / too long. */
-    internal fun toTrack(item: StreamInfoItem, maxSeconds: Long = MAX_SONG_SECONDS): Track? {
+    private fun toTrack(item: StreamInfoItem): Track? {
         if (item.streamType == StreamType.LIVE_STREAM || item.streamType == StreamType.AUDIO_LIVE_STREAM) return null
         // Skip hour-long compilations and "10 hours of..." uploads; they're not songs.
-        if (item.duration > maxSeconds) return null
+        if (item.duration > MAX_SONG_SECONDS) return null
         val id = VIDEO_ID.find(item.url)?.groupValues?.get(1) ?: return null
 
         val (splitTitle, splitArtist) = YouTubeSearch.splitArtist(
