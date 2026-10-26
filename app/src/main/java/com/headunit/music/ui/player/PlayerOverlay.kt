@@ -1,7 +1,6 @@
 package com.headunit.music.ui.player
 
 import android.os.Build
-import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -51,14 +50,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.headunit.music.R
@@ -82,13 +79,6 @@ private object PlayerGlass {
     val Edge = Brush.verticalGradient(listOf(Color(0x80FFFFFF), Color(0x1FFFFFFF)))
     val Tile = Brush.verticalGradient(listOf(Color(0x2EFFFFFF), Color(0x14FFFFFF)))
 }
-
-/**
- * Size of each hidden YouTube player in real screen pixels. YouTube picks the
- * video quality from the player's size, so this keeps it at its lowest (~144p).
- */
-private const val HIDDEN_PLAYER_W_PX = 128
-private const val HIDDEN_PLAYER_H_PX = 72
 
 // ---- Layout (design px on the 2000x1200 canvas), after the CarPlay Now Playing ----
 //   ⌄                                         “starboy” — 3 of 20     ← y 48–178
@@ -119,9 +109,8 @@ private const val ART_MINI_X = 56f
  * **Dock** (minimized): a glass bar along the bottom with the artwork, song and
  * controls. Tap it to open Now Playing.
  *
- * Audio only, as far as you can see: the two YouTube players sit tiny behind
- * the artwork. The artwork square glides between dock and Now Playing, and the
- * players move with it, so playback never restarts.
+ * Audio only: there's no video. The artwork square glides between the dock
+ * and Now Playing.
  * [dockHidden] slides the dock away (e.g. while our keyboard is up).
  */
 @Composable
@@ -206,20 +195,6 @@ fun PlayerOverlay(
                             indication = null,
                         ) { if (!player.expanded) player.expanded = true },
                 ) {
-                    // The two YouTube players: on screen (they need to be to play) but
-                    // tiny and covered by the artwork. Tiny = YouTube's lowest video
-                    // quality, so data use stays close to audio-only.
-                    val density = LocalDensity.current
-                    Row(Modifier.align(Alignment.Center)) {
-                        player.playerViews.forEach { view ->
-                            AndroidView(
-                                factory = { view.also { (it.parent as? ViewGroup)?.removeView(it) } },
-                                modifier = with(density) {
-                                    Modifier.size(width = HIDDEN_PLAYER_W_PX.toDp(), height = HIDDEN_PLAYER_H_PX.toDp())
-                                },
-                            )
-                        }
-                    }
                     run {
                         val context = LocalContext.current
                         val artRequest = remember(track.artworkUrl) {

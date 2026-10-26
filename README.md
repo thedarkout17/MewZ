@@ -37,18 +37,20 @@ Use `with(LocalDesignScale.current) { 232.u }` for sizes and `92.usp` for text.
 - YouTube song search: music videos that allow embedding, with durations; titles cleaned up
   ("Artist - Song (Official Video)" → song + artist); loading, empty and error states
 - Recent searches (saved on the device, scrollable, × to remove)
-- Player: songs play through YouTube's own player (IFrame API in a WebView), **hidden**:
-  you see the artwork and hear the song. The player is kept tiny behind the artwork, so
-  YouTube picks its lowest video quality (~144p) and data use stays near audio-only
-  (~100 MB/hour). Two hidden players take turns: while one plays, the other loads the
-  next song muted and holds it at 0:00, so skipping starts instantly.
+- Player: **audio only**. Search uses the YouTube Data API; for each song the app finds
+  YouTube's audio-only stream (~128 kbps AAC, via NewPipeExtractor) and plays it with
+  Media3 ExoPlayer, so no video is downloaded: roughly 60 MB per hour.
+  When a song starts, the next one's first ~5 seconds are pre-buffered into an on-disk
+  cache (64 MB, also keeps recently played songs), so skipping starts instantly.
+  Pauses for navigation prompts / calls and when Bluetooth drops.
   Now Playing laid out like CarPlay (720×720 artwork, full-width seek bar, shuffle /
   loop-this-song / add); ⌄ minimizes to a glass dock and returns home.
-  Tapping a result queues the rest of that list; songs auto-advance; songs YouTube
-  won't play outside YouTube are skipped automatically.
+  Tapping a result queues the rest of that list; songs auto-advance; songs that can't be
+  played are skipped. Personal project: pulling audio this way isn't allowed by YouTube's
+  terms, and Google could disable the API key if it notices.
 
 ## Branches
-- `main`: this version (YouTube Data API search + hidden YouTube players).
+- `main`: this version (YouTube Data API search + audio-only playback).
 - `savepoint/youtube-api`: the version with the visible embedded player, kept as a fixed restore point.
 - `experiment/audio-only`: NewPipeExtractor search + true audio-only playback with ExoPlayer.
 

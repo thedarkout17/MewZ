@@ -41,6 +41,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // NewPipeExtractor uses newer Java APIs; this backports them to Android 7+.
+        isCoreLibraryDesugaringEnabled = true
     }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures {
@@ -59,5 +61,12 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("io.coil-kt:coil-compose:2.7.0") // thumbnails
+
+    // Audio-only playback: NewPipeExtractor finds each song's audio stream (search
+    // stays on the YouTube Data API), Media3 ExoPlayer plays it.
+    implementation("com.github.teamnewpipe:NewPipeExtractor:v0.26.5")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.2")
+    implementation("androidx.media3:media3-exoplayer:1.4.1")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

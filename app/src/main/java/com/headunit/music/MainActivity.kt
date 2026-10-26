@@ -4,11 +4,13 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import android.speech.RecognizerIntent
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +26,7 @@ import com.headunit.music.data.SearchHistory
 import com.headunit.music.player.PlayerController
 import com.headunit.music.ui.player.DOCK_HEIGHT
 import com.headunit.music.ui.player.PlayerOverlay
+import com.headunit.music.data.youtube.NewPipeDownloader
 import com.headunit.music.data.youtube.YouTubeSearch
 import com.headunit.music.ui.home.HomeScreen
 import com.headunit.music.ui.theme.HeadunitMusicTheme
@@ -36,6 +39,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         goImmersive()
+        NewPipeDownloader.init()
         player = PlayerController(this)
 
         setContent {
@@ -54,6 +58,12 @@ class MainActivity : ComponentActivity() {
                 val history = remember { SearchHistory(applicationContext) }
                 var keyboardUp by remember { mutableStateOf(false) }
                 var goHomeRequests by remember { mutableIntStateOf(0) }
+
+                // Keep the screen on while music plays (headunits shouldn't dim mid-song).
+                LaunchedEffect(player.isPlaying) {
+                    if (player.isPlaying) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
 
                 Box(Modifier.fillMaxSize()) {
                     HomeScreen(
