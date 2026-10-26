@@ -16,4 +16,6 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "HeadunitMusic"
-include(":app")
+include(":app")    // the Android headunit app
+include(":shared") // the rules both apps share (core/), plain Kotlin
+include(":phone")  // the iPhone app's Kotlin side: screens, playback, data (see iosApp/)

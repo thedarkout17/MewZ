@@ -1,4 +1,5 @@
 import java.util.Properties
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
@@ -44,14 +45,20 @@ android {
         // NewPipeExtractor uses newer Java APIs; this backports them to Android 7+.
         isCoreLibraryDesugaringEnabled = true
     }
-    kotlinOptions { jvmTarget = "17" }
     buildFeatures {
         compose = true
         buildConfig = true
     }
 }
 
+kotlin {
+    compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
+}
+
 dependencies {
+    // The rules shared with the iPhone app (queue, libraries, text clean-up...): ../shared
+    implementation(project(":shared"))
+
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")
@@ -71,7 +78,6 @@ dependencies {
     // Media session + background service: steering wheel, Bluetooth, headunit media controls
     implementation("androidx.media3:media3-session:1.4.1")
 
-    // Unit tests for the shared core (app/src/test): Run them from Android Studio.
-    testImplementation("junit:junit:4.13.2")
+    // (The core's unit tests moved with it: shared/src/commonTest.)
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
