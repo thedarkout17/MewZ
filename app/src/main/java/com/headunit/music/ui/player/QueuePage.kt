@@ -29,6 +29,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.headunit.music.data.Track
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.zIndex
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
@@ -62,8 +70,9 @@ private const val ROW_STEP = 240f
  * The queue, laid out like an open library over Now Playing's blurred artwork:
  * "Up Next" at the top, then the songs. Opens on the song playing now with
  * what's coming below; scroll up for what already played (greyed out, marked
- * "Previous"). Tap a song to jump to it, × to take an upcoming one out; a tap
- * on empty space (or Back) returns to Now Playing.
+ * "Previous"). Tap a song to play it and go back to Now Playing; double-tap
+ * to make it play next (staying here); hold and drag an upcoming song to move
+ * it; × takes one out. A tap on empty space (or Back) returns to Now Playing.
  */
 @Composable
 fun QueuePage(player: PlayerController, onClose: () -> Unit, modifier: Modifier = Modifier) {
@@ -84,6 +93,12 @@ fun QueuePage(player: PlayerController, onClose: () -> Unit, modifier: Modifier 
             // Follow along when the song changes while the queue is open.
             if (opened) startOf(now).let { (i, o) -> list.animateScrollToItem(i, o) } else opened = true
         }
+
+        // Hold-to-drag: which song is being moved, and how far it's been pulled from its slot.
+        var dragKey by remember { mutableStateOf<String?>(null) }
+        var dragOffset by remember { mutableFloatStateOf(0f) }
+        val stepPx = with(density) { ROW_STEP.u.toPx() }
+        val haptics = LocalHapticFeedback.current
 
         val collapseDistance = (HEADER_TALL - HEADER_SHORT).u
         val c by remember {
@@ -118,13 +133,74 @@ fun QueuePage(player: PlayerController, onClose: () -> Unit, modifier: Modifier 
                         )
                     },
             ) {
-                items(queue.indices.toList(), key = { i -> "$i:${queue[i].videoId}" }) { i ->
+                val keys = keysOf(queue)
+                items(queue.indices.toList(), key = { i -> keys[i] }) { i ->
                     val track = queue[i]
                     val held = i > now && player.isHeldQueued(track)
+                    val key = keys[i]
+                    val dragging = dragKey == key
+                    val canDrag = i > now // songs still to come can be rearranged
+                    val at by rememberUpdatedState(i)
+                    Box(
+                        Modifier
+                            .then(if (dragging) Modifier.zIndex(1f) else Modifier.animateItem())
+                            .graphicsLayer {
+                                if (dragging) {
+                                    translationY = dragOffset
+                                    scaleX = 1.03f; scaleY = 1.03f
+                                    shadowElevation = 24.u.toPx()
+                                    shape = RoundedCornerShape(28.u)
+                                    clip = false
+                                }
+                            },
+                    ) {
                     TrackRow(
                         track = track,
                         index = i - now, // only the first screenful from "now" staggers in
-                        onClick = { player.skipTo(i) },
+                        onClick = {},
+                        gestures = Modifier
+                            // Tap: play it and go back to Now Playing. Double-tap: play it next,
+                            // staying here. (Hold is the drag below; it stops the tap firing.)
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onTap = {
+                                        if (at != player.index) player.skipTo(at)
+                                        onClose()
+                                    },
+                                    onDoubleTap = {
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        player.playNext(at)
+                                    },
+                                    onLongPress = { },
+                                )
+                            }
+                            // Hold, then drag up or down to move it.
+                            .pointerInput(canDrag) {
+                                if (!canDrag) return@pointerInput
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = {
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        dragKey = key
+                                        dragOffset = 0f
+                                    },
+                                    onDrag = { change, amount ->
+                                        change.consume()
+                                        dragOffset += amount.y
+                                        // Past halfway into a neighbour's slot: swap with it.
+                                        val from = keysOf(player.queue).indexOf(dragKey)
+                                        if (from < 0) return@detectDragGesturesAfterLongPress
+                                        if (dragOffset > stepPx / 2 && from + 1 < player.queue.size) {
+                                            player.moveInQueue(from, from + 1)
+                                            dragOffset -= stepPx
+                                        } else if (dragOffset < -stepPx / 2 && from - 1 > player.index) {
+                                            player.moveInQueue(from, from - 1)
+                                            dragOffset += stepPx
+                                        }
+                                    },
+                                    onDragEnd = { dragKey = null; dragOffset = 0f },
+                                    onDragCancel = { dragKey = null; dragOffset = 0f },
+                                )
+                            },
                         label = when {
                             i < now -> "Previous"
                             i == now -> "Now playing"
@@ -133,8 +209,9 @@ fun QueuePage(player: PlayerController, onClose: () -> Unit, modifier: Modifier 
                         },
                         played = i < now,
                         highlighted = i == now,
-                        trailing = if (i > now) ({ RemoveButton { player.removeFromQueue(i) } }) else null,
+                        trailing = if (i > now) ({ RemoveButton { player.removeFromQueue(at) } }) else null,
                     )
+                    }
                 }
                 if (player.autoMix) {
                     item(key = "mix") {
@@ -191,6 +268,19 @@ fun QueuePage(player: PlayerController, onClose: () -> Unit, modifier: Modifier 
                 Icon(painterResource(R.drawable.ic_queue), stringResource(R.string.queue), tint = Color.White, modifier = Modifier.size(64.u))
             }
         }
+    }
+}
+
+/**
+ * Stable keys for the queue's rows that survive reordering: the video id, plus
+ * which repeat of it this is (a song can be in the queue more than once).
+ */
+private fun keysOf(queue: List<Track>): List<String> {
+    val seen = HashMap<String, Int>()
+    return queue.map { t ->
+        val n = (seen[t.videoId] ?: 0) + 1
+        seen[t.videoId] = n
+        "${t.videoId}#$n"
     }
 }
 

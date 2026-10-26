@@ -232,6 +232,11 @@ internal fun TrackRow(
     highlighted: Boolean = false,
     /** Extra control at the end of the row (the queue's ×). */
     trailing: (@Composable () -> Unit)? = null,
+    /**
+     * Replaces the usual tap / hold handling (the queue does its own: tap,
+     * double-tap and hold-to-drag). [onClick] and [onLongClick] are ignored then.
+     */
+    gestures: Modifier? = null,
 ) {
     val haptics = LocalHapticFeedback.current
     // First screenful staggers in; rows further down just appear as you scroll.
@@ -256,17 +261,19 @@ internal fun TrackRow(
                 }
                 .clip(RoundedCornerShape(28.u))
                 .then(if (highlighted) Modifier.background(Color(0x24FFFFFF)) else Modifier)
-                .combinedClickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = ripple(color = Color.White),
-                    onClick = onClick,
-                    // Hold: add to the queue.
-                    onLongClick = onLongClick?.let { hold ->
-                        {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            hold()
-                        }
-                    },
+                .then(
+                    gestures ?: Modifier.combinedClickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = ripple(color = Color.White),
+                        onClick = onClick,
+                        // Hold: add to the queue.
+                        onLongClick = onLongClick?.let { hold ->
+                            {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                hold()
+                            }
+                        },
+                    )
                 )
                 .padding(horizontal = 16.u),
         ) {

@@ -276,6 +276,34 @@ class PlayerController(context: Context) {
         playAt(i)
     }
 
+    /** Queue page drag: move the upcoming song at [from] to [to] (both after the current song). */
+    fun moveInQueue(from: Int, to: Int) {
+        if (from == to || from <= index || to <= index || from !in queue.indices || to !in queue.indices) return
+        queue = queue.toMutableList().apply { add(to, removeAt(from)) }
+        keepOrderInSync()
+        if (from == index + 1 || to == index + 1) preloadNext()
+    }
+
+    /** Queue page double-tap: the song at [i] plays next. */
+    fun playNext(i: Int) {
+        if (i !in queue.indices || i == index || i == index + 1) return
+        val track = queue[i]
+        val list = queue.toMutableList()
+        list.removeAt(i)
+        val now = if (i < index) index - 1 else index
+        list.add(now + 1, track)
+        queue = list
+        index = now
+        heldQueued += track.videoId
+        keepOrderInSync()
+        preloadNext()
+    }
+
+    /** Hand-arranged queue: unshuffled, the "original" order is simply what's shown. */
+    private fun keepOrderInSync() {
+        if (!shuffle) originalOrder = queue
+    }
+
     /** Queue list: take the upcoming song at [i] out. */
     fun removeFromQueue(i: Int) {
         if (i <= index || i !in queue.indices) return
