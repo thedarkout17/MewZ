@@ -38,6 +38,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import kotlin.math.sin
+import kotlin.math.cos
+import kotlin.math.atan2
+import kotlin.math.PI
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.StrokeCap
@@ -682,7 +687,8 @@ private fun GlassTile(
     activeIcon: Int = icon,
     /**
      * Played when the tile is tapped on (not off): drawn instead of the icon with
-     * progress 0 → 1 → 0. The glass snaps on once it's finished.
+     * progress 0 → 1 (it should look like the icon again at both ends). The glass
+     * snaps on once it's finished.
      */
     onAnimation: (@Composable (Float) -> Unit)? = null,
 ) {
@@ -697,8 +703,7 @@ private fun GlassTile(
         animating = true
         try {
             anim.snapTo(0f)
-            anim.animateTo(1f, tween(TILE_ANIM_HALF_MS, easing = FastOutSlowInEasing))
-            anim.animateTo(0f, tween(TILE_ANIM_HALF_MS, easing = FastOutSlowInEasing))
+            anim.animateTo(1f, tween(TILE_ANIM_MS, easing = LinearEasing))
         } finally {
             animating = false
         }
@@ -737,38 +742,68 @@ private fun GlassTile(
     }
 }
 
-/** Half of a tile animation (out, then back). */
-private const val TILE_ANIM_HALF_MS = 280
+/** How long a tile animation runs. */
+private const val TILE_ANIM_MS = 760
 
 /**
- * The shuffle icon drawn live, for its animation: at [t] = 0 it's the normal
- * (bold) icon; as [t] goes to 1 the two lines swing across each other until
- * they've swapped places, then they swing back as [t] returns to 0.
+ * The shuffle icon drawn live, for its animation. The two lines slither like
+ * snakes: led by their arrowheads, each one bends across to where the other
+ * line was and back, the movement rippling down its body from head to tail,
+ * with a small wiggle travelling along it. At [p] = 0 and 1 it's the normal
+ * (bold) icon.
  */
 @Composable
-private fun ShuffleGlyph(t: Float) {
+private fun ShuffleGlyph(p: Float) {
     Canvas(Modifier.fillMaxSize()) {
         val k = size.minDimension / 24f // the icon's 24x24 grid
         val stroke = Stroke(width = 2.8f * k, cap = StrokeCap.Round, join = StrokeJoin.Round)
-        fun lerp(a: Float, b: Float) = a + (b - a) * t
-        /** One line of the icon: flat, an S-bend from [yLeft] to [yRight], flat, and its arrowhead. */
-        fun line(yLeft: Float, yRight: Float) {
-            val path = Path().apply {
-                moveTo(3f * k, yLeft * k)
-                lineTo(6.5f * k, yLeft * k)
-                cubicTo(11f * k, yLeft * k, 13f * k, yRight * k, 17.5f * k, yRight * k)
-                lineTo(20f * k, yRight * k)
-                // Arrowhead
-                moveTo(17.5f * k, (yRight - 2.5f) * k)
-                lineTo(20f * k, yRight * k)
-                lineTo(17.5f * k, (yRight + 2.5f) * k)
+        // Head (u = 1, the arrow) moves first; the tail (u = 0) follows this far behind.
+        val lag = 0.55f
+        // Wiggle: strongest mid-animation, gone at the start and end.
+        val wiggle = 1.1f * sin(PI.toFloat() * p)
+
+        fun smooth(x: Float) = x * x * (3f - 2f * x)
+
+        /** One snake: at rest it runs from [yLeft] to [yRight]; it swings to [yLeft2] → [yRight2] and back. */
+        fun snake(yLeft: Float, yRight: Float, yLeft2: Float, yRight2: Float, phase: Float) {
+            val n = 48
+            val xs = FloatArray(n + 1)
+            val ys = FloatArray(n + 1)
+            for (i in 0..n) {
+                val u = i / n.toFloat()
+                val x = 3f + 17f * u
+                // This point's own progress: the head is ahead of the tail.
+                val q = ((p * (1f + lag)) - lag * (1f - u)).coerceIn(0f, 1f)
+                val swap = sin(PI.toFloat() * q) // 0 → 1 (swapped) → 0
+                val a = yLeft + (yLeft2 - yLeft) * swap
+                val b = yRight + (yRight2 - yRight) * swap
+                val bend = smooth(((x - 6.5f) / 11f).coerceIn(0f, 1f))
+                val base = a + (b - a) * bend
+                // A ripple running from head to tail, fading out at the very tail.
+                val ripple = wiggle * u * sin(2f * PI.toFloat() * (1.6f * u - 2.2f * p) + phase)
+                xs[i] = x
+                ys[i] = base + ripple
             }
-            drawPath(path, Color.White, style = stroke)
+            val body = Path().apply {
+                moveTo(xs[0] * k, ys[0] * k)
+                for (i in 1..n) lineTo(xs[i] * k, ys[i] * k)
+            }
+            drawPath(body, Color.White, style = stroke)
+            // Arrowhead, pointing the way the head is going.
+            val angle = atan2(ys[n] - ys[n - 2], xs[n] - xs[n - 2])
+            val wing = 3.5f
+            val hx = xs[n]; val hy = ys[n]
+            val head = Path().apply {
+                moveTo((hx - wing * cos(angle - PI.toFloat() / 4f)) * k, (hy - wing * sin(angle - PI.toFloat() / 4f)) * k)
+                lineTo(hx * k, hy * k)
+                lineTo((hx - wing * cos(angle + PI.toFloat() / 4f)) * k, (hy - wing * sin(angle + PI.toFloat() / 4f)) * k)
+            }
+            drawPath(head, Color.White, style = stroke)
         }
-        // At rest: one line runs from top-left (7) to bottom-right (16), the other from
-        // bottom-left (17) to top-right (7). Each swings to where the other one was.
-        line(lerp(7f, 17f), lerp(16f, 7f))
-        line(lerp(17f, 7f), lerp(7f, 16f))
+        // At rest: one line runs top-left (7) → bottom-right (16), the other bottom-left (17) →
+        // top-right (7). Each slithers over to where the other was and back, in opposite phase.
+        snake(7f, 16f, 17f, 7f, phase = 0f)
+        snake(17f, 7f, 7f, 16f, phase = PI.toFloat())
     }
 }
 
