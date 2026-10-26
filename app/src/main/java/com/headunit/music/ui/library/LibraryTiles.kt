@@ -41,6 +41,11 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.headunit.music.R
+import com.headunit.music.ui.components.CenterSquareCrop
+import com.headunit.music.data.Track
+import coil.request.ImageRequest
+import coil.compose.AsyncImage
+import androidx.compose.ui.platform.LocalContext
 import com.headunit.music.data.HISTORY_ID
 import com.headunit.music.data.LIKED_ID
 import com.headunit.music.data.Library
@@ -114,7 +119,10 @@ fun LibraryGrid(
                                 title = item.library.name,
                                 subtitle = songCount(item.library.tracks.size),
                                 onClick = { onOpen(item.library) },
-                                onLongClick = if (item.library.id == LIKED_ID || item.library.id == HISTORY_ID) null
+                                // Your libraries show their first four songs' artwork; Liked and
+                                // History always keep their icons.
+                                covers = if (isBuiltIn(item.library)) emptyList() else item.library.tracks.take(4),
+                                onLongClick = if (isBuiltIn(item.library)) null
                                     else ({ onHoldLibrary(item.library) }),
                                 squish = squish,
                             )
@@ -139,6 +147,8 @@ fun iconFor(library: Library): Int = when (library.id) {
     else -> R.drawable.ic_music_note
 }
 
+private fun isBuiltIn(library: Library) = library.id == LIKED_ID || library.id == HISTORY_ID
+
 fun songCount(n: Int): String = if (n == 1) "1 song" else "$n songs"
 
 /**
@@ -155,6 +165,8 @@ private fun LibraryTile(
     onClick: () -> Unit,
     squish: () -> Float,
     onLongClick: (() -> Unit)? = null,
+    /** Up to four songs whose artwork replaces the icon (none: show the icon). */
+    covers: List<Track> = emptyList(),
 ) {
     val haptics = LocalHapticFeedback.current
     with(LocalDesignScale.current) {
@@ -185,20 +197,24 @@ private fun LibraryTile(
             ) {
                 GlassPane(Modifier.fillMaxSize())
                 Box(Modifier.fillMaxSize().border(3.u, LibraryGlass.Edge, shape))
-                // Soft shadow under the icon so white reads on the light glass
-                // (blurred on Android 12+, a faint offset copy before that).
-                Icon(
-                    painterResource(icon),
-                    contentDescription = null,
-                    tint = Color(0x29000000),
-                    modifier = Modifier.offset(y = 8.u).size(250.u).blur(14.u),
-                )
-                Icon(
-                    painterResource(icon),
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(250.u),
-                )
+                if (covers.isNotEmpty()) {
+                    ArtCollage(covers)
+                } else {
+                    // Soft shadow under the icon so white reads on the light glass
+                    // (blurred on Android 12+, a faint offset copy before that).
+                    Icon(
+                        painterResource(icon),
+                        contentDescription = null,
+                        tint = Color(0x29000000),
+                        modifier = Modifier.offset(y = 8.u).size(250.u).blur(14.u),
+                    )
+                    Icon(
+                        painterResource(icon),
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(250.u),
+                    )
+                }
             }
             Spacer(Modifier.height(30.u))
             Text(
@@ -214,6 +230,58 @@ private fun LibraryTile(
                     maxLines = 1,
                     style = TextStyle(LibrarySecondary, fontSize = 46.usp, shadow = LibraryTextShadow),
                     modifier = Modifier.padding(start = 12.u, top = 4.u),
+                )
+            }
+        }
+    }
+}
+
+// Artwork inside a library tile (design px): inset so the glass edge still shows.
+private const val ART_INSET = 52f
+private const val ART_GAP = 20f
+private const val ART_AREA = LIBRARY_TILE - 2 * ART_INSET          // 656
+private const val ART_SMALL = (ART_AREA - ART_GAP) / 2f              // 318
+
+/**
+ * The first one to four songs' artwork, as squares inside the tile:
+ * one big square; two side by side; three as two over one; four as a 2x2 grid.
+ */
+@Composable
+private fun ArtCollage(tracks: List<Track>) {
+    with(LocalDesignScale.current) {
+        val big = tracks.size == 1
+        // Top-left corner of each square, relative to the art area.
+        val half = (ART_AREA - ART_SMALL) / 2f
+        val far = ART_SMALL + ART_GAP
+        val spots: List<Pair<Float, Float>> = when (tracks.size) {
+            1 -> listOf(0f to 0f)
+            2 -> listOf(0f to half, far to half)
+            3 -> listOf(0f to 0f, far to 0f, half to far)
+            else -> listOf(0f to 0f, far to 0f, 0f to far, far to far)
+        }
+        val side = if (big) ART_AREA else ART_SMALL
+        val shape = RoundedCornerShape((if (big) 44f else 30f).u)
+        Box(Modifier.fillMaxSize()) {
+            tracks.zip(spots).forEach { (track, spot) ->
+                val context = LocalContext.current
+                val request = remember(track.artworkUrl) {
+                    ImageRequest.Builder(context)
+                        .data(track.artworkUrl)
+                        .size(640) // plenty for a tile; keeps memory down
+                        .transformations(CenterSquareCrop(letterboxed = track.artworkLetterboxed, side = 400))
+                        .allowHardware(false)
+                        .build()
+                }
+                AsyncImage(
+                    model = request,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .offset(x = (ART_INSET + spot.first).u, y = (ART_INSET + spot.second).u)
+                        .size(side.u)
+                        .clip(shape)
+                        .background(Color(0x33000000))
+                        .border(1.5f.u, Color.White.copy(alpha = 0.22f), shape),
                 )
             }
         }
