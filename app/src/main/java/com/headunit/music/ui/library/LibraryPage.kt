@@ -66,6 +66,8 @@ fun LibraryPage(
     onPlay: (index: Int) -> Unit,
     /** A song was held: add it to the queue. */
     onQueue: (Track) -> Unit = {},
+    /** If set, each row gets an × (like the queue's) that takes the song out. History uses it. */
+    onRemove: ((Track) -> Unit)? = null,
     dockInset: Float,
     modifier: Modifier = Modifier,
 ) {
@@ -123,7 +125,12 @@ fun LibraryPage(
                         },
                 ) {
                     itemsIndexed(library.tracks, key = { _, t -> t.videoId }) { i, track ->
-                        TrackRow(track, i, onClick = { onPlay(i) }, onLongClick = { onQueue(track) })
+                        TrackRow(
+                            track, i,
+                            onClick = { onPlay(i) },
+                            onLongClick = { onQueue(track) },
+                            trailing = onRemove?.let { remove -> { RemoveButton { remove(track) } } },
+                        )
                     }
                 }
             }
@@ -154,6 +161,31 @@ fun LibraryPage(
                     modifier = Modifier.graphicsLayer { alpha = 1f - c },
                 )
             }
+        }
+    }
+}
+
+/** The × at the end of a row (same as the queue's). */
+@Composable
+private fun RemoveButton(onClick: () -> Unit) {
+    with(LocalDesignScale.current) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(130.u)
+                .clip(CircleShape)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = ripple(color = Color.White),
+                    onClick = onClick,
+                ),
+        ) {
+            Icon(
+                painterResource(R.drawable.ic_close),
+                stringResource(R.string.remove_from_history),
+                tint = LibrarySecondary,
+                modifier = Modifier.size(52.u),
+            )
         }
     }
 }

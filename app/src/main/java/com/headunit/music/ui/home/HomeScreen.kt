@@ -425,6 +425,7 @@ fun HomeScreen(
                             onPlay(pageLibrary.tracks, i, pageLibrary.name)
                         },
                         onQueue = onQueue,
+                        onRemove = if (pageLibrary.id == HISTORY_ID) ({ t -> libraries.removeFromHistory(t) }) else null,
                         dockInset = dockInset,
                         modifier = Modifier.graphicsLayer {
                             alpha = libP

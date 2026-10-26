@@ -89,6 +89,12 @@ class LibraryStore(context: Context) {
         writeTracks(KEY_HISTORY, history)
     }
 
+    /** The × on a History row: forget that song was played. */
+    fun removeFromHistory(track: Track) {
+        history = history.filterNot { it.videoId == track.videoId }
+        writeTracks(KEY_HISTORY, history)
+    }
+
     // ---- Your libraries ----
 
     fun create(name: String): Library {
