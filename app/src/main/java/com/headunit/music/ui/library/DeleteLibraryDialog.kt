@@ -105,7 +105,7 @@ fun DeleteLibraryDialog(
                     )
                     Spacer(Modifier.height(20.u))
                     Text(
-                        "The library goes away; its songs stay in Liked.",
+                        "This is not reversible, but songs in the library are still liked.",
                         textAlign = TextAlign.Center,
                         style = TextStyle(LibrarySecondary, fontSize = 44.usp),
                     )
@@ -134,9 +134,7 @@ private fun DialogButton(text: String, danger: Boolean, onClick: () -> Unit, mod
                 .height(150.u)
                 .clip(shape)
                 .then(
-                    if (danger) Modifier
-                        .background(GlassOptionDanger)
-                        .border(1.5f.u, GlassOptionDangerEdge, shape)
+                    if (danger) Modifier.background(Brand.Red)
                     else Modifier
                         .background(Brush.verticalGradient(listOf(Color(0x2EFFFFFF), Color(0x14FFFFFF))))
                         .border(1.5f.u, LibraryGlass.Edge, shape)
