@@ -77,10 +77,10 @@ private val Tertiary = Color.White.copy(alpha = 0.62f)
 
 private object PlayerGlass {
     /**
-     * Dock: frosted glass texture (fully opaque) under an orange-red tint, so
-     * there's a hint of colour drifting through it but nothing behind shows.
+     * Dock: frosted glass texture (fully opaque) under a red tint, slightly
+     * see-through (~88%) so a little of what's behind shows.
      */
-    val DockTint = Color(0xAAE6482A)
+    val DockTint = Color(0x80E0262A)
     /** Light along the top of the glass, fading quickly, with a faint lift at the bottom. */
     val DockSheen = Brush.verticalGradient(
         0f to Color(0x38FFFFFF), 0.35f to Color(0x0DFFFFFF), 0.85f to Color(0x05FFFFFF), 1f to Color(0x12FFFFFF),
@@ -554,11 +554,12 @@ private fun Dock(player: PlayerController, width: Float, modifier: Modifier) {
                     onClick = { player.expanded = true },
                 ),
         ) {
-            // Opaque frosted glass: texture, tint, sheen, glint, bright edge.
+            // Frosted glass: texture, tint, sheen, glint, bright edge.
             Image(
                 painter = painterResource(R.drawable.library_glass),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                alpha = 0.88f,
                 modifier = Modifier.matchParentSize(),
             )
             Box(
