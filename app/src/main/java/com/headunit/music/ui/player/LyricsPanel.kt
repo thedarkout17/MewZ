@@ -64,7 +64,6 @@ private sealed interface LyricsState {
     data object Loading : LyricsState
     data class Found(val lyrics: Lyrics) : LyricsState
     data object None : LyricsState
-    data object Offline : LyricsState
 }
 
 /**
@@ -81,7 +80,7 @@ fun LyricsPanel(player: PlayerController, track: Track, modifier: Modifier = Mod
         state = try {
             LyricsRepository.find(track)?.let { LyricsState.Found(it) } ?: LyricsState.None
         } catch (e: IOException) {
-            LyricsState.Offline
+            LyricsState.None // whatever the reason, there are no lyrics to show
         }
     }
 
@@ -100,7 +99,6 @@ fun LyricsPanel(player: PlayerController, track: Track, modifier: Modifier = Mod
                     modifier = Modifier.align(Alignment.Center).size(72.u),
                 )
                 LyricsState.None -> Note("No lyrics found for this song", Modifier.align(Alignment.Center))
-                LyricsState.Offline -> Note("Couldn't load lyrics · no connection", Modifier.align(Alignment.Center))
                 is LyricsState.Found -> LyricsList(player, s.lyrics, maxHeight)
             }
         }
