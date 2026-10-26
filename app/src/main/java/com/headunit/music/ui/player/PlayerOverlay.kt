@@ -140,7 +140,7 @@ fun PlayerOverlay(
     libraries: LibraryStore,
     /** "New library" in the + list: name one, then the song goes in it. */
     onNewLibrary: (Track) -> Unit,
-    /** ⌄ or Back on Now Playing: shrink to the dock (the caller also goes back home). */
+    /** Tap on empty space or Back on Now Playing: shrink to the dock (the caller also goes back home). */
     onMinimize: () -> Unit = { player.expanded = false },
 ) {
     val track = player.current ?: return
@@ -164,8 +164,8 @@ fun PlayerOverlay(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer { alpha = e }
-                    // Swallow taps so nothing underneath reacts.
-                    .pointerInput(Unit) { detectTapGestures { } },
+                    // A tap on empty space minimizes (and nothing underneath reacts).
+                    .pointerInput(onMinimize) { detectTapGestures(onTap = { onMinimize() }) },
             )
         }
 
@@ -198,7 +198,7 @@ fun PlayerOverlay(
                 if (e > 0f) {
                     NowPlaying(
                         player = player, libraries = libraries, width = w, screenHeight = h, shiftY = shiftY,
-                        alpha = e, onMinimize = onMinimize, onNewLibrary = onNewLibrary,
+                        alpha = e, onNewLibrary = onNewLibrary,
                     )
                 }
 
@@ -317,7 +317,6 @@ private fun NowPlaying(
     screenHeight: Float,
     shiftY: Float,
     alpha: Float,
-    onMinimize: () -> Unit,
     onNewLibrary: (Track) -> Unit,
 ) {
     val track = player.current ?: return
@@ -335,16 +334,9 @@ private fun NowPlaying(
         val colW = width - colX - SIDE
         val fullW = width - 2 * SIDE
 
-        // Minimize (top-left), its left edge lined up with the artwork's
-        GlassCircleButton(
-            icon = R.drawable.ic_keyboard_hide,
-            contentDescription = stringResource(R.string.minimize_player),
-            size = 130f, glyph = 64f,
-            onClick = onMinimize,
-            modifier = Modifier.offset(x = ART_FULL_X.u, y = (48f + shiftY).u).graphicsLayer { this.alpha = alpha },
-        )
+        // (No minimize button: a tap on empty space, or Back, minimizes.)
 
-        // Queue (top-right), mirroring minimize on the left.
+        // Queue (top-right).
         GlassCircleButton(
             icon = R.drawable.ic_queue,
             contentDescription = stringResource(R.string.queue),

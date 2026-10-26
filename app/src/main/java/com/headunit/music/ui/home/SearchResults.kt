@@ -41,6 +41,9 @@ import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -100,15 +103,19 @@ fun SearchResults(
     onQueue: (Track) -> Unit = {},
     /** Scrolled near the end of the results: fetch the next page. */
     onLoadMore: () -> Unit = {},
+    /** A tap on empty space (not a song or button): back to the home screen. */
+    onTapEmptySpace: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val tapEmpty by rememberUpdatedState(onTapEmptySpace)
     // Keyed by kind, so more results arriving just extend the list (no crossfade, no jump to the top).
     AnimatedContent(
         targetState = state,
         transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(220)) },
         contentKey = { it::class },
         label = "results",
-        modifier = modifier,
+        // Rows and buttons take their own taps; anything left over is empty space.
+        modifier = modifier.pointerInput(Unit) { detectTapGestures(onTap = { tapEmpty() }) },
     ) { s ->
         when (s) {
             ResultsState.Loading -> LoadingRows()

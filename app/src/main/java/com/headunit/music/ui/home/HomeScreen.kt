@@ -201,17 +201,25 @@ fun HomeScreen(
         keyboard = false
         submitted?.let { query = it }
     }
-    fun tapOutside() {
-        if (!open) return
-        if (keyboard && query.isNotEmpty()) keyboard = false // first tap: put the keyboard away
-        else closePanel()                                    // then: close suggestions
-    }
     fun goHome() {
         openLibraryId = null
         query = ""
         submitted = null
         open = false
         keyboard = false
+    }
+
+    /**
+     * A tap on empty space on the search screen. While typing, the first tap puts
+     * the keyboard away and the next closes the panel (back to results, if any);
+     * on the results, or with nothing searched, it goes back home.
+     */
+    fun tapOutside() {
+        when {
+            open && keyboard && query.isNotEmpty() -> keyboard = false
+            open && submitted != null -> closePanel()
+            else -> goHome()
+        }
     }
 
     // When the mic returns text, drop it in the box and search straight away.
@@ -431,6 +439,7 @@ fun HomeScreen(
                         onRetry = { attempt++ },
                         onQueue = onQueue,
                         onLoadMore = ::loadMore,
+                        onTapEmptySpace = ::goHome,
                         modifier = Modifier
                             .align(Alignment.TopStart)
                             .fillMaxSize()

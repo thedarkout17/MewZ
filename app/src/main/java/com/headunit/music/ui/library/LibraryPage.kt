@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -25,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
@@ -80,7 +82,8 @@ fun LibraryPage(
         }
         val headerH = HEADER_TALL + (HEADER_SHORT - HEADER_TALL) * c
 
-        Box(modifier.fillMaxSize()) {
+        // A tap on empty space (not a song) goes back home.
+        Box(modifier.fillMaxSize().pointerInput(onBack) { detectTapGestures(onTap = { onBack() }) }) {
             if (library.tracks.isEmpty()) {
                 Message(
                     title = "No songs yet",
@@ -125,29 +128,11 @@ fun LibraryPage(
                 }
             }
 
-            // Minimize, top-left (same spot and chevron as the player's minimize button).
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .offset(x = 96.u, y = 48.u)
-                    .size(130.u)
-                    .clip(CircleShape)
-                    .background(Brush.verticalGradient(listOf(Color(0x2EFFFFFF), Color(0x14FFFFFF))))
-                    .border(1.5f.u, LibraryGlass.Edge, CircleShape)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = ripple(color = Color.White),
-                        onClick = onBack,
-                    ),
-            ) {
-                Icon(painterResource(R.drawable.ic_keyboard_hide), stringResource(R.string.back), tint = Color.White, modifier = Modifier.size(64.u))
-            }
-
-            // Name (and song count), shrinking toward the back button as you scroll.
+            // Name (and song count), shrinking into the top-left as you scroll.
             Column(
                 modifier = Modifier
                     .offset(
-                        x = (96f + (266f - 96f) * c).u,
+                        x = 96.u,
                         y = (226f + (64f - 226f) * c).u,
                     )
                     .padding(end = 120.u),
