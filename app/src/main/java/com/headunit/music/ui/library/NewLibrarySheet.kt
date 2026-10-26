@@ -73,8 +73,11 @@ fun NewLibrarySheet(
     BackHandler(enabled = visible, onBack = onCancel)
 
     val shown = name
+    // Reads the name when Create is pressed (not when the screen was first drawn),
+    // so the keyboard's remembered action never sees a stale, empty name.
     fun create() {
-        if (shown.isNotBlank()) onCreate(shown.trim())
+        val typed = name
+        if (typed.isNotBlank()) onCreate(typed.trim())
     }
 
     Box(
@@ -144,7 +147,7 @@ fun NewLibrarySheet(
                         if (name.length < MAX_NAME && (c != ' ' || (name.isNotEmpty() && !name.endsWith(' ')))) name += c
                     },
                     onBackspace = { if (name.isNotEmpty()) name = name.dropLast(1) },
-                    onSearch = ::create,
+                    onSearch = { create() },
                     onHide = onCancel,
                     actionLabel = stringResource(R.string.key_create),
                     actionIcon = null,
