@@ -1,9 +1,9 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp" android:height="24dp"
     android:viewportWidth="24" android:viewportHeight="24">
-    <!-- Lyrics: lines of text with a music note -->
-    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="2.8" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000"
-        android:pathData="M3.5,5.5h13M3.5,10.5h9M3.5,15.5h6M18,18V9.5l3,1" />
+    <!-- Lyrics: a handheld (karaoke) microphone: ball head sitting on a tapered handle -->
     <path android:strokeColor="#FFFFFFFF" android:strokeWidth="2.8" android:fillColor="#00000000"
-        android:pathData="M18,18m-2.25,0a2.25,2.25 0,1 1,4.5 0a2.25,2.25 0,1 1,-4.5 0" />
+        android:pathData="M12,6.5m-4.2,0a4.2,4.2 0,1 1,8.4 0a4.2,4.2 0,1 1,-8.4 0" />
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="2.8" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000"
+        android:pathData="M9.6,10.9h4.8l-1.4,10.3h-2z" />
 </vector>
