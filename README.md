@@ -37,16 +37,20 @@ Use `with(LocalDesignScale.current) { 232.u }` for sizes and `92.usp` for text.
 - YouTube song search: music videos that allow embedding, with durations; titles cleaned up
   ("Artist - Song (Official Video)" → song + artist); loading, empty and error states
 - Recent searches (saved on the device, scrollable, × to remove)
-- Player: songs play through YouTube's official embedded player (IFrame API in a WebView).
-  Now Playing screen (big video, seek bar, previous / play-pause / next, "Up next"),
-  minimizes to a glass dock at the bottom so music keeps going while you browse.
+- Player: songs play through YouTube's own player (IFrame API in a WebView), **hidden**:
+  you see the artwork and hear the song. The player is kept tiny behind the artwork, so
+  YouTube picks its lowest video quality (~144p) and data use stays near audio-only
+  (~100 MB/hour). Two hidden players take turns: while one plays, the other loads the
+  next song muted and holds it at 0:00, so skipping starts instantly.
+  Now Playing laid out like CarPlay (720×720 artwork, full-width seek bar, shuffle /
+  loop-this-song / add); ⌄ minimizes to a glass dock and returns home.
   Tapping a result queues the rest of that list; songs auto-advance; songs YouTube
   won't play outside YouTube are skipped automatically.
 
-## Why the video is always visible
-YouTube's terms for embedded players say the player must stay visible while it plays,
-so the video is part of the Now Playing screen and the dock rather than hidden audio.
-The dock slides away while our keyboard is up and comes back when it closes.
+## Branches
+- `main`: this version (YouTube Data API search + hidden YouTube players).
+- `savepoint/youtube-api`: the version with the visible embedded player, kept as a fixed restore point.
+- `experiment/audio-only`: NewPipeExtractor search + true audio-only playback with ExoPlayer.
 
 ## Repo layout
 - `app/` — the Android app
