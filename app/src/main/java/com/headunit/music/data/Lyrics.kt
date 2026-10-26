@@ -43,12 +43,13 @@ object LyricsRepository {
     private val cache = ConcurrentHashMap<String, Cached>()
 
     /**
-     * Lyrics for [track], or null if there are none. Throws [IOException] only
-     * when the device is actually offline; a slow or failing LRCLIB just means
-     * "none" (not remembered, so it's tried again next time).
-     *
-     * Slowed / reverb / sped-up / nightcore uploads get the original song's
-     * lyrics, unsynced (the original's timings wouldn't match).
+     * Synced lyrics that fit this exact video, or null ("No lyrics found").
+     * Only timed lyrics count, and when the video's length is known they must
+     * be for a recording of the same length (within [LENGTH_SLACK] seconds),
+     * so a different version's timings never show. Slowed / reverb / sped-up /
+     * nightcore uploads never match. Throws [IOException] only when the device
+     * is actually offline; a slow or failing LRCLIB just means "none" (not
+     * remembered, so it's tried again next time).
      */
     suspend fun find(track: Track): Lyrics? = withContext(Dispatchers.IO) {
         when (val c = cache[track.videoId]) {
@@ -56,13 +57,17 @@ object LyricsRepository {
             Cached.None -> return@withContext null
             null -> {}
         }
-        val altered = ALTERED.containsMatchIn(track.title)
-        val title = originalTitle(track.title)
+        // Slowed / sped up etc.: no lyrics are timed for that version.
+        if (ALTERED.containsMatchIn(track.title)) {
+            Log.d("MuZ", "Lyrics for \"${track.title}\": none (altered version)")
+            cache[track.videoId] = Cached.None
+            return@withContext null
+        }
+        val title = track.title.trim()
         // "The Weeknd ft. Daft Punk" → "The Weeknd": LRCLIB lists the main artist.
         val artist = track.artist.split(Regex("""\s+(?:ft\.?|feat\.?|featuring)\s+""", RegexOption.IGNORE_CASE))
             .first().trim()
-        // An altered version's length doesn't match the original's.
-        val duration = track.durationSeconds?.takeIf { !altered }
+        val duration = track.durationSeconds
 
         var offline: IOException? = null
         var failed = false
@@ -74,14 +79,15 @@ object LyricsRepository {
             if (isOffline(e)) offline = e else failed = true
             null
         }
+        /** Timed lyrics for a recording this video's length (when we know it). */
+        fun fits(r: JSONObject): Boolean =
+            r.hasSynced() && (duration == null || kotlin.math.abs(r.optDouble("duration", -999.0) - duration) <= LENGTH_SLACK)
         fun results(body: String?): List<JSONObject> {
             val arr = body?.let { runCatching { JSONArray(it) }.getOrNull() } ?: return emptyList()
-            return (0 until arr.length()).map { arr.getJSONObject(it) }.filter { it.hasLyrics() }
+            return (0 until arr.length()).map { arr.getJSONObject(it) }.filter(::fits)
         }
         fun pick(list: List<JSONObject>): JSONObject? = list.minByOrNull { r ->
-            val synced = if (r.optString("syncedLyrics").isNotBlank()) 0.0 else 1000.0
-            val off = duration?.let { d -> kotlin.math.abs(r.optDouble("duration", 0.0) - d) } ?: 0.0
-            synced + off
+            duration?.let { d -> kotlin.math.abs(r.optDouble("duration", 0.0) - d) } ?: 0.0
         }
 
         // 1. Exact match from LRCLIB's own database ("get-cached": quick; the plain "get"
@@ -91,20 +97,16 @@ object LyricsRepository {
             "track_name" to title,
             "artist_name" to artist,
             *(duration?.let { arrayOf("duration" to it.toString()) } ?: emptyArray()),
-        )?.let { runCatching { JSONObject(it) }.getOrNull() }?.takeIf { it.hasLyrics() }
+        )?.let { runCatching { JSONObject(it) }.getOrNull() }?.takeIf(::fits)
 
         // 2. Search by title + artist, then 3. by both as free text.
         val best = exact
             ?: pick(results(tryGet("search", "track_name" to title, "artist_name" to artist)))
             ?: pick(results(tryGet("search", "q" to "$title $artist")))
 
-        var lyrics = best?.toLyrics()
-        // Slowed / sped up: the original's words, without its (wrong) timings.
-        if (lyrics != null && altered && lyrics.synced) {
-            lyrics = Lyrics(lyrics.lines.map { LyricLine(null, it.text) }, synced = false)
-        }
-        Log.d("MuZ", "Lyrics for \"$title\" by \"$artist\"" + (if (altered) " (altered version)" else "") + ": " +
-            when { lyrics != null -> if (lyrics.synced) "synced" else "plain"; offline != null -> "offline"; failed -> "LRCLIB error"; else -> "none" })
+        val lyrics = best?.toLyrics()?.takeIf { it.synced }
+        Log.d("MuZ", "Lyrics for \"$title\" by \"$artist\" (${duration ?: "?"} s): " +
+            when { lyrics != null -> "synced"; offline != null -> "offline"; failed -> "LRCLIB error"; else -> "none (no synced lyrics this length)" })
 
         when {
             lyrics != null -> cache[track.videoId] = Cached.Found(lyrics)
@@ -113,16 +115,6 @@ object LyricsRepository {
             !failed -> cache[track.videoId] = Cached.None
         }
         lyrics
-    }
-
-    /** "Starboy (Slowed + Reverb)" / "Starboy - sped up" → "Starboy". */
-    private fun originalTitle(title: String): String {
-        var t = title.replace(Regex("""\s*[(\[][^)\]]*[)\]]""")) { m ->
-            if (ALTERED.containsMatchIn(m.value)) "" else m.value
-        }
-        t = t.replace(Regex("""\s*[-|–—]\s*[^-|–—]*(?:${ALTERED.pattern})[^-|–—]*$""", RegexOption.IGNORE_CASE), "")
-        t = t.replace(ALTERED, "").replace(Regex("""\s+[+&x]\s*$"""), "")
-        return t.replace(Regex("""\s{2,}"""), " ").trim().ifEmpty { title.trim() }
     }
 
     /** Can't reach the internet at all (as opposed to LRCLIB being slow or erroring). */
@@ -134,18 +126,17 @@ object LyricsRepository {
         RegexOption.IGNORE_CASE,
     )
 
-    private fun JSONObject.hasLyrics() =
-        !optBoolean("instrumental") &&
-            (optString("syncedLyrics").isNotBlank() || optString("plainLyrics").isNotBlank())
+    private fun JSONObject.hasSynced() =
+        !optBoolean("instrumental") && optString("syncedLyrics").let { it.isNotBlank() && it != "null" }
 
+    /** How far (seconds) the lyrics' recording may be from the video's length. */
+    private const val LENGTH_SLACK = 3.0
+
+    /** Only timed lyrics: plain ones aren't shown. */
     private fun JSONObject.toLyrics(): Lyrics? {
-        val synced = optString("syncedLyrics").takeIf { it.isNotBlank() && it != "null" }
-        if (synced != null) {
-            val lines = parseLrc(synced)
-            if (lines.isNotEmpty()) return Lyrics(lines, synced = true)
-        }
-        val plain = optString("plainLyrics").takeIf { it.isNotBlank() && it != "null" } ?: return null
-        return Lyrics(plain.lines().map { LyricLine(null, it.trim()) }, synced = false)
+        val synced = optString("syncedLyrics").takeIf { it.isNotBlank() && it != "null" } ?: return null
+        val lines = parseLrc(synced)
+        return if (lines.isEmpty()) null else Lyrics(lines, synced = true)
     }
 
     /** "[01:23.45] Some line" (a line can carry several times) → timed lines, in order. */
