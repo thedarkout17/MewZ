@@ -1,6 +1,7 @@
 package com.headunit.music.ui.player
 
 import android.os.Build
+import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -56,6 +57,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.headunit.music.R
@@ -109,8 +111,10 @@ private const val ART_MINI_X = 56f
  * **Dock** (minimized): a glass bar along the bottom with the artwork, song and
  * controls. Tap it to open Now Playing.
  *
- * Audio only: there's no video. One artwork square glides between the dock
- * and Now Playing.
+ * The YouTube player sits directly behind the artwork. Tapping the artwork on
+ * Now Playing flips to the live video (YouTube's terms want the player visible
+ * while it plays, so that's the compliant view). One artwork/video frame glides
+ * between dock and Now Playing, so playback never restarts.
  * [dockHidden] slides the dock away (e.g. while our keyboard is up).
  */
 @Composable
@@ -132,6 +136,13 @@ fun PlayerOverlay(
         animationSpec = tween(320, easing = FastOutSlowInEasing),
         label = "dockAway",
     )
+    // Video only ever shows on Now Playing; the dock always shows artwork.
+    val video by animateFloatAsState(
+        targetValue = if (player.showVideo && player.expanded) 1f else 0f,
+        animationSpec = tween(300),
+        label = "video",
+    )
+
     BackHandler(enabled = player.expanded) { onMinimize() }
 
     Box(Modifier.fillMaxSize()) {
@@ -176,7 +187,7 @@ fun PlayerOverlay(
                     NowPlaying(player = player, width = w, shiftY = shiftY, alpha = e, onMinimize = onMinimize)
                 }
 
-                // ---- Artwork: one square that glides between dock and Now Playing ----
+                // ---- Artwork, with the YouTube player right behind it ----
                 val artSize = lerp(ART_MINI, ART_FULL)
                 val x = lerp(ART_MINI_X, ART_FULL_X)
                 val y = lerp(dockTop + (DOCK_HEIGHT - ART_MINI) / 2f, artTopFull)
@@ -193,41 +204,50 @@ fun PlayerOverlay(
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                        ) { if (!player.expanded) player.expanded = true },
+                        ) {
+                            if (player.expanded) player.showVideo = !player.showVideo
+                            else player.expanded = true
+                        },
                 ) {
-                    Artwork(track, Modifier.fillMaxSize())
-                    ArtOverlay(player)
+                    AndroidView(
+                        factory = { player.webView.also { (it.parent as? ViewGroup)?.removeView(it) } },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    if (video < 1f) {
+                        val context = LocalContext.current
+                        val artRequest = remember(track.artworkUrl) {
+                            ImageRequest.Builder(context)
+                                .data(track.artworkUrl)
+                                // Work from the full-size download, then cut an exact
+                                // 720x720 square from the dead centre (bars skipped).
+                                .size(coil.size.Size.ORIGINAL)
+                                .transformations(CenterSquareCrop(letterboxed = track.artworkLetterboxed))
+                                .allowHardware(false)
+                                .build()
+                        }
+                        AsyncImage(
+                            model = artRequest,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer { alpha = 1f - video },
+                        )
+                    }
+                    VideoOverlay(player)
+                    if (e > 0f) {
+                        ArtChip(
+                            text = stringResource(if (player.showVideo) R.string.show_artwork else R.string.show_video),
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(24.u)
+                                .graphicsLayer { alpha = e },
+                        )
+                    }
                 }
             }
         }
     }
-}
-
-/**
- * The square artwork: an exact 720x720 cut from the dead centre of the
- * 1280x720 image. Videos without that HD image fall back to the 480x360 one,
- * whose square comes from between its baked-in black bars.
- */
-@Composable
-private fun Artwork(track: Track, modifier: Modifier) {
-    val context = LocalContext.current
-    var useFallback by remember(track.videoId) { mutableStateOf(false) }
-    val request = remember(track.videoId, useFallback) {
-        ImageRequest.Builder(context)
-            .data(if (useFallback) track.thumbnailUrl else track.artworkUrl)
-            // Work from the full-size download, then cut the square.
-            .size(coil.size.Size.ORIGINAL)
-            .transformations(CenterSquareCrop(letterboxed = useFallback))
-            .allowHardware(false)
-            .build()
-    }
-    AsyncImage(
-        model = request,
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        onError = { if (!useFallback) useFallback = true }, // no HD image for this video
-        modifier = modifier,
-    )
 }
 
 /**
@@ -264,9 +284,9 @@ private fun BlurredArtBackground(track: Track, modifier: Modifier) {
     }
 }
 
-/** Buffering spinner, or why a song can't play, over the artwork. */
+/** Buffering spinner or YouTube's refusal message, over the artwork. */
 @Composable
-private fun ArtOverlay(player: PlayerController) {
+private fun VideoOverlay(player: PlayerController) {
     with(LocalDesignScale.current) {
         val error = player.error
         when {
@@ -289,6 +309,20 @@ private fun ArtOverlay(player: PlayerController) {
                 CircularProgressIndicator(color = Color.White, strokeWidth = 5.u, modifier = Modifier.size(72.u))
             }
         }
+    }
+}
+
+@Composable
+private fun ArtChip(text: String, modifier: Modifier) {
+    with(LocalDesignScale.current) {
+        Text(
+            text,
+            style = TextStyle(Color.White, fontSize = 30.usp, fontWeight = FontWeight.Medium),
+            modifier = modifier
+                .clip(RoundedCornerShape(50))
+                .background(Color(0x73000000))
+                .padding(horizontal = 26.u, vertical = 12.u),
+        )
     }
 }
 

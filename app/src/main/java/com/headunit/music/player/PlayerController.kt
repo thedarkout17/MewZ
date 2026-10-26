@@ -1,49 +1,29 @@
-@file:OptIn(UnstableApi::class)
-
 package com.headunit.music.player
 
+import android.annotation.SuppressLint
 import android.content.Context
-import android.os.SystemClock
-import android.util.Log
-import androidx.annotation.OptIn
+import android.os.Handler
+import android.os.Looper
+import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.media3.common.AudioAttributes
-import androidx.media3.common.C
-import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DataSpec
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.datasource.cache.CacheDataSource
-import androidx.media3.datasource.cache.CacheWriter
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.headunit.music.data.Track
-import com.headunit.music.data.youtube.AudioStreams
-import com.headunit.music.data.youtube.AudioUnavailableException
-import com.headunit.music.data.youtube.NewPipeDownloader
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 /**
- * Plays songs as audio only (no video is downloaded) and keeps a simple queue.
+ * Plays songs through YouTube's official embedded player (IFrame Player API)
+ * inside a WebView, and keeps a simple queue.
  *
- * Each song's audio stream is found with NewPipeExtractor ([AudioStreams]) and
- * played with Media3 ExoPlayer. While a song plays, the next one is looked up
- * in the background, so skipping is near-instant.
+ * The WebView is the video you see on the Now Playing screen and in the mini
+ * player. YouTube's terms require the embedded player to stay visible while it
+ * plays, so it's never hidden behind the UI.
  *
  * All state is Compose state, so the screens update on their own.
  */
@@ -82,7 +62,10 @@ class PlayerController(context: Context) {
     var wrapQueue by mutableStateOf(false)
         private set
 
-    // ---- Playback ----
+    /** Now Playing shows the artwork (false) or the live YouTube video (true). */
+    var showVideo by mutableStateOf(false)
+
+    // ---- Playback (fed by the player's JavaScript) ----
     var isPlaying by mutableStateOf(false)
         private set
     var isBuffering by mutableStateOf(false)
@@ -91,60 +74,30 @@ class PlayerController(context: Context) {
         private set
     var durationSeconds by mutableFloatStateOf(0f)
         private set
-    /** Set when a song can't be played; cleared on the next song. */
+    /** Set when YouTube refuses a video; cleared on the next song. */
     var error by mutableStateOf<PlayerError?>(null)
         private set
 
     /** Now Playing screen open (true) or minimized to the dock (false). */
     var expanded by mutableStateOf(false)
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private var loadJob: Job? = null
-    private var skipJob: Job? = null
-    /** One fresh-link retry per song (links expire after a few hours). */
-    private var retriedVideoId: String? = null
+    private val main = Handler(Looper.getMainLooper())
+    private var ready = false
+    private var pendingVideoId: String? = null
+    private var skipOnError: Runnable? = null
 
-    // Load timing for the log: tap → audio link found → first sound. Filter Logcat by "MuZ".
-    private var tapAt = 0L
-    private var linkMs = 0L
-
-    /**
-     * Reads audio through the on-disk cache: pre-buffered starts come from disk,
-     * the rest streams from YouTube (and is cached as it plays).
-     */
-    private val dataSource: CacheDataSource.Factory = CacheDataSource.Factory()
-        .setCache(AudioCache.get(context))
-        .setUpstreamDataSourceFactory(
-            DefaultHttpDataSource.Factory().setUserAgent(NewPipeDownloader.USER_AGENT),
-        )
-        .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-
-    /** Downloading the next song's first seconds (cancelled if you move on). */
-    private var preloadJob: Job? = null
-    @Volatile private var preloadWriter: CacheWriter? = null
-
-    private val exo: ExoPlayer = ExoPlayer.Builder(context.applicationContext)
-        .setMediaSourceFactory(DefaultMediaSourceFactory(dataSource))
-        // Pause for navigation prompts / calls, and when headphones or Bluetooth drop.
-        .setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(C.USAGE_MEDIA)
-                .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                .build(),
-            /* handleAudioFocus = */ true,
-        )
-        .setHandleAudioBecomingNoisy(true)
-        .build()
-        .apply { addListener(Listener()) }
-
-    init {
-        // Seek bar / timer: read the position a few times a second while playing.
-        scope.launch {
-            while (isActive) {
-                if (exo.isPlaying) positionSeconds = exo.currentPosition / 1000f
-                delay(250)
-            }
-        }
+    @SuppressLint("SetJavaScriptEnabled")
+    val webView: WebView = WebView(context.applicationContext).apply {
+        setBackgroundColor(android.graphics.Color.BLACK)
+        settings.javaScriptEnabled = true
+        settings.domStorageEnabled = true
+        // Start songs without a second tap inside the video.
+        settings.mediaPlaybackRequiresUserGesture = false
+        webChromeClient = WebChromeClient()
+        webViewClient = WebViewClient()
+        addJavascriptInterface(Bridge(), "Android")
+        isVerticalScrollBarEnabled = false
+        isHorizontalScrollBarEnabled = false
     }
 
     // ---- Controls ----
@@ -182,17 +135,15 @@ class PlayerController(context: Context) {
             queue = originalOrder
             index = originalOrder.indexOf(now).coerceAtLeast(0)
         }
-        preloadNext()
     }
 
     fun toggleLoop() {
         loopSong = !loopSong
-        exo.repeatMode = if (loopSong) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
     }
 
     fun togglePlay() {
         if (current == null) return
-        if (exo.isPlaying) exo.pause() else exo.play()
+        js(if (isPlaying) "pause()" else "play()")
     }
 
     fun next() {
@@ -209,161 +160,156 @@ class PlayerController(context: Context) {
 
     fun seekTo(seconds: Float) {
         positionSeconds = seconds.coerceIn(0f, durationSeconds.coerceAtLeast(0f))
-        exo.seekTo((positionSeconds * 1000).toLong())
+        js("seek(${positionSeconds})")
     }
 
     fun release() {
-        preloadWriter?.cancel()
-        scope.cancel()
-        exo.release()
+        main.removeCallbacksAndMessages(null)
+        webView.destroy()
     }
 
-    private fun playAt(i: Int, resumeAtMs: Long = 0L) {
+    private fun playAt(i: Int) {
         val track = queue.getOrNull(i) ?: return
-        if (track.videoId != retriedVideoId) retriedVideoId = null
-        skipJob?.cancel()
-        loadJob?.cancel()
+        skipOnError?.let { main.removeCallbacks(it) }
         index = i
         error = null
-        positionSeconds = resumeAtMs / 1000f
+        positionSeconds = 0f
         durationSeconds = (track.durationSeconds ?: 0).toFloat()
         isBuffering = true
-        exo.stop()
-        tapAt = SystemClock.elapsedRealtime()
+        if (!pageLoaded) {
+            pageLoaded = true
+            pendingVideoId = track.videoId
+            webView.loadDataWithBaseURL(BASE_URL, playerHtml(track.videoId), "text/html", "utf-8", null)
+        } else if (!ready) {
+            pendingVideoId = track.videoId
+        } else {
+            js("load(${JSONObject.quote(track.videoId)})")
+        }
+    }
 
-        loadJob = scope.launch {
-            try {
-                val url = AudioStreams.urlFor(track.videoId)
-                linkMs = SystemClock.elapsedRealtime() - tapAt
-                if (current?.videoId != track.videoId) return@launch // moved on meanwhile
-                exo.setMediaItem(mediaItem(track.videoId, url), resumeAtMs)
-                exo.prepare()
-                exo.play()
-                preloadNext()
-            } catch (e: AudioUnavailableException) {
-                fail(PlayerError.from(e.reason))
+    private var pageLoaded = false
+
+    private fun js(call: String) {
+        if (ready) webView.evaluateJavascript(call, null)
+    }
+
+    // ---- Events from the page (arrive on a background thread) ----
+
+    private inner class Bridge {
+        @JavascriptInterface
+        fun onReady() = main.post {
+            ready = true
+            // A song picked while the player was still loading.
+            pendingVideoId?.let { id ->
+                pendingVideoId = null
+                if (id != current?.videoId) js("load(${JSONObject.quote(id)})")
+            }
+        }
+
+        @JavascriptInterface
+        fun onState(state: Int) = main.post {
+            isPlaying = state == STATE_PLAYING
+            isBuffering = state == STATE_BUFFERING || state == STATE_UNSTARTED
+            webView.keepScreenOn = isPlaying
+            if (state == STATE_ENDED) {
+                when {
+                    loopSong -> { js("seek(0)"); js("play()") }
+                    hasNext -> next()
+                    else -> isBuffering = false
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun onTime(position: Double, duration: Double) = main.post {
+            positionSeconds = position.toFloat()
+            if (duration > 0) durationSeconds = duration.toFloat()
+        }
+
+        @JavascriptInterface
+        fun onError(code: Int) = main.post {
+            val e = PlayerError.from(code)
+            error = e
+            isPlaying = false
+            isBuffering = false
+            // Songs YouTube won't play here: move on by themselves.
+            if (e.skippable && hasNext) {
+                skipOnError = Runnable { next() }.also { main.postDelayed(it, 2500) }
             }
         }
     }
 
-    /**
-     * While this song plays, get the next one ready: look up its audio link and
-     * download its first ~5 seconds into the cache, so skipping starts instantly.
-     */
-    private fun preloadNext() {
-        preloadJob?.cancel()
-        preloadWriter?.cancel()
-        val next = queue.getOrNull(index + 1) ?: if (wrapQueue) queue.firstOrNull() else null
-        next ?: return
-        preloadJob = scope.launch {
-            val url = runCatching { AudioStreams.urlFor(next.videoId) }.getOrNull() ?: return@launch
-            withContext(Dispatchers.IO) {
-                val writer = CacheWriter(
-                    dataSource.createDataSource(),
-                    DataSpec.Builder()
-                        .setUri(url)
-                        .setKey(cacheKey(next.videoId, url)) // same key playback uses
-                        .setPosition(0)
-                        .setLength(PRELOAD_BYTES)
-                        .build(),
-                    /* temporaryBuffer = */ null,
-                    /* progressListener = */ null,
-                )
-                preloadWriter = writer
-                // Already cached (e.g. played recently) costs nothing; failures just mean no head start.
-                runCatching { writer.cache() }
-                if (preloadWriter === writer) preloadWriter = null
-            }
-        }
-    }
+    companion object {
+        /**
+         * The page needs a real https address. YouTube rejects embeds that arrive
+         * with no origin/referrer (error 152/153), which is what a bare local page sends.
+         */
+        private const val BASE_URL = "https://com.headunit.music/"
 
-    private fun mediaItem(videoId: String, url: String): MediaItem =
-        MediaItem.Builder().setUri(url).setCustomCacheKey(cacheKey(videoId, url)).build()
+        private const val STATE_UNSTARTED = -1
+        private const val STATE_ENDED = 0
+        private const val STATE_PLAYING = 1
+        private const val STATE_BUFFERING = 3
 
-    /**
-     * Cache entries are keyed by video + audio format (YouTube's "itag"), not by
-     * the stream link, which expires and changes on every lookup. The format is
-     * part of the key so bytes from one format are never mixed with another.
-     */
-    private fun cacheKey(videoId: String, url: String): String =
-        "$videoId:" + (ITAG.find(url)?.groupValues?.get(1) ?: "audio")
-
-    private fun fail(e: PlayerError) {
-        error = e
-        isPlaying = false
-        isBuffering = false
-        // Songs that can't be played move on by themselves.
-        if (e.skippable && hasNext) {
-            skipJob = scope.launch {
-                delay(2500)
-                next()
-            }
-        }
-    }
-
-    private inner class Listener : Player.Listener {
-        override fun onIsPlayingChanged(playing: Boolean) {
-            isPlaying = playing
-            if (playing && tapAt > 0) {
-                val total = SystemClock.elapsedRealtime() - tapAt
-                Log.d(TAG, "Load \"${current?.title}\": find audio ${linkMs} ms + buffer ${total - linkMs} ms = ${total} ms")
-                tapAt = 0
-            }
-        }
-
-        override fun onPlaybackStateChanged(state: Int) {
-            isBuffering = state == Player.STATE_BUFFERING
-            if (state == Player.STATE_READY) {
-                val d = exo.duration
-                if (d != C.TIME_UNSET && d > 0) durationSeconds = d / 1000f
-            }
-            if (state == Player.STATE_ENDED) {
-                // (Loop-this-song is handled by ExoPlayer's repeat mode, so ENDED means move on.)
-                positionSeconds = durationSeconds
-                if (hasNext) next()
-            }
-        }
-
-        override fun onPlayerError(e: PlaybackException) {
-            val track = current ?: return
-            if (retriedVideoId != track.videoId) {
-                // Most often an expired link: fetch a fresh one and carry on from here.
-                retriedVideoId = track.videoId
-                AudioStreams.forget(track.videoId)
-                playAt(index, resumeAtMs = exo.currentPosition)
-            } else {
-                fail(PlayerError.Other)
-            }
+        private fun playerHtml(firstVideoId: String): String {
+            val origin = BASE_URL.trimEnd('/')
+            // controls=0: our own big buttons drive it. playsinline: no forced fullscreen.
+            val src = "https://www.youtube.com/embed/$firstVideoId?enablejsapi=1&autoplay=1&controls=0" +
+                "&disablekb=1&fs=0&iv_load_policy=3&playsinline=1&rel=0&origin=$origin"
+            return """
+                <!doctype html>
+                <html><head>
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+                <meta name="referrer" content="strict-origin-when-cross-origin">
+                <style>
+                  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+                  iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+                </style>
+                </head><body>
+                <iframe id="p" src="$src" allow="autoplay; encrypted-media"
+                        referrerpolicy="strict-origin-when-cross-origin"></iframe>
+                <script src="https://www.youtube.com/iframe_api"></script>
+                <script>
+                  var player;
+                  function onYouTubeIframeAPIReady() {
+                    player = new YT.Player('p', { events: {
+                      onReady: function () { Android.onReady(); },
+                      onStateChange: function (e) { Android.onState(e.data); },
+                      onError: function (e) { Android.onError(e.data); }
+                    }});
+                  }
+                  function load(id) { player.loadVideoById(id); }
+                  function play() { player.playVideo(); }
+                  function pause() { player.pauseVideo(); }
+                  function seek(s) { player.seekTo(s, true); }
+                  setInterval(function () {
+                    if (player && player.getCurrentTime) {
+                      Android.onTime(player.getCurrentTime() || 0, player.getDuration() || 0);
+                    }
+                  }, 250);
+                </script>
+                </body></html>
+            """.trimIndent()
         }
     }
 }
 
-private const val TAG = "MuZ"
-
-/**
- * How much of the next song to download ahead: ~5 s of 128 kbps audio (80 KB)
- * plus room for the file's header at the start (~48 KB).
- */
-private const val PRELOAD_BYTES = 128L * 1024
-
-private val ITAG = Regex("[?&]itag=(\\d+)")
-
-/** Why a song couldn't be played, in words for the screen. */
+/** Why YouTube wouldn't play a video, in words for the screen. */
 enum class PlayerError(val message: String, val skippable: Boolean) {
-    Unavailable("This song isn't available", skippable = true),
-    AgeRestricted("This song is age-restricted on YouTube", skippable = true),
-    Offline("No internet connection", skippable = false),
-    RateLimited("YouTube is limiting requests; try again shortly", skippable = false),
-    ExtractorOutdated("YouTube changed something; the app needs an update", skippable = false),
+    NotAllowed("This song can't be played outside YouTube", skippable = true),
+    Unavailable("This video was removed or is private", skippable = true),
+    BadRequest("Couldn't load this song", skippable = true),
+    PlayerConfig("YouTube blocked the player setup (error 153)", skippable = false),
     Other("Couldn't play this song", skippable = true);
 
     companion object {
-        fun from(reason: AudioUnavailableException.Reason) = when (reason) {
-            AudioUnavailableException.Reason.Unavailable -> Unavailable
-            AudioUnavailableException.Reason.AgeRestricted -> AgeRestricted
-            AudioUnavailableException.Reason.Offline -> Offline
-            AudioUnavailableException.Reason.RateLimited -> RateLimited
-            AudioUnavailableException.Reason.ExtractorOutdated -> ExtractorOutdated
+        fun from(code: Int) = when (code) {
+            101, 150 -> NotAllowed
+            100 -> Unavailable
+            2 -> BadRequest
+            152, 153 -> PlayerConfig
+            else -> Other
         }
     }
 }
+
