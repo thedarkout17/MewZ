@@ -123,11 +123,11 @@ body {
   -webkit-mask-image: linear-gradient(transparent, #000 calc(40 * var(--u)));
   mask-image: linear-gradient(transparent, #000 calc(40 * var(--u)));
 }
-.searching.kb-up .suggest { padding-bottom: calc(494 * var(--u)); }
+.searching.kb-up .suggest { padding-bottom: calc(564 * var(--u)); }
 .suggest::-webkit-scrollbar { display: none; }
 /* icon slot sits under the bar's magnifier, text under the typed text, × under the mic */
 .suggest li {
-  display: flex; align-items: center; height: calc(176 * var(--u));
+  display: flex; align-items: center; height: calc(150 * var(--u));
   border-radius: calc(24 * var(--u));
   animation: rise .32s var(--ease) both;
   animation-delay: calc(var(--i) * 45ms);
@@ -322,10 +322,10 @@ body {
 
 /* Glass keyboard (GlassKeyboard.kt) */
 .kb {
-  position: absolute; left: 0; right: 0; bottom: 0; height: calc(470 * var(--u));
+  position: absolute; left: 0; right: 0; bottom: 0; height: calc(540 * var(--u));
   box-sizing: border-box;
-  padding: calc(22 * var(--u)) calc(96 * var(--u)) calc(26 * var(--u));
-  display: grid; grid-template-rows: repeat(4, 1fr); gap: calc(14 * var(--u));
+  padding: calc(26 * var(--u)) calc(96 * var(--u)) calc(30 * var(--u));
+  display: grid; grid-template-rows: repeat(4, 1fr); gap: calc(16 * var(--u));
   border-radius: calc(56 * var(--u)) calc(56 * var(--u)) 0 0;
   background:
     linear-gradient(rgba(255,255,255,.19), rgba(255,255,255,.06)),
@@ -338,7 +338,7 @@ body {
   pointer-events: none;
 }
 .kb.up { transform: none; opacity: 1; pointer-events: auto; }
-.kb-row { display: flex; gap: calc(14 * var(--u)); min-height: 0; }
+.kb-row { display: flex; gap: calc(16 * var(--u)); min-height: 0; }
 .kb-gap { flex: .5; }
 .key {
   flex: var(--w, 1); min-width: 0; border-radius: calc(26 * var(--u));
@@ -347,17 +347,17 @@ body {
   border-top-color: rgba(255,255,255,.42);
   background: linear-gradient(rgba(255,255,255,.13), rgba(255,255,255,.04));
   box-shadow: inset 0 calc(1.5 * var(--u)) 0 rgba(255,255,255,.18);
-  color: #fff; font: 400 calc(50 * var(--u)) / 1 var(--font-app);
+  color: #fff; font: 400 calc(56 * var(--u)) / 1 var(--font-app);
   text-shadow: 0 1px 6px rgba(0,0,0,.25);
   display: flex; align-items: center; justify-content: center; gap: calc(16 * var(--u));
   cursor: pointer; padding: 0;
   transition: transform .09s, background .09s;
   touch-action: manipulation;
 }
-.key.small { font-size: calc(40 * var(--u)); font-weight: 500; }
+.key.small { font-size: calc(44 * var(--u)); font-weight: 500; }
 .key.faded { color: rgba(255,255,255,.7); }
-.key svg { width: calc(56 * var(--u)); height: calc(56 * var(--u)); }
-.key.accent svg { width: calc(42 * var(--u)); height: calc(42 * var(--u)); }
+.key svg { width: calc(62 * var(--u)); height: calc(62 * var(--u)); }
+.key.accent svg { width: calc(46 * var(--u)); height: calc(46 * var(--u)); }
 .key.pressed { transform: scale(.94); background: linear-gradient(rgba(255,255,255,.30), rgba(255,255,255,.18)); }
 .key.accent { background: var(--red); border-color: rgba(255,255,255,.25); }
 .key.accent.pressed { background: rgba(219, 10, 32, .75); }
@@ -551,7 +551,7 @@ body {
       <span class="chip">Canvas <b>2000×1200</b></span>
       <span class="chip">Scale <b id="scale">–</b></span>
       <span class="chip">Back <b>Esc</b></span>
-      <span class="chip">Build <b>v0.17 · player</b></span>
+      <span class="chip">Build <b>v0.18 · player</b></span>
       <label class="chip" for="mode">Results
         <select class="sel" id="mode">
           <option value="ok">Sample songs</option>

@@ -159,7 +159,7 @@ private fun SuggestionRow(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(176.u)
+                .height(150.u)
                 .onGloballyPositioned { topY = it.positionInWindow().y }
                 .graphicsLayer {
                     // 0 = fully above the glass, 1 = fully behind it; eases across the edge.
