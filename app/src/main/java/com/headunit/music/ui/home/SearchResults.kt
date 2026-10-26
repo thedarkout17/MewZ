@@ -237,6 +237,8 @@ internal fun TrackRow(
      * double-tap and hold-to-drag). [onClick] and [onLongClick] are ignored then.
      */
     gestures: Modifier? = null,
+    /** Song length after the artist (off where it doesn't matter, like picking a cover). */
+    showDuration: Boolean = true,
 ) {
     val haptics = LocalHapticFeedback.current
     // First screenful staggers in; rows further down just appear as you scroll.
@@ -304,7 +306,7 @@ internal fun TrackRow(
                     ),
                 )
                 Text(
-                    text = listOfNotNull(label, track.artist, track.durationText).joinToString("  ·  "),
+                    text = listOfNotNull(label, track.artist, track.durationText?.takeIf { showDuration }).joinToString("  ·  "),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = TextStyle(color = if (played) PlayedDetail else Secondary, fontSize = 46.usp, shadow = TextShadow),

@@ -360,6 +360,7 @@ private fun SongPickerPage(tracks: List<Track>, current: Track?, onPick: (Track)
                         onClick = { onPick(track) },
                         label = if (isCurrent) "On cover" else null,
                         highlighted = isCurrent,
+                        showDuration = false,
                     )
                 }
             }
