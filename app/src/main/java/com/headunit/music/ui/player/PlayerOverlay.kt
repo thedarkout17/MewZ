@@ -5,7 +5,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -43,6 +42,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.TileMode
@@ -76,11 +77,17 @@ private val Secondary = Color.White.copy(alpha = 0.78f)
 private val Tertiary = Color.White.copy(alpha = 0.62f)
 
 private object PlayerGlass {
-    /**
-     * Dock: frosted glass texture (fully opaque) under a red tint, slightly
-     * see-through (~88%) so a little of what's behind shows.
-     */
-    val DockTint = Color(0x80E0262A)
+    /** Dock artwork wash: ~12% brighter, plus a lift so dark covers don't go muddy. */
+    val DockBrighten = ColorFilter.colorMatrix(
+        ColorMatrix(
+            floatArrayOf(
+                1.12f, 0f, 0f, 0f, 22f,
+                0f, 1.12f, 0f, 0f, 22f,
+                0f, 0f, 1.12f, 0f, 22f,
+                0f, 0f, 0f, 1f, 0f,
+            ),
+        ),
+    )
     /** Light along the top of the glass, fading quickly, with a faint lift at the bottom. */
     val DockSheen = Brush.verticalGradient(
         0f to Color(0x38FFFFFF), 0.35f to Color(0x0DFFFFFF), 0.85f to Color(0x05FFFFFF), 1f to Color(0x12FFFFFF),
@@ -554,18 +561,30 @@ private fun Dock(player: PlayerController, width: Float, modifier: Modifier) {
                     onClick = { player.expanded = true },
                 ),
         ) {
-            // Frosted glass: texture, tint, sheen, glint, bright edge.
-            Image(
-                painter = painterResource(R.drawable.library_glass),
+            // Glass made from the song's artwork: loaded tiny and stretched (soft on
+            // every Android version), heavily blurred on 12+, brightened, ~92% opaque.
+            val context = LocalContext.current
+            val artRequest = remember(track.thumbnailUrl) {
+                ImageRequest.Builder(context).data(track.thumbnailUrl).size(24, 14).build()
+            }
+            AsyncImage(
+                model = artRequest,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                alpha = 0.88f,
-                modifier = Modifier.matchParentSize(),
+                filterQuality = FilterQuality.High,
+                colorFilter = PlayerGlass.DockBrighten,
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer {
+                        alpha = 0.92f
+                        // Zoom hides the soft edges the blur leaves.
+                        scaleX = 1.25f; scaleY = 1.25f
+                        if (Build.VERSION.SDK_INT >= 31) renderEffect = BlurEffect(90f, 90f, TileMode.Clamp)
+                    },
             )
             Box(
                 Modifier
                     .matchParentSize()
-                    .background(PlayerGlass.DockTint)
                     .background(PlayerGlass.DockSheen)
                     .background(PlayerGlass.DockGlint)
                     .border(2.u, PlayerGlass.Edge, shape),
