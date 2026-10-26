@@ -45,11 +45,6 @@ object AudioStreams : AudioStreamSource {
         cache.remove(videoId)
     }
 
-    /** Look up [videoId] in the background so it's ready when needed; failures are ignored. */
-    suspend fun prefetch(videoId: String) {
-        runCatching { urlFor(videoId) }
-    }
-
     private fun resolve(videoId: String): String {
         NewPipeDownloader.init()
         val info = try {

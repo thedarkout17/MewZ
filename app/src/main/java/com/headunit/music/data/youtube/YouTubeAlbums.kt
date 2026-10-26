@@ -64,7 +64,7 @@ object YouTubeAlbums : AlbumSource {
         var pages = 0
         while (page != null && pages < 5) {
             val more = runCatching { PlaylistInfo.getMoreItems(ServiceList.YouTube, album.url, page) }
-                .onFailure { Log.w("MuZ", "Album page failed: ${it.message}") }
+                .onFailure { Log.w("MewZ", "Album page failed: ${it.message}") }
                 .getOrNull() ?: break
             items += more.items
             page = more.nextPage

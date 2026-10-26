@@ -88,7 +88,7 @@ object YouTubeMix : MixSource {
         return !url.contains("maxresdefault") && !url.contains("mqdefault") && !url.contains("hq720")
     }
 
-    private const val TAG = "MuZ"
+    private const val TAG = "MewZ"
     private const val MAX_SONG_SECONDS = 15 * 60L
     private val VIDEO_ID = Regex("""[?&]v=([\w-]{11})""")
 }

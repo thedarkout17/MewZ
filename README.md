@@ -60,11 +60,44 @@ Use `with(LocalDesignScale.current) { 232.u }` for sizes and `92.usp` for text.
   of your libraries (which likes it too). Saved on the device.
 
 ## Branches
-- `main`: this version (YouTube Data API search + audio-only playback).
-- `savepoint/youtube-api`: the version with the visible embedded player, kept as a fixed restore point.
-- `experiment/audio-only`: NewPipeExtractor search + true audio-only playback with ExoPlayer.
+- `main`: the working build (YouTube Data API search + audio-only playback via NewPipeExtractor).
+- `cleanup`: the tidy-up below, to be merged into `main` once it's been tested on the headunit.
+
+## Code layout
+The app is split in two so the logic can be reused on other platforms (see
+[docs/PORTING.md](docs/PORTING.md)):
+
+```
+app/src/main/java/com/headunit/music/
+  core/        Plain Kotlin, no Android imports: the rules of the app
+    model/       Track, Library, Lyrics (+ LRC parser)
+    playback/    QueueState (queue, shuffle, loop, Mix), PlayerError
+    library/     LibraryBook (Liked, History, your libraries)
+    search/      SearchResult, result rows, album matching
+    text/        SongText (title/artist clean-up, durations)
+    sources/     Interfaces for search, audio, Mix, albums, lyrics, suggestions
+  data/        Android/network implementations of those sources, and storage
+    youtube/     YouTube Data API search, NewPipe audio/Mix/albums, suggestions
+    LibraryStore, SearchHistory, Lyrics (LRCLIB)
+  player/      ExoPlayer, the media service and the disk cache
+  ui/          Compose screens
+    theme/       DesignScale (.u / .usp), shared text styles
+    components/  Glass, search bar, collapsing header
+    home/ library/ player/ keyboard/
+```
+
+`core` holds state as immutable values (`QueueState`, `LibraryBook`); the Android
+classes (`PlayerController`, `LibraryStore`) keep the current value in Compose state,
+save it, and do the I/O. New logic belongs in `core` whenever it doesn't need Android.
+
+## Tests
+Unit tests for `core` live in `app/src/test/`. In Android Studio right-click that folder →
+**Run Tests**, or from a terminal:
+```
+gradlew testDebugUnitTest
+```
 
 ## Repo layout
 - `app/` — the Android app
 - `docs/design/` — original mockups and graphics
-- `docs/demo/` — live web demo of the screens (mirrors the Compose layout, with an event log for debugging)
+- `docs/PORTING.md` — how to take the app to a phone layout or iPhone

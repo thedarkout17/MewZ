@@ -66,7 +66,7 @@ object LyricsRepository : LyricsSource {
 
         val lyrics = best?.toLyrics()
         cache[track.videoId] = if (lyrics != null) Cached.Found(lyrics) else Cached.None
-        Log.d("MuZ", "Lyrics for \"$title\" by \"$artist\": " +
+        Log.d("MewZ", "Lyrics for \"$title\" by \"$artist\": " +
             when { lyrics == null -> "none"; lyrics.synced -> "synced"; else -> "plain" })
         lyrics
     }

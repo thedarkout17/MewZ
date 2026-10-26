@@ -76,7 +76,6 @@ data class HeldLibrary(val id: String, val tile: Rect)
 private enum class Stage { Menu, Cover, Pick }
 
 /** Delete's soft pink. */
-private val DeleteTint = Color(0x40FF5C8A)
 private val DeleteText = Color(0xFFFFC2D4)
 
 /**

@@ -151,7 +151,7 @@ class PlayerController private constructor(
     /** One fresh-link retry per song (links expire after a few hours). */
     private var retriedVideoId: String? = null
 
-    // Load timing for the log: tap → audio link found → first sound. Filter Logcat by "MuZ".
+    // Load timing for the log: tap → audio link found → first sound. Filter Logcat by "MewZ".
     private var tapAt = 0L
     private var linkMs = 0L
 
@@ -683,7 +683,7 @@ class PlayerController private constructor(
     }
 }
 
-private const val TAG = "MuZ"
+private const val TAG = "MewZ"
 
 private const val POLL_MS = 250L
 /** Already-played audio kept in memory for instant rewinds: about 5 MB at 128 kbps. */
