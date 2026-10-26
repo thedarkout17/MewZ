@@ -425,7 +425,14 @@ fun HomeScreen(
                             onPlay(pageLibrary.tracks, i, pageLibrary.name)
                         },
                         onQueue = onQueue,
-                        onRemove = if (pageLibrary.id == HISTORY_ID) ({ t -> libraries.removeFromHistory(t) }) else null,
+                        // × on every row: History forgets it, Liked unlikes it, your libraries drop it.
+                        onRemove = { t ->
+                            when (pageLibrary.id) {
+                                HISTORY_ID -> libraries.removeFromHistory(t)
+                                LIKED_ID -> libraries.unlike(t)
+                                else -> libraries.removeFrom(pageLibrary.id, t)
+                            }
+                        },
                         dockInset = dockInset,
                         modifier = Modifier.graphicsLayer {
                             alpha = libP

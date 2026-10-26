@@ -66,7 +66,7 @@ fun LibraryPage(
     onPlay: (index: Int) -> Unit,
     /** A song was held: add it to the queue. */
     onQueue: (Track) -> Unit = {},
-    /** If set, each row gets an × (like the queue's) that takes the song out. History uses it. */
+    /** If set, each row gets an × (like the queue's) that takes the song out of this library. */
     onRemove: ((Track) -> Unit)? = null,
     dockInset: Float,
     modifier: Modifier = Modifier,
@@ -182,7 +182,7 @@ private fun RemoveButton(onClick: () -> Unit) {
         ) {
             Icon(
                 painterResource(R.drawable.ic_close),
-                stringResource(R.string.remove_from_history),
+                stringResource(R.string.remove_from_library),
                 tint = LibrarySecondary,
                 modifier = Modifier.size(52.u),
             )
