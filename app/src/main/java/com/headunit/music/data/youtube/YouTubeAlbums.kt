@@ -61,9 +61,13 @@ object YouTubeAlbums {
     fun relevant(albums: List<Album>, query: String, topSongs: List<Track>, max: Int = 6): List<Album> {
         // Words like "album" or "by" in the search don't need to be in the title.
         val typed = words(query)
-        val q = typed - FILLER
+        // The word still being typed may be half done: "starboy albu" means "starboy album".
+        val last = wordList(query).lastOrNull()
+        fun isWord(w: String, set: Set<String>) =
+            w in set || (w == last && w.length >= 3 && set.any { it.startsWith(w) })
+        val q = typed.filterNot { isWord(it, FILLER) }.toSet()
         // Asked for the album itself ("starboy album"): show every edition (Deluxe too).
-        val wantsEditions = typed.any { it in EDITION_WORDS }
+        val wantsEditions = typed.any { isWord(it, EDITION_WORDS) }
         if (q.isEmpty()) return emptyList()
         // Artists that matter for this search: the first few song results'.
         val popular = topSongs.take(TOP_SONGS).map { words(it.artist) }
@@ -108,12 +112,13 @@ object YouTubeAlbums {
             .replace(Regex("""\s+-\s+(deluxe|expanded|remaster(ed)?|anniversary|edition|version).*$""", RegexOption.IGNORE_CASE), "")
 
     /** Lower-case words, without punctuation or a leading "the" (so "The Weeknd" matches "weeknd"). */
-    private fun words(text: String): Set<String> =
+    private fun words(text: String): Set<String> = wordList(text).toSet()
+
+    private fun wordList(text: String): List<String> =
         text.lowercase()
             .replace("&", " and ")
             .split(Regex("""[^\p{L}\p{N}]+"""))
             .filter { it.isNotEmpty() && it != "the" }
-            .toSet()
 
     private const val TOP_SONGS = 6
     private val FILLER = setOf("album", "albums", "full", "by", "lp", "ep", "deluxe", "edition")

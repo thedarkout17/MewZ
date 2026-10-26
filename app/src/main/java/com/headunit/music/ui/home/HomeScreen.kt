@@ -45,13 +45,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import com.headunit.music.R
-import com.headunit.music.data.LocalSuggestionProvider
 import com.headunit.music.data.SearchHistory
 import com.headunit.music.data.SuggestionProvider
 import com.headunit.music.data.Track
 import com.headunit.music.data.youtube.Album
 import com.headunit.music.data.youtube.SearchResult
 import com.headunit.music.data.youtube.YouTubeAlbums
+import com.headunit.music.data.youtube.YouTubeSuggestions
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import com.headunit.music.data.youtube.YouTubeSearch
@@ -132,7 +132,7 @@ fun HomeScreen(
     onVoiceSearch: () -> Unit,
     voiceResult: String? = null,
     onVoiceResultConsumed: () -> Unit = {},
-    suggestionProvider: SuggestionProvider = remember { LocalSuggestionProvider() },
+    suggestionProvider: SuggestionProvider = remember { YouTubeSuggestions() },
     /** Height (design px) of the mini player docked at the bottom; content stays clear of it. */
     dockInset: Float = 0f,
     /** Tells the player dock to slide away while our keyboard is up. */
