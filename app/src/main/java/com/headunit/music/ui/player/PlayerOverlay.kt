@@ -359,7 +359,7 @@ fun PlayerOverlay(
 }
 
 /**
- * Full-screen backdrop made from the song's artwork. It's loaded tiny (48x27 px)
+ * Full-screen backdrop made from the song's artwork. It's loaded tiny (24x14 px)
  * and stretched, which blurs it on every Android version; Android 12+ adds a
  * real blur on top so it's silky. A dark wash keeps the white text readable.
  */
@@ -367,8 +367,8 @@ fun PlayerOverlay(
 private fun BlurredArtBackground(track: Track, modifier: Modifier) {
     val context = LocalContext.current
     val request = remember(track.thumbnailUrl) {
-        // medium/high thumbnail at 48x27: plenty for a blur, and stretched it's soft everywhere.
-        ImageRequest.Builder(context).data(track.thumbnailUrl).size(48, 27).build()
+        // Thumbnail at 24x14: stretched, it's soft everywhere (as blurred as the mini player used to be).
+        ImageRequest.Builder(context).data(track.thumbnailUrl).size(24, 14).build()
     }
     Box(modifier.background(Color(0xFF1A0508))) {
         AsyncImage(
@@ -380,8 +380,8 @@ private fun BlurredArtBackground(track: Track, modifier: Modifier) {
                 .fillMaxSize()
                 .graphicsLayer {
                     // Slight zoom hides the soft edges the blur leaves.
-                    scaleX = 1.15f; scaleY = 1.15f
-                    if (Build.VERSION.SDK_INT >= 31) renderEffect = BlurEffect(60f, 60f, TileMode.Clamp)
+                    scaleX = 1.25f; scaleY = 1.25f
+                    if (Build.VERSION.SDK_INT >= 31) renderEffect = BlurEffect(90f, 90f, TileMode.Clamp)
                 },
         )
         Box(
@@ -609,7 +609,8 @@ private fun Dock(player: PlayerController, width: Float, modifier: Modifier) {
             // every Android version), heavily blurred on 12+, brightened, ~95% opaque.
             val context = LocalContext.current
             val artRequest = remember(track.thumbnailUrl) {
-                ImageRequest.Builder(context).data(track.thumbnailUrl).size(24, 14).build()
+                // Tinier still (12x7) and blurred harder than Now Playing: just a wash of colour.
+                ImageRequest.Builder(context).data(track.thumbnailUrl).size(12, 7).build()
             }
             AsyncImage(
                 model = artRequest,
@@ -622,8 +623,8 @@ private fun Dock(player: PlayerController, width: Float, modifier: Modifier) {
                     .graphicsLayer {
                         alpha = 0.95f
                         // Zoom hides the soft edges the blur leaves.
-                        scaleX = 1.25f; scaleY = 1.25f
-                        if (Build.VERSION.SDK_INT >= 31) renderEffect = BlurEffect(90f, 90f, TileMode.Clamp)
+                        scaleX = 1.4f; scaleY = 1.4f
+                        if (Build.VERSION.SDK_INT >= 31) renderEffect = BlurEffect(170f, 170f, TileMode.Clamp)
                     },
             )
             Box(
