@@ -59,7 +59,7 @@ private const val ROW = 150f
 /**
  * Opened by the queue button on Now Playing: opens on the song playing now,
  * with everything coming up below it. Scroll up to see what already played
- * (faded and greyed out). Tap a song to jump to it; × takes an upcoming one
+ * (faded, greyed out and marked "Previous"). Tap a song to jump to it; × takes an upcoming one
  * out. Songs added with a hold are marked "Queued".
  */
 @Composable
@@ -153,7 +153,7 @@ private fun QueueRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(ROW.u)
-                .graphicsLayer { alpha = if (played) 0.75f else 1f }
+                .graphicsLayer { alpha = if (played) 0.7f else 1f }
                 .then(if (playing) Modifier.background(Color(0x1FFFFFFF)) else Modifier)
                 .clickable(
                     enabled = !playing,
@@ -180,18 +180,22 @@ private fun QueueRow(
                     track.title,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = TextStyle(Color.White, fontSize = 48.usp, fontWeight = FontWeight.Medium),
+                    style = TextStyle(
+                        if (played) PlayedTitle else Color.White,
+                        fontSize = 48.usp, fontWeight = FontWeight.Medium,
+                    ),
                 )
                 val label = when {
                     playing -> "Now playing"
                     held -> "Queued"
+                    played -> "Previous"
                     else -> null
                 }
                 Text(
                     listOfNotNull(label, track.artist, track.durationText).joinToString("  ·  "),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = TextStyle(LibrarySecondary, fontSize = 36.usp),
+                    style = TextStyle(if (played) PlayedDetail else LibrarySecondary, fontSize = 36.usp),
                 )
             }
             if (onRemove != null) {
@@ -220,5 +224,8 @@ private fun QueueRow(
     }
 }
 
-/** Mostly grey (20% of the colour left) for songs that already played. */
-private val Desaturated = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0.2f) })
+/** Fully grey for songs that already played. */
+private val Desaturated = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
+/** Played songs' text: grey rather than white. */
+private val PlayedTitle = Color(0xFFB8B8B8)
+private val PlayedDetail = Color(0xFF8E8E8E)
