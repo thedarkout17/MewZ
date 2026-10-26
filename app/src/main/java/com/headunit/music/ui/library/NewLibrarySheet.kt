@@ -72,8 +72,7 @@ fun NewLibrarySheet(
     if (p == 0f) return
     BackHandler(enabled = visible, onBack = onCancel)
 
-    // The keyboard only types lowercase, so the name gets a capital first letter.
-    val shown = name.replaceFirstChar { it.uppercase() }
+    val shown = name
     fun create() {
         if (shown.isNotBlank()) onCreate(shown.trim())
     }
@@ -149,6 +148,8 @@ fun NewLibrarySheet(
                     onHide = onCancel,
                     actionLabel = stringResource(R.string.key_create),
                     actionIcon = null,
+                    // Shift starts on, so the name begins with a capital.
+                    startCapitalized = true,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .graphicsLayer { translationY = (1f - p) * KEYBOARD_HEIGHT.u.toPx() },

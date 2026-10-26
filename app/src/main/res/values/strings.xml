@@ -7,6 +7,7 @@
     <string name="key_search">Search</string>
     <string name="key_space">space</string>
     <string name="key_backspace">Delete</string>
+    <string name="key_shift">Shift</string>
     <string name="key_hide">Hide keyboard</string>
     <string name="minimize_player">Minimize player</string>
     <string name="play">Play</string>

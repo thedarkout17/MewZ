@@ -94,8 +94,29 @@ fun GlassKeyboard(
     /** The red key: "Search" by default; naming a library uses "Create". */
     actionLabel: String = stringResource(R.string.key_search),
     actionIcon: Int? = R.drawable.ic_search,
+    /** Start with Shift on, so the first letter is a capital (naming a library). */
+    startCapitalized: Boolean = false,
 ) {
     var symbols by rememberSaveable { mutableStateOf(false) }
+    // Shift: one tap = the next letter is a capital; double-tap = caps lock; tap again = off.
+    var shift by remember { mutableStateOf(if (startCapitalized) Shift.Once else Shift.Off) }
+    var lastShiftTap by remember { mutableStateOf(0L) }
+    val typeChar: (Char) -> Unit = { c ->
+        if (shift != Shift.Off && c.isLetter()) {
+            onType(c.uppercaseChar())
+            if (shift == Shift.Once) shift = Shift.Off
+        } else onType(c)
+    }
+    fun tapShift() {
+        val now = android.os.SystemClock.uptimeMillis()
+        shift = when {
+            shift == Shift.Once && now - lastShiftTap < 400 -> Shift.Lock
+            shift == Shift.Off -> Shift.Once
+            else -> Shift.Off
+        }
+        lastShiftTap = now
+    }
+    val upper = shift != Shift.Off
 
     with(LocalDesignScale.current) {
         val keyGap = 16.u
@@ -122,19 +143,32 @@ fun GlassKeyboard(
             val r3 = if (symbols) SYMBOLS_3 else LETTERS_3
 
             Row(rowModifier, horizontalArrangement = Arrangement.spacedBy(keyGap)) {
-                r1.forEach { c -> CharKey(c, onType) }
+                r1.forEach { c -> CharKey(c, typeChar, upper) }
             }
             Row(rowModifier, horizontalArrangement = Arrangement.spacedBy(keyGap)) {
                 // Nine letters sit half a key in, like a real keyboard.
                 if (r2.length < 10) Spacer(Modifier.weight(0.5f))
-                r2.forEach { c -> CharKey(c, onType) }
+                r2.forEach { c -> CharKey(c, typeChar, upper) }
                 if (r2.length < 10) Spacer(Modifier.weight(0.5f))
             }
             Row(rowModifier, horizontalArrangement = Arrangement.spacedBy(keyGap)) {
-                GlassKey(weight = 1.5f, label = if (symbols) "abc" else "123", onPress = { symbols = !symbols }) {
-                    KeyLabel(if (symbols) "abc" else "123", small = true)
+                // Shift (letters page); the symbols page has nothing to capitalise.
+                GlassKey(
+                    weight = 1.5f,
+                    label = stringResource(R.string.key_shift),
+                    onPress = { if (!symbols) tapShift() },
+                    lit = shift != Shift.Off && !symbols,
+                ) {
+                    if (!symbols) KeyIcon(
+                        when (shift) {
+                            Shift.Off -> R.drawable.ic_shift
+                            Shift.Once -> R.drawable.ic_shift_on
+                            Shift.Lock -> R.drawable.ic_caps_lock
+                        },
+                        58.u,
+                    )
                 }
-                r3.forEach { c -> CharKey(c, onType) }
+                r3.forEach { c -> CharKey(c, typeChar, upper) }
                 GlassKey(
                     weight = 1.5f,
                     label = stringResource(R.string.key_backspace),
@@ -143,14 +177,17 @@ fun GlassKeyboard(
                 ) { KeyIcon(R.drawable.ic_backspace, 62.u) }
             }
             Row(rowModifier, horizontalArrangement = Arrangement.spacedBy(keyGap)) {
-                GlassKey(weight = 1.5f, label = stringResource(R.string.key_hide), onPress = onHide) {
+                GlassKey(weight = 1.25f, label = stringResource(R.string.key_hide), onPress = onHide) {
                     KeyIcon(R.drawable.ic_keyboard_hide, 62.u)
                 }
-                CharKey(',', onType)
-                GlassKey(weight = 4.5f, label = stringResource(R.string.key_space), onPress = { onType(' ') }) {
+                GlassKey(weight = 1.25f, label = if (symbols) "abc" else "123", onPress = { symbols = !symbols }) {
+                    KeyLabel(if (symbols) "abc" else "123", small = true)
+                }
+                CharKey(',', typeChar, upper)
+                GlassKey(weight = 3.5f, label = stringResource(R.string.key_space), onPress = { onType(' ') }) {
                     KeyLabel(stringResource(R.string.key_space), small = true, faded = true)
                 }
-                CharKey('.', onType)
+                CharKey('.', typeChar, upper)
                 GlassKey(
                     weight = 2f,
                     label = actionLabel,
@@ -171,11 +208,15 @@ fun GlassKeyboard(
 }
 
 @Composable
-private fun RowScope.CharKey(c: Char, onType: (Char) -> Unit) {
-    GlassKey(weight = 1f, label = c.toString(), onPress = { onType(c) }) {
-        KeyLabel(c.toString())
+private fun RowScope.CharKey(c: Char, onType: (Char) -> Unit, upper: Boolean) {
+    // Letters show as capitals while Shift is on.
+    val shown = if (upper) c.uppercaseChar() else c
+    GlassKey(weight = 1f, label = shown.toString(), onPress = { onType(c) }) {
+        KeyLabel(shown.toString())
     }
 }
+
+private enum class Shift { Off, Once, Lock }
 
 /**
  * One frosted tile. Fires on release (so a slide-off cancels), except
@@ -188,6 +229,8 @@ private fun RowScope.GlassKey(
     onPress: () -> Unit,
     accent: Boolean = false,
     repeatOnHold: Boolean = false,
+    /** Brighter glass, for a key that's switched on (Shift). */
+    lit: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val haptics = LocalHapticFeedback.current
@@ -208,7 +251,7 @@ private fun RowScope.GlassKey(
                 .clip(shape)
                 .then(
                     if (accent) Modifier.background(if (pressed) Brand.Red.copy(alpha = 0.75f) else Brand.Red)
-                    else Modifier.background(if (pressed) Glass.KeyPressed else Glass.Key)
+                    else Modifier.background(if (pressed || lit) Glass.KeyPressed else Glass.Key)
                 )
                 .border(1.5f.u, if (accent) SolidColor(Color(0x40FFFFFF)) else Glass.KeyEdge, shape)
                 .semantics {

@@ -352,6 +352,7 @@ body {
 .key.faded { color: rgba(255,255,255,.7); }
 .key svg { width: calc(62 * var(--u)); height: calc(62 * var(--u)); }
 .key.accent svg { width: calc(46 * var(--u)); height: calc(46 * var(--u)); }
+.key.lit { background: linear-gradient(rgba(255,255,255,.30), rgba(255,255,255,.18)); }
 .key.pressed { transform: scale(.94); background: linear-gradient(rgba(255,255,255,.30), rgba(255,255,255,.18)); }
 .key.accent { background: var(--red); border-color: rgba(255,255,255,.25); }
 .key.accent.pressed { background: rgba(219, 10, 32, .75); }
@@ -377,7 +378,7 @@ body {
 .home-first .title { top: calc(600 * var(--u)); }
 .lib-grid {
   display: grid; grid-template-columns: repeat(2, calc(760 * var(--u)));
-  column-gap: calc(80 * var(--u)); justify-content: center;
+  column-gap: calc(240 * var(--u)); justify-content: center;   /* 120 from the screen edges */
   padding-bottom: calc(40 * var(--u));
 }
 .has-dock .lib-grid { padding-bottom: calc(320 * var(--u)); }
@@ -385,15 +386,18 @@ body {
 .lib-tile .pane {
   width: calc(760 * var(--u)); height: calc(760 * var(--u)); border-radius: calc(72 * var(--u));
   display: grid; place-items: center; box-sizing: border-box;
-  background: linear-gradient(rgba(255,255,255,.24), rgba(255,255,255,.06) 55%, rgba(255,255,255,.10)),
-              url("home_background_blur.jpg") center / cover;
-  border: calc(2 * var(--u)) solid rgba(255,255,255,.18); border-top-color: rgba(255,255,255,.6);
+  /* library_glass.jpg: the background, heavily blurred and lifted toward white */
+  background:
+    linear-gradient(135deg, transparent 42%, rgba(255,255,255,.12) 50%, transparent 58%),
+    linear-gradient(rgba(255,255,255,.35), rgba(255,255,255,.08) 55%, rgba(255,255,255,.15)),
+    url("library_glass.jpg") center / cover;
+  border: calc(3 * var(--u)) solid rgba(255,255,255,.3); border-top-color: rgba(255,255,255,.9);
   transition: transform .12s;
 }
 .lib-tile:active .pane { transform: scale(.98); }
 .lib-tile:focus-visible { outline: 0; }
 .lib-tile:focus-visible .pane { outline: calc(4 * var(--u)) solid #fff; outline-offset: calc(4 * var(--u)); }
-.lib-tile .pane svg { width: calc(250 * var(--u)); height: calc(250 * var(--u)); filter: drop-shadow(0 4px 16px rgba(0,0,0,.18)); }
+.lib-tile .pane svg { width: calc(250 * var(--u)); height: calc(250 * var(--u)); filter: drop-shadow(0 calc(8 * var(--u)) calc(14 * var(--u)) rgba(0,0,0,.16)); }
 .lib-tile .n { display: block; margin: calc(30 * var(--u)) 0 0 calc(12 * var(--u)); font: 500 calc(66 * var(--u)) / 1.2 var(--font-app); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 8px rgba(0,0,0,.33); }
 .lib-tile .c { display: block; margin: calc(4 * var(--u)) 0 0 calc(12 * var(--u)); font-size: calc(46 * var(--u)); color: rgba(255,255,255,.72); text-shadow: 0 2px 8px rgba(0,0,0,.33); }
 .searching .home-scroll, .in-library .home-scroll { opacity: 0; pointer-events: none; }
@@ -667,7 +671,7 @@ body {
       <span class="chip">Canvas <b>2000×1200</b></span>
       <span class="chip">Scale <b id="scale">–</b></span>
       <span class="chip">Back <b>Esc</b></span>
-      <span class="chip">Build <b>v0.29 · libraries</b></span>
+      <span class="chip">Build <b>v0.30 · shift + glass tiles</b></span>
       <label class="chip" for="mode">Results
         <select class="sel" id="mode">
           <option value="ok">Sample songs</option>
@@ -1204,9 +1208,10 @@ const NAME_KB = {
   backspace: () => { newName = newName.slice(0, -1); renderNamer(); },
   hide: () => closeNamer(), action: () => createFromNamer(), actionLabel: 'Create', actionIcon: false,
 };
-const shownName = () => newName.replace(/^./, c => c.toUpperCase());
+const shownName = () => newName;
 function openNamer(track) {
   naming = true; namingFor = track; newName = ''; namerSymbols = false;
+  NAME_KB.shift = 'once';   // starts capitalised
   logEvent('library', track ? `new library for ${JSON.stringify(track.title)}` : 'new library');
   buildKeyboard(NAME_KB); renderNamer();
 }
@@ -1359,27 +1364,50 @@ const SEARCH_KB = {
   type: (c) => type(c), backspace: () => backspace(), hide: () => { keyboard = false; render(); },
   action: () => { if (query.trim()) submit(query.trim()); }, actionLabel: 'Search', actionIcon: true,
 };
+// Shift: tap = next letter capital, double-tap = caps lock, tap again = off.
+const SHIFT_ICON = {
+  off: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.2 3.8 12.6h4.7v6.9h7v-6.9h4.7z" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+  once: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.2 3.8 12.6h4.7v6.9h7v-6.9h4.7z" fill="#fff" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+  lock: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 11.2h4.5V16h7v-4.8H20z" fill="#fff" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/><path d="M8.5 20.2h7" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>',
+};
+SEARCH_KB.shift = 'off';
+function tapShift(h) {
+  const now = performance.now();
+  h.shift = h.shift === 'once' && now - (h.lastShift || 0) < 400 ? 'lock' : h.shift === 'off' ? 'once' : 'off';
+  h.lastShift = now;
+  logEvent('keyboard', `shift ${h.shift}`);
+  buildKeyboard(h);
+}
 function buildKeyboard(h = SEARCH_KB) {
   const kbEl = h.el();
   kbEl.textContent = '';
   const [r1, r2, r3] = h.sym() ? PAGES.symbols : PAGES.letters;
   const row = () => { const r = document.createElement('div'); r.className = 'kb-row'; kbEl.appendChild(r); return r; };
   const gap = () => { const g = document.createElement('span'); g.className = 'kb-gap'; return g; };
-  const char = (c) => makeKey({ label: c, act: () => h.type(c) });
+  const upper = h.shift !== 'off';
+  const char = (c) => makeKey({ label: upper ? c.toUpperCase() : c, act: () => {
+    if (upper && /[a-z]/.test(c)) {
+      h.type(c.toUpperCase());
+      if (h.shift === 'once') { h.shift = 'off'; buildKeyboard(h); }
+    } else h.type(c);
+  } });
   const symbols = h.sym(), type = h.type, backspace = h.backspace;
 
   const a = row(); [...r1].forEach(c => a.appendChild(char(c)));
   const b = row(); if (r2.length < 10) b.appendChild(gap());
   [...r2].forEach(c => b.appendChild(char(c))); if (r2.length < 10) b.appendChild(gap());
   const c = row();
-  c.appendChild(makeKey({ label: symbols ? 'abc' : '123', w: 1.5, cls: 'small',
-    act: () => { h.flip(); buildKeyboard(h); } }));
+  const sk = makeKey({ label: 'Shift', html: symbols ? ' ' : SHIFT_ICON[h.shift], w: 1.5,
+    cls: upper && !symbols ? 'lit' : '', act: () => { if (!symbols) tapShift(h); } });
+  c.appendChild(sk);
   [...r3].forEach(ch => c.appendChild(char(ch)));
   c.appendChild(makeKey({ label: 'Delete', html: ICON.back, w: 1.5, act: backspace, repeat: true }));
   const d = row();
-  d.appendChild(makeKey({ label: 'Hide keyboard', html: ICON.hide, w: 1.5, act: h.hide }));
+  d.appendChild(makeKey({ label: 'Hide keyboard', html: ICON.hide, w: 1.25, act: h.hide }));
+  d.appendChild(makeKey({ label: symbols ? 'abc' : '123', w: 1.25, cls: 'small',
+    act: () => { h.flip(); buildKeyboard(h); } }));
   d.appendChild(char(','));
-  d.appendChild(makeKey({ label: 'space', w: 4.5, cls: 'small faded', act: () => type(' ') }));
+  d.appendChild(makeKey({ label: 'space', w: 3.5, cls: 'small faded', act: () => type(' ') }));
   d.appendChild(char('.'));
   d.appendChild(makeKey({ label: h.actionLabel, html: `${h.actionIcon ? ICON.search : ''}<span>${h.actionLabel}</span>`,
     w: 2, cls: 'small accent', act: h.action }));
@@ -1393,7 +1421,7 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeNamer();
     else if (e.key === 'Backspace') { e.preventDefault(); NAME_KB.backspace(); }
     else if (e.key === 'Enter') { e.preventDefault(); createFromNamer(); }
-    else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) { e.preventDefault(); NAME_KB.type(e.key.toLowerCase()); }
+    else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) { e.preventDefault(); NAME_KB.type(e.key); }
     return;
   }
   if (e.key === 'Escape') {
@@ -1407,7 +1435,7 @@ document.addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key === 'Backspace') { e.preventDefault(); backspace(); }
   else if (e.key === 'Enter') { e.preventDefault(); if (query.trim()) submit(query.trim()); }
-  else if (e.key.length === 1) { e.preventDefault(); type(e.key.toLowerCase()); }
+  else if (e.key.length === 1) { e.preventDefault(); type(e.key); }
 });
 
 // ---------- Wiring ----------
@@ -1456,7 +1484,7 @@ $('fsBtn').addEventListener('click', async () => {
   catch { logEvent('debug', 'fullscreen not available in this view'); }
 });
 $('resetBtn').addEventListener('click', () => {
-  query = ''; open = false; keyboard = false; suggestions = []; symbols = false;
+  query = ''; open = false; keyboard = false; suggestions = []; symbols = false; SEARCH_KB.shift = 'off';
   submitted = null; clearTimeout(searchTimer); voice.hidden = true; toastEl.hidden = true;
   clearInterval(P.timer); Object.assign(P, { queue: [], index: -1, playing: false, expanded: false }); picking = false; renderPlayer();
   closeNamer(); openLibId = null; $('libPage').hidden = true; $('homeScroll').scrollTop = 0;
