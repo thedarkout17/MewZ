@@ -64,12 +64,18 @@ object YouTubeAlbums {
         if (q.isEmpty()) return emptyList()
         // Artists that matter for this search: the first few song results'.
         val popular = topSongs.take(TOP_SONGS).map { words(it.artist) }
+        // Artists typed into the search ("starboy kid cosmo"): their names aren't part of
+        // any album title, so take them out before comparing titles.
+        val namedWords = albums.map { words(it.artist) }
+            .filter { it.isNotEmpty() && q.containsAll(it) }
+            .flatten().toSet()
         return albums.filter { album ->
             val artist = words(album.artist)
             if (artist.isEmpty()) return@filter false
             val named = q.containsAll(artist)
-            val rest = if (named) q - artist else q
             val title = words(coreTitle(album.title))
+            // (Never strip words that are in this album's own title.)
+            val rest = q - (if (named) artist else namedWords - title)
             val playedForThis = popular.any { it.containsAll(artist) }
             when {
                 // "the weeknd": their albums (if they're who the song results are by too,
@@ -81,7 +87,10 @@ object YouTubeAlbums {
                 named -> true
                 else -> playedForThis
             }
-        }.take(max)
+        }
+            // One edition per album: "Starboy" and "Starboy (Deluxe)" → the higher-ranked one.
+            .distinctBy { words(coreTitle(it.title)) to words(it.artist) }
+            .take(max)
     }
 
     /** "Starboy (Deluxe Edition) [Remastered]" → "Starboy". */
