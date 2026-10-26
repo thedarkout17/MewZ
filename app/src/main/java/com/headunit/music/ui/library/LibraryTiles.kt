@@ -50,13 +50,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.headunit.music.R
 import com.headunit.music.ui.components.CenterSquareCrop
-import com.headunit.music.data.Track
+import com.headunit.music.core.model.Track
 import coil.request.ImageRequest
 import coil.compose.AsyncImage
 import androidx.compose.ui.platform.LocalContext
-import com.headunit.music.data.HISTORY_ID
-import com.headunit.music.data.LIKED_ID
-import com.headunit.music.data.Library
+import com.headunit.music.core.model.HISTORY_ID
+import com.headunit.music.core.model.LIKED_ID
+import com.headunit.music.core.model.Library
 import com.headunit.music.ui.theme.LocalDesignScale
 
 /** Library squares on the home screen (design px). Two side by side, 80 from the screen edges. */

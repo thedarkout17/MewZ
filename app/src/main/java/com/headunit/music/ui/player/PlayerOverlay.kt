@@ -77,7 +77,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.headunit.music.R
 import com.headunit.music.data.LibraryStore
-import com.headunit.music.data.Track
+import com.headunit.music.core.model.Track
 import com.headunit.music.player.PlayerController
 import com.headunit.music.ui.components.CenterSquareCrop
 import com.headunit.music.ui.theme.Brand

@@ -1,5 +1,7 @@
 package com.headunit.music.data.youtube
 
+import com.headunit.music.core.sources.AudioStreamSource
+import com.headunit.music.core.playback.AudioUnavailableException
 import android.os.SystemClock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,11 +16,6 @@ import org.schabi.newpipe.extractor.stream.StreamInfo
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 
-/** Why a song's audio couldn't be found. */
-class AudioUnavailableException(val reason: Reason, message: String?) : Exception(message) {
-    enum class Reason { Unavailable, AgeRestricted, Offline, RateLimited, ExtractorOutdated }
-}
-
 /**
  * Finds the audio-only stream for a YouTube video, so no video is downloaded.
  *
@@ -27,7 +24,7 @@ class AudioUnavailableException(val reason: Reason, message: String?) : Exceptio
  * song ahead of time makes skipping near-instant. YouTube's stream links expire
  * after about 6 hours; cached ones are dropped well before that.
  */
-object AudioStreams {
+object AudioStreams : AudioStreamSource {
 
     private data class Entry(val url: String, val at: Long)
 
@@ -36,7 +33,7 @@ object AudioStreams {
     private const val TARGET_KBPS = 128
 
     /** Audio stream URL for [videoId]. Throws [AudioUnavailableException]. */
-    suspend fun urlFor(videoId: String): String = withContext(Dispatchers.IO) {
+    override suspend fun urlFor(videoId: String): String = withContext(Dispatchers.IO) {
         cache[videoId]?.let { if (SystemClock.elapsedRealtime() - it.at < MAX_AGE_MS) return@withContext it.url }
         val url = resolve(videoId)
         cache[videoId] = Entry(url, SystemClock.elapsedRealtime())
@@ -44,7 +41,7 @@ object AudioStreams {
     }
 
     /** Drop a cached link (e.g. it expired and playback failed) so the next lookup is fresh. */
-    fun forget(videoId: String) {
+    override fun forget(videoId: String) {
         cache.remove(videoId)
     }
 

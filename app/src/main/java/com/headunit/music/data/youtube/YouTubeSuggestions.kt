@@ -1,6 +1,6 @@
 package com.headunit.music.data.youtube
 
-import com.headunit.music.data.SuggestionProvider
+import com.headunit.music.core.sources.SuggestionSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -14,7 +14,7 @@ import java.net.URLEncoder
  * API key or quota. If it can't be reached, there are simply no suggestions
  * (recent searches still show).
  */
-class YouTubeSuggestions : SuggestionProvider {
+class YouTubeSuggestions : SuggestionSource {
 
     override suspend fun suggest(query: String, limit: Int): List<String> = withContext(Dispatchers.IO) {
         val q = query.trim()

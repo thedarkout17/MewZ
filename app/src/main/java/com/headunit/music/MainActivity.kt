@@ -25,12 +25,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import com.headunit.music.data.LibraryStore
 import com.headunit.music.data.SearchHistory
-import com.headunit.music.data.Track
+import com.headunit.music.core.model.Track
 import com.headunit.music.ui.library.NewLibrarySheet
 import com.headunit.music.ui.library.DeleteLibraryDialog
 import com.headunit.music.ui.library.HeldLibrary
 import com.headunit.music.ui.library.LibraryOptions
-import com.headunit.music.data.Library
+import com.headunit.music.core.model.Library
 import com.headunit.music.player.PlayerController
 import com.headunit.music.ui.player.DOCK_HEIGHT
 import com.headunit.music.ui.player.PlayerOverlay

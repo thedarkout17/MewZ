@@ -1,5 +1,10 @@
 package com.headunit.music.data
 
+import com.headunit.music.core.sources.LyricsSource
+import com.headunit.music.core.model.Lrc
+import com.headunit.music.core.model.LyricLine
+import com.headunit.music.core.model.Lyrics
+import com.headunit.music.core.model.Track
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -11,29 +16,12 @@ import java.net.URL
 import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 
-/** One line of lyrics; [time] (seconds) is when it's sung, null for unsynced lyrics. */
-data class LyricLine(val time: Float?, val text: String)
-
-/** A song's lyrics. [synced] lyrics have a time on every line, so they can follow along. */
-data class Lyrics(val lines: List<LyricLine>, val synced: Boolean) {
-    /** The line being sung at [seconds] (synced lyrics only), or -1 before the first. */
-    fun lineAt(seconds: Float): Int {
-        if (!synced) return -1
-        var found = -1
-        for (i in lines.indices) {
-            val t = lines[i].time ?: continue
-            if (t <= seconds + 0.15f) found = i else break
-        }
-        return found
-    }
-}
-
 /**
  * Finds lyrics on LRCLIB (lrclib.net): a free, open lyrics database, no key
  * needed. Prefers synced (timed) lyrics; falls back to plain ones. Results are
  * remembered for the session, including "none found".
  */
-object LyricsRepository {
+object LyricsRepository : LyricsSource {
 
     private sealed interface Cached {
         data class Found(val lyrics: Lyrics) : Cached
@@ -43,7 +31,7 @@ object LyricsRepository {
     private val cache = ConcurrentHashMap<String, Cached>()
 
     /** Lyrics for [track], or null if there are none. Throws [IOException] when offline. */
-    suspend fun find(track: Track): Lyrics? = withContext(Dispatchers.IO) {
+    override suspend fun find(track: Track): Lyrics? = withContext(Dispatchers.IO) {
         when (val c = cache[track.videoId]) {
             is Cached.Found -> return@withContext c.lyrics
             Cached.None -> return@withContext null
@@ -90,24 +78,13 @@ object LyricsRepository {
     private fun JSONObject.toLyrics(): Lyrics? {
         val synced = optString("syncedLyrics").takeIf { it.isNotBlank() && it != "null" }
         if (synced != null) {
-            val lines = parseLrc(synced)
+            val lines = Lrc.parse(synced)
             if (lines.isNotEmpty()) return Lyrics(lines, synced = true)
         }
         val plain = optString("plainLyrics").takeIf { it.isNotBlank() && it != "null" } ?: return null
         return Lyrics(plain.lines().map { LyricLine(null, it.trim()) }, synced = false)
     }
 
-    /** "[01:23.45] Some line" (a line can carry several times) → timed lines, in order. */
-    private fun parseLrc(lrc: String): List<LyricLine> {
-        val stamp = Regex("""\[(\d+):(\d{1,2}(?:[.:]\d{1,3})?)]""")
-        return lrc.lines().flatMap { raw ->
-            val times = stamp.findAll(raw).map { m ->
-                m.groupValues[1].toInt() * 60f + m.groupValues[2].replace(':', '.').toFloat()
-            }.toList()
-            val text = raw.replace(stamp, "").trim()
-            times.map { LyricLine(it, text) }
-        }.sortedBy { it.time }
-    }
 
     /** GET lrclib.net/api/[endpoint]; null on 404 (nothing found). */
     private fun get(endpoint: String, vararg params: Pair<String, String>): String? {

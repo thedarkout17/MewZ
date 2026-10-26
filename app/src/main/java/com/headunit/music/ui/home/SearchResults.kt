@@ -1,5 +1,7 @@
 package com.headunit.music.ui.home
 
+import com.headunit.music.core.search.mixInAlbums
+import com.headunit.music.core.search.ResultRow
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -48,7 +50,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.headunit.music.data.youtube.Album
+import com.headunit.music.core.search.Album
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import com.headunit.music.data.youtube.YouTubeAlbums
@@ -69,8 +71,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import coil.compose.AsyncImage
-import com.headunit.music.data.Track
-import com.headunit.music.data.youtube.SearchResult.Reason
+import com.headunit.music.core.model.Track
+import com.headunit.music.core.search.SearchResult.Reason
 import com.headunit.music.ui.theme.LocalDesignScale
 import kotlinx.coroutines.delay
 
@@ -327,37 +329,6 @@ internal fun TrackRow(
                 )
             }
             trailing?.invoke()
-        }
-    }
-}
-
-/** A row in the results: a song, or an album among them. */
-private sealed interface ResultRow {
-    val key: String
-    data class Song(val track: Track) : ResultRow { override val key get() = track.videoId }
-    data class AlbumItem(val album: Album) : ResultRow { override val key get() = "album:" + album.url }
-}
-
-/**
- * Puts each album just after the first song by its artist (so "starboy" gives
- * the song, then the album), or after the second song if none of its songs
- * came up.
- */
-private fun mixInAlbums(tracks: List<Track>, albums: List<Album>): List<ResultRow> {
-    if (albums.isEmpty()) return tracks.map { ResultRow.Song(it) }
-    fun norm(s: String) = s.lowercase().removePrefix("the ").filter { it.isLetterOrDigit() }
-    val after = HashMap<Int, MutableList<Album>>() // song position → albums to put after it
-    albums.forEach { album ->
-        val artist = norm(album.artist)
-        val at = tracks.indexOfFirst { artist.isNotEmpty() && norm(it.artist).startsWith(artist) }
-            .takeIf { it >= 0 } ?: minOf(1, tracks.size - 1)
-        after.getOrPut(at) { mutableListOf() } += album
-    }
-    return buildList {
-        if (tracks.isEmpty()) albums.forEach { add(ResultRow.AlbumItem(it)) }
-        tracks.forEachIndexed { i, t ->
-            add(ResultRow.Song(t))
-            after[i]?.forEach { add(ResultRow.AlbumItem(it)) }
         }
     }
 }

@@ -70,5 +70,8 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.4.1")
     // Media session + background service: steering wheel, Bluetooth, headunit media controls
     implementation("androidx.media3:media3-session:1.4.1")
+
+    // Unit tests for the shared core (app/src/test): Run them from Android Studio.
+    testImplementation("junit:junit:4.13.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

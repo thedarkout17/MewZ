@@ -1,7 +1,9 @@
 package com.headunit.music.data.youtube
 
+import com.headunit.music.core.sources.MixSource
+import com.headunit.music.core.text.SongText
 import android.util.Log
-import com.headunit.music.data.Track
+import com.headunit.music.core.model.Track
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.schabi.newpipe.extractor.Image
@@ -18,10 +20,10 @@ import org.schabi.newpipe.extractor.stream.StreamType
  * every video (list id "RD" + video id). If YouTube won't give a mix, falls
  * back to the video's related videos. Free: no API quota is used.
  */
-object YouTubeMix {
+object YouTubeMix : MixSource {
 
     /** Songs to follow [seed], without [seed] itself. Empty if nothing could be found. */
-    suspend fun upNext(seed: Track): List<Track> = withContext(Dispatchers.IO) {
+    override suspend fun upNext(seed: Track): List<Track> = withContext(Dispatchers.IO) {
         NewPipeDownloader.init()
         val items = runCatching { mix(seed.videoId) }
             .onFailure { Log.w(TAG, "Mix failed for ${seed.videoId}: ${it.message}") }
@@ -61,11 +63,11 @@ object YouTubeMix {
         if (item.duration > maxSeconds) return null
         val id = VIDEO_ID.find(item.url)?.groupValues?.get(1) ?: return null
 
-        val (splitTitle, splitArtist) = YouTubeSearch.splitArtist(
-            YouTubeSearch.cleanTitle(item.name.orEmpty()),
-            YouTubeSearch.cleanArtist(item.uploaderName.orEmpty()),
+        val (splitTitle, splitArtist) = SongText.splitArtist(
+            SongText.cleanTitle(item.name.orEmpty()),
+            SongText.cleanArtist(item.uploaderName.orEmpty()),
         )
-        val (title, artist) = YouTubeSearch.moveFeaturedArtists(splitTitle, splitArtist)
+        val (title, artist) = SongText.moveFeaturedArtists(splitTitle, splitArtist)
 
         val biggest = item.thumbnails.maxByOrNull { it.width.toLong() * it.height }
         val artUrl = biggest?.url?.takeIf { it.isNotEmpty() } ?: "https://i.ytimg.com/vi/$id/hqdefault.jpg"

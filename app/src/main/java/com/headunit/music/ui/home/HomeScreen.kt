@@ -1,5 +1,7 @@
 package com.headunit.music.ui.home
 
+import android.util.Log
+import com.headunit.music.core.search.AlbumMatching
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -19,9 +21,9 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.CompositingStrategy
-import com.headunit.music.data.HISTORY_ID
-import com.headunit.music.data.LIKED_ID
-import com.headunit.music.data.Library
+import com.headunit.music.core.model.HISTORY_ID
+import com.headunit.music.core.model.LIKED_ID
+import com.headunit.music.core.model.Library
 import com.headunit.music.data.LibraryStore
 import com.headunit.music.ui.library.LibraryGrid
 import com.headunit.music.ui.library.LibraryPage
@@ -46,10 +48,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import com.headunit.music.R
 import com.headunit.music.data.SearchHistory
-import com.headunit.music.data.SuggestionProvider
-import com.headunit.music.data.Track
-import com.headunit.music.data.youtube.Album
-import com.headunit.music.data.youtube.SearchResult
+import com.headunit.music.core.sources.SuggestionSource
+import com.headunit.music.core.model.Track
+import com.headunit.music.core.search.Album
+import com.headunit.music.core.search.SearchResult
 import com.headunit.music.data.youtube.YouTubeAlbums
 import com.headunit.music.data.youtube.YouTubeSuggestions
 import kotlinx.coroutines.async
@@ -132,7 +134,7 @@ fun HomeScreen(
     onVoiceSearch: () -> Unit,
     voiceResult: String? = null,
     onVoiceResultConsumed: () -> Unit = {},
-    suggestionProvider: SuggestionProvider = remember { YouTubeSuggestions() },
+    suggestionProvider: SuggestionSource = remember { YouTubeSuggestions() },
     /** Height (design px) of the mini player docked at the bottom; content stays clear of it. */
     dockInset: Float = 0f,
     /** Tells the player dock to slide away while our keyboard is up. */
@@ -261,8 +263,8 @@ fun HomeScreen(
                 is SearchResult.Failure -> ResultsState.Failed(r.reason)
             }
             val now = results
-            // Only albums that really fit this search (see YouTubeAlbums.relevant).
-            val found = YouTubeAlbums.relevant(albums.await(), q, (now as? ResultsState.Done)?.tracks.orEmpty())
+            // Only albums that really fit this search (see AlbumMatching.relevant).
+            val found = AlbumMatching.relevant(albums.await(), q, (now as? ResultsState.Done)?.tracks.orEmpty()) { Log.d("MewZ", it) }
             val latest = results
             if (found.isNotEmpty() && latest is ResultsState.Done && latest.query == q) results = latest.copy(albums = found)
         }
@@ -600,7 +602,7 @@ private fun HomeScreenPreview() {
         HomeScreen(
             youtube = YouTubeSearch(apiKey = ""),
             history = remember { SearchHistory(context) },
-            libraries = remember { LibraryStore(context) },
+            libraries = remember { LibraryStore.get(context) },
             onPlay = { _, _, _ -> },
             onCreateLibrary = {},
             onVoiceSearch = {},

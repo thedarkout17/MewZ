@@ -37,8 +37,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import coil.compose.AsyncImage
-import com.headunit.music.data.Track
-import com.headunit.music.data.youtube.Album
+import com.headunit.music.core.model.Track
+import com.headunit.music.core.search.Album
 import com.headunit.music.ui.theme.LocalDesignScale
 
 /** An album's songs: loading, loaded, or why not. */

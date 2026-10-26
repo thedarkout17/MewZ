@@ -61,9 +61,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import coil.compose.AsyncImage
 import com.headunit.music.R
-import com.headunit.music.data.Library
+import com.headunit.music.core.model.Library
 import com.headunit.music.data.LibraryStore
-import com.headunit.music.data.Track
+import com.headunit.music.core.model.Track
 import com.headunit.music.ui.theme.DesignCanvas
 import com.headunit.music.ui.theme.LocalDesignScale
 import kotlin.math.roundToInt

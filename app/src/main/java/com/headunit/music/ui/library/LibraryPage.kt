@@ -40,10 +40,10 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.headunit.music.R
-import com.headunit.music.data.HISTORY_ID
-import com.headunit.music.data.LIKED_ID
-import com.headunit.music.data.Library
-import com.headunit.music.data.Track
+import com.headunit.music.core.model.HISTORY_ID
+import com.headunit.music.core.model.LIKED_ID
+import com.headunit.music.core.model.Library
+import com.headunit.music.core.model.Track
 import com.headunit.music.ui.home.Message
 import com.headunit.music.ui.home.TrackRow
 import com.headunit.music.ui.theme.LocalDesignScale

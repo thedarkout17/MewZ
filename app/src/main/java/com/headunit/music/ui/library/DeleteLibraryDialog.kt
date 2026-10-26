@@ -40,7 +40,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import com.headunit.music.data.Library
+import com.headunit.music.core.model.Library
 import com.headunit.music.ui.theme.Brand
 import com.headunit.music.ui.theme.DesignCanvas
 import com.headunit.music.ui.theme.LocalDesignScale

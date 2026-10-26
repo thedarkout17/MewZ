@@ -1,4 +1,6 @@
-package com.headunit.music.data
+// Shared core: plain Kotlin, no Android. Keep it that way so it can move to a
+// Kotlin Multiplatform module (Android + iOS) as-is.
+package com.headunit.music.core.model
 
 /** One playable song, backed by a YouTube video. */
 data class Track(

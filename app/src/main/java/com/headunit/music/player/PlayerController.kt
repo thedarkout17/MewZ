@@ -2,6 +2,10 @@
 
 package com.headunit.music.player
 
+import com.headunit.music.core.playback.PlayerError
+import com.headunit.music.core.sources.MixSource
+import com.headunit.music.core.sources.AudioStreamSource
+import com.headunit.music.core.playback.QueueState
 import android.content.Context
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaMetadata
@@ -9,10 +13,8 @@ import android.net.Uri
 import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.OptIn
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.media3.common.AudioAttributes
@@ -28,13 +30,13 @@ import androidx.media3.datasource.cache.CacheWriter
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import com.headunit.music.data.Track
+import com.headunit.music.core.model.Track
 import com.headunit.music.data.toJson
 import com.headunit.music.data.toTracks
 import org.json.JSONArray
 import org.json.JSONObject
 import com.headunit.music.data.youtube.AudioStreams
-import com.headunit.music.data.youtube.AudioUnavailableException
+import com.headunit.music.core.playback.AudioUnavailableException
 import com.headunit.music.data.youtube.YouTubeMix
 import com.headunit.music.data.youtube.NewPipeDownloader
 import kotlinx.coroutines.CoroutineScope
@@ -64,7 +66,13 @@ import kotlinx.coroutines.withContext
  *
  * All state is Compose state, so the screens update on their own.
  */
-class PlayerController private constructor(context: Context) {
+class PlayerController private constructor(
+    context: Context,
+    /** Finds each song's audio (NewPipe on Android). */
+    private val audio: AudioStreamSource = AudioStreams,
+    /** "Up next" songs for search plays (YouTube's Mix). */
+    private val mix: MixSource = YouTubeMix,
+) {
 
     companion object {
         @Volatile private var instance: PlayerController? = null
@@ -81,53 +89,28 @@ class PlayerController private constructor(context: Context) {
     }
 
     // ---- Queue ----
-    var queue by mutableStateOf<List<Track>>(emptyList())
-        private set
-    var index by mutableIntStateOf(-1)
-        private set
-    /**
-     * Name of the library or playlist being played, shown as "Road trip — 3 of 20".
-     * Null when playing from search results: those aren't a collection, so no position is shown.
-     */
-    var queueName by mutableStateOf<String?>(null)
-        private set
-    val current: Track? by derivedStateOf { queue.getOrNull(index) }
-    /** Libraries loop both ways: back from the first song goes to the last. */
-    val hasPrevious: Boolean by derivedStateOf { index > 0 || (wrapQueue && queue.size > 1) }
-    val hasNext: Boolean by derivedStateOf {
-        index in 0 until queue.size - 1 || (wrapQueue && queue.isNotEmpty()) || autoMix
-    }
+    // The rules (what's next, hold-to-queue, the Mix, shuffle, looping) live in
+    // QueueState, in the shared core; this holds the current one as Compose state.
+    private var q by mutableStateOf(QueueState())
 
-    /** The queue in its original order, so turning shuffle off puts it back. */
-    private var originalOrder: List<Track> = emptyList()
+    val queue: List<Track> get() = q.tracks
+    val index: Int get() = q.index
+    /** Name of the library or album being played ("Road trip — 3 of 20"); null for search plays. */
+    val queueName: String? get() = q.name
+    val current: Track? get() = q.current
+    val hasPrevious: Boolean get() = q.hasPrevious
+    val hasNext: Boolean get() = q.hasNext
+    val shuffle: Boolean get() = q.shuffle
+    /** Playing a search result's YouTube Mix (topped up as it runs low). */
+    val autoMix: Boolean get() = q.autoMix
 
-    var shuffle by mutableStateOf(false)
-        private set
     /** Loop button: replay the current song when it ends. */
     var loopSong by mutableStateOf(false)
         private set
 
-    /**
-     * Go back to the first song after the last one. Libraries and playlists
-     * will play this way; search results don't.
-     */
-    var wrapQueue by mutableStateOf(false)
-        private set
-
-    /**
-     * Playing a song from search: the queue is that song's YouTube Mix (like
-     * YouTube's autoplay), topped up as it runs low so it never ends.
-     */
-    var autoMix by mutableStateOf(false)
-        private set
     private var mixJob: Job? = null
-    /** Songs already in this mix queue, so top-ups don't repeat them. */
-    private val mixSeen = HashSet<String>()
-    /** Reached the end while a top-up was still loading: play on once it arrives. */
+    /** Reached the end while a mix top-up was still loading: play on once it arrives. */
     private var advanceWhenMixArrives = false
-
-    /** Songs added with a hold that haven't played yet; they line up right after the current song. */
-    private val heldQueued = HashSet<String>()
 
     // ---- Playback ----
     var isPlaying by mutableStateOf(false)
@@ -290,24 +273,13 @@ class PlayerController private constructor(context: Context) {
 
     /**
      * Plays [tracks] starting at [startIndex]; the rest become the queue.
-     * [wrap]: start over after the last song (libraries / playlists pass true).
+     * [wrap]: start over after the last song (libraries / albums pass true).
      */
     fun playQueue(tracks: List<Track>, startIndex: Int, name: String? = null, wrap: Boolean = false) {
-        if (startIndex !in tracks.indices) return
+        val started = q.start(tracks, startIndex, name, wrap) ?: return
         stopMix()
-        heldQueued.clear()
-        originalOrder = tracks
-        queueName = name
-        wrapQueue = wrap
-        if (shuffle) {
-            // Keep the tapped song first, shuffle the rest after it.
-            val first = tracks[startIndex]
-            queue = listOf(first) + (tracks - first).shuffled()
-            playAt(0)
-        } else {
-            queue = tracks
-            playAt(startIndex)
-        }
+        q = started
+        playAt(q.index)
         expanded = true
     }
 
@@ -317,158 +289,92 @@ class PlayerController private constructor(context: Context) {
      */
     fun playWithMix(track: Track) {
         stopMix()
-        heldQueued.clear()
-        autoMix = true
-        mixSeen += track.videoId
-        originalOrder = listOf(track)
-        queueName = null
-        wrapQueue = false
-        queue = listOf(track)
+        q = q.startMix(track)
         playAt(0) // also starts loading the mix
         expanded = true
     }
 
     /**
      * Hold-to-queue: [track] plays after the current song (and after anything
-     * queued before it), ahead of the rest of the list or mix. If nothing is
-     * playing it just starts playing. Returns true if it was queued.
+     * queued before it). If nothing is playing it just starts playing.
+     * Returns true if it was queued.
      */
     fun addToQueue(track: Track): Boolean {
-        val now = current
-        if (now == null) {
+        if (current == null) {
             playWithMix(track)
             return false
         }
-        // Already coming up later? Move it forward rather than playing it twice.
-        val behind = queue.take(index + 1)
-        val ahead = queue.drop(index + 1).filter { it.videoId != track.videoId }
-        val queuedFirst = ahead.takeWhile { it.videoId in heldQueued }.size
-        queue = behind + ahead.take(queuedFirst) + track + ahead.drop(queuedFirst)
-
-        // Same spot in the unshuffled order, so turning shuffle off keeps it.
-        val base = originalOrder.filter { it.videoId != track.videoId || it == now }
-        val at = (base.indexOf(now) + 1).coerceAtLeast(0)
-        val afterNow = base.drop(at)
-        val q = afterNow.takeWhile { it.videoId in heldQueued }.size
-        originalOrder = base.take(at) + afterNow.take(q) + track + afterNow.drop(q)
-
-        heldQueued += track.videoId
-        mixSeen += track.videoId
-        if (queuedFirst == 0) preloadNext() // it's the very next song now
+        update(q.enqueue(track))
         return true
     }
 
     /** True if [track] was added with a hold and hasn't played yet. */
-    fun isHeldQueued(track: Track): Boolean = track.videoId in heldQueued
+    fun isHeldQueued(track: Track): Boolean = q.isHeld(track)
 
-    /** Queue list: jump straight to the song at [i]. Held songs passed over stay where they are. */
+    /** Queue list: jump straight to the song at [i]. */
     fun skipTo(i: Int) {
         if (i !in queue.indices || i == index) return
         playAt(i)
     }
 
-    /** Queue page drag: move the upcoming song at [from] to [to] (both after the current song). */
-    fun moveInQueue(from: Int, to: Int) {
-        if (from == to || from <= index || to <= index || from !in queue.indices || to !in queue.indices) return
-        queue = queue.toMutableList().apply { add(to, removeAt(from)) }
-        keepOrderInSync()
-        if (from == index + 1 || to == index + 1) preloadNext()
-    }
+    /** Queue page drag: move the upcoming song at [from] to [to]. */
+    fun moveInQueue(from: Int, to: Int) = update(q.move(from, to))
 
-    /**
-     * Queue page double-tap: the song at [i] joins the songs you've queued, at
-     * the end of them (like hold-to-queue), ahead of the rest of the list or mix.
-     * Double-tapping a song that's already one of them moves it to the very front.
-     */
-    fun playNext(i: Int) {
-        if (i !in queue.indices || i == index) return
-        val track = queue[i]
-        val list = queue.toMutableList()
-        list.removeAt(i)
-        val now = if (i < index) index - 1 else index
-        val alreadyQueued = i > index && track.videoId in heldQueued
-        val queuedAhead = if (alreadyQueued) 0
-            else list.drop(now + 1).takeWhile { it.videoId in heldQueued }.size
-        val at = now + 1 + queuedAhead
-        list.add(at, track)
-        queue = list
-        index = now
-        heldQueued += track.videoId
-        keepOrderInSync()
-        if (at == now + 1 || i == now + 1) preloadNext()
-    }
-
-    /** Hand-arranged queue: unshuffled, the "original" order is simply what's shown. */
-    private fun keepOrderInSync() {
-        if (!shuffle) originalOrder = queue
-    }
+    /** Queue page double-tap: the song at [i] plays after the songs you've queued (see [QueueState.playNext]). */
+    fun playNext(i: Int) = update(q.playNext(i))
 
     /** Queue list: take the upcoming song at [i] out. */
     fun removeFromQueue(i: Int) {
-        if (i <= index || i !in queue.indices) return
-        val track = queue[i]
-        queue = queue.toMutableList().apply { removeAt(i) }
-        val o = originalOrder.indexOfLast { it.videoId == track.videoId }
-        if (o >= 0) originalOrder = originalOrder.toMutableList().apply { removeAt(o) }
-        heldQueued -= track.videoId
-        if (i == index + 1) preloadNext()
-        current?.let { if (autoMix && index >= queue.size - 3) extendMix(it) }
+        val removed = q.remove(i)
+        if (removed == q) return
+        update(removed)
+        if (q.needsMoreMix) current?.let { extendMix(it) }
+    }
+
+    /** The library being played was renamed: show the new name ("Road trip — 3 of 20"). */
+    fun renameQueue(from: String, to: String) {
+        val renamed = q.renamed(from, to)
+        if (renamed == q) return
+        q = renamed
+        saveState()
+    }
+
+    /** Shuffle the songs after the current one; turning it off restores the original order. */
+    fun toggleShuffle() = update(q.toggledShuffle())
+
+    /**
+     * Changes the queue; if the next song (or the one after) is different now,
+     * the pre-buffering is re-planned for them.
+     */
+    private fun update(new: QueueState) {
+        val next = q.ahead(1)
+        val after = q.ahead(2)
+        q = new
+        if (q.ahead(1) != next || q.ahead(2) != after) preloadNext()
     }
 
     private fun stopMix() {
         mixJob?.cancel()
         mixJob = null
-        autoMix = false
         advanceWhenMixArrives = false
-        mixSeen.clear()
     }
 
-    /** Append [seed]'s Mix to the queue (only new songs). */
+    /** Fetch [seed]'s Mix and add the songs that aren't in the queue yet. */
     private fun extendMix(seed: Track) {
         if (mixJob?.isActive == true) return
         mixJob = scope.launch {
-            val more = YouTubeMix.upNext(seed).filter { mixSeen.add(it.videoId) }
-            if (!autoMix || more.isEmpty()) return@launch
-            val hadNext = index < queue.size - 1
-            originalOrder = originalOrder + more
-            queue = queue + if (shuffle) more.shuffled() else more
-            if (!hadNext) preloadNext()
+            val more = mix.upNext(seed)
+            val topped = q.withMix(more)
+            if (topped.tracks.size == q.tracks.size) {
+                q = topped // (remembers what was offered, so it isn't offered again)
+                return@launch
+            }
+            update(topped)
             if (advanceWhenMixArrives) {
                 advanceWhenMixArrives = false
                 next()
             }
         }
-    }
-
-    /** The library being played was renamed: show the new name ("Road trip — 3 of 20"). */
-    fun renameQueue(from: String, to: String) {
-        if (queueName == from) {
-            queueName = to
-            saveState()
-        }
-    }
-
-    /** Shuffle the songs after the current one; turning it off restores the original order. */
-    fun toggleShuffle() {
-        val now = current
-        shuffle = !shuffle
-        if (now == null) return
-        if (autoMix) {
-            // A mix keeps what's been played behind you; only the songs ahead move.
-            val played = queue.take(index + 1)
-            val ahead = originalOrder.filter { it !in played }
-            queue = played + if (shuffle) ahead.shuffled() else ahead
-            preloadNext()
-            return
-        }
-        if (shuffle) {
-            queue = listOf(now) + (originalOrder - now).shuffled()
-            index = 0
-        } else {
-            queue = originalOrder
-            index = originalOrder.indexOf(now).coerceAtLeast(0)
-        }
-        preloadNext()
     }
 
     fun toggleLoop() {
@@ -487,26 +393,21 @@ class PlayerController private constructor(context: Context) {
     }
 
     fun next() {
-        when {
-            index < queue.size - 1 -> playAt(index + 1)
-            wrapQueue && queue.isNotEmpty() -> playAt(0) // back to the start
-            autoMix -> current?.let { // more songs on the way (or try again if the last top-up failed)
+        when (val step = q.next()) {
+            is QueueState.Next.PlayAt -> playAt(step.index)
+            // More mix songs on the way (or try again if the last top-up failed).
+            QueueState.Next.AwaitMix -> current?.let {
                 advanceWhenMixArrives = true
                 extendMix(it)
             }
+            QueueState.Next.Nothing -> {}
         }
     }
 
-    /**
-     * Like most players: restarts the song if you're past 2.5 seconds, else goes back one.
-     * In a library (which loops), back from the first song goes to the last.
-     */
+    /** Restarts the song, or goes back one (see [QueueState.previous]). */
     fun previous() {
-        when {
-            positionSeconds > 2.5f || !hasPrevious -> seekTo(0f)
-            index > 0 -> playAt(index - 1)
-            else -> playAt(queue.size - 1) // first song of a looping library → the last
-        }
+        val i = q.previous(positionSeconds)
+        if (i == null) seekTo(0f) else playAt(i)
     }
 
     fun seekTo(seconds: Float) {
@@ -521,30 +422,26 @@ class PlayerController private constructor(context: Context) {
     /** Saves the queue, the song and where it's at. Called as it plays, on pause, and when the app goes away. */
     fun saveState() {
         sinceSaveMs = 0L
-        val now = current
-        if (now == null) {
+        // Keep the file small: at most a few hundred songs around the current one.
+        val kept = q.forSaving(KEEP_BEHIND, KEEP_AHEAD)
+        if (kept.current == null) {
             saved.edit().clear().apply()
             return
         }
-        // Keep the file small: at most a few hundred songs around the current one.
-        val from = (index - KEEP_BEHIND).coerceAtLeast(0)
-        val to = (index + KEEP_AHEAD).coerceAtMost(queue.size)
-        val kept = queue.subList(from, to)
-        val keptIds = kept.mapTo(HashSet()) { it.videoId }
         val positionMs = restoredAtMs
             ?: if (exo.mediaItemCount > 0) exo.currentPosition else (positionSeconds * 1000).toLong()
         val state = JSONObject()
-            .put("queue", kept.toJson())
-            .put("original", originalOrder.filter { it.videoId in keptIds }.toJson())
-            .put("index", index - from)
+            .put("queue", kept.tracks.toJson())
+            .put("original", kept.original.toJson())
+            .put("index", kept.index)
             .put("positionMs", positionMs)
             .put("durationSeconds", durationSeconds.toDouble())
-            .put("wrap", wrapQueue)
-            .put("autoMix", autoMix)
-            .put("shuffle", shuffle)
+            .put("wrap", kept.wrap)
+            .put("autoMix", kept.autoMix)
+            .put("shuffle", kept.shuffle)
             .put("loop", loopSong)
-            .put("held", JSONArray(heldQueued.filter { it in keptIds }))
-            .apply { queueName?.let { put("name", it) } }
+            .put("held", JSONArray(kept.held.toList()))
+            .apply { kept.name?.let { put("name", it) } }
         saved.edit().putString(KEY_STATE, state.toString()).apply()
     }
 
@@ -553,25 +450,25 @@ class PlayerController private constructor(context: Context) {
         val json = saved.getString(KEY_STATE, null) ?: return
         runCatching {
             val o = JSONObject(json)
-            val q = o.getJSONArray("queue").toTracks()
-            val i = o.getInt("index")
-            if (i !in q.indices) return
-            queue = q
-            originalOrder = o.optJSONArray("original")?.toTracks()?.takeIf { it.isNotEmpty() } ?: q
-            index = i
-            queueName = if (o.has("name")) o.getString("name") else null
-            wrapQueue = o.optBoolean("wrap")
-            autoMix = o.optBoolean("autoMix")
-            if (autoMix) q.mapTo(mixSeen) { it.videoId }
-            shuffle = o.optBoolean("shuffle")
+            val held = o.optJSONArray("held")?.let { arr -> List(arr.length()) { arr.getString(it) }.toSet() }.orEmpty()
+            val restored = QueueState(
+                tracks = o.getJSONArray("queue").toTracks(),
+                index = o.getInt("index"),
+                name = if (o.has("name")) o.getString("name") else null,
+                wrap = o.optBoolean("wrap"),
+                shuffle = o.optBoolean("shuffle"),
+                autoMix = o.optBoolean("autoMix"),
+                original = o.optJSONArray("original")?.toTracks().orEmpty(),
+                held = held,
+            ).restored() ?: return
+            q = restored
             loopSong = o.optBoolean("loop")
             exo.repeatMode = if (loopSong) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
-            o.optJSONArray("held")?.let { arr -> for (k in 0 until arr.length()) heldQueued += arr.getString(k) }
             val at = o.optLong("positionMs")
             restoredAtMs = at
             positionSeconds = at / 1000f
             durationSeconds = o.optDouble("durationSeconds", 0.0).toFloat()
-                .takeIf { it > 0f } ?: (q[i].durationSeconds ?: 0).toFloat()
+                .takeIf { it > 0f } ?: (restored.current?.durationSeconds ?: 0).toFloat()
             // A whole new play only counts for History once it's played a while.
             reportedPlay = true
         }.onFailure { Log.w(TAG, "Couldn't restore last song: ${it.message}") }
@@ -590,12 +487,11 @@ class PlayerController private constructor(context: Context) {
         skipJob?.cancel()
         loadJob?.cancel()
         restoredAtMs = null // loading for real now
-        index = i
+        q = q.at(i)
         error = null
-        heldQueued -= track.videoId
         advanceWhenMixArrives = false
         // Mix running low: fetch more, seeded by this song so it keeps drifting naturally.
-        if (autoMix && i >= queue.size - 3) extendMix(track)
+        if (q.needsMoreMix) extendMix(track)
         // A fresh play (not a resume after a link refresh) starts the 3-second count again.
         if (resumeAtMs == 0L) {
             playedMs = 0L
@@ -609,7 +505,7 @@ class PlayerController private constructor(context: Context) {
 
         loadJob = scope.launch {
             try {
-                val url = AudioStreams.urlFor(track.videoId)
+                val url = audio.urlFor(track.videoId)
                 linkMs = SystemClock.elapsedRealtime() - tapAt
                 if (current?.videoId != track.videoId) return@launch // moved on meanwhile
                 exo.setMediaItem(mediaItem(track, url), resumeAtMs)
@@ -633,8 +529,8 @@ class PlayerController private constructor(context: Context) {
     private fun preloadNext() {
         preloadJob?.cancel()
         preloadWriter?.cancel()
-        val next = queuedAhead(1) ?: return
-        val after = queuedAhead(2)?.takeIf { it.videoId != next.videoId }
+        val next = q.ahead(1) ?: return
+        val after = q.ahead(2)?.takeIf { it.videoId != next.videoId }
         // Strictly in order, one at a time, so nothing competes for a weak signal:
         //   1. the song playing (ExoPlayer buffers it 5 minutes ahead) always comes first;
         //   2. then the next song's first 5 minutes;
@@ -652,17 +548,6 @@ class PlayerController private constructor(context: Context) {
         while (exo.isLoading) delay(500)
     }
 
-    /** The song [steps] places after the current one (libraries wrap round), if any. */
-    private fun queuedAhead(steps: Int): Track? {
-        if (queue.isEmpty() || index < 0) return null
-        val i = index + steps
-        return when {
-            i < queue.size -> queue[i]
-            wrapQueue -> queue[i % queue.size].takeIf { it.videoId != current?.videoId }
-            else -> null
-        }
-    }
-
     /**
      * Downloads the start of [track] (the first [bytes] of its audio) into the disk
      * cache, under the same key playback uses. Already cached (e.g. played recently)
@@ -670,7 +555,7 @@ class PlayerController private constructor(context: Context) {
      */
     private suspend fun cacheStart(track: Track, bytes: (url: String) -> Long) {
         waitForPlayingSong()
-        val url = runCatching { AudioStreams.urlFor(track.videoId) }.getOrNull() ?: return
+        val url = runCatching { audio.urlFor(track.videoId) }.getOrNull() ?: return
         while (true) {
             waitForPlayingSong()
             val writer = CacheWriter(
@@ -789,7 +674,7 @@ class PlayerController private constructor(context: Context) {
             if (retriedVideoId != track.videoId) {
                 // Most often an expired link: fetch a fresh one and carry on from here.
                 retriedVideoId = track.videoId
-                AudioStreams.forget(track.videoId)
+                audio.forget(track.videoId)
                 playAt(index, resumeAtMs = exo.currentPosition)
             } else {
                 fail(PlayerError.Other)
@@ -830,23 +715,3 @@ private val CLEN = Regex("[?&]clen=(\\d+)")
 private val DUR = Regex("[?&]dur=([\\d.]+)")
 
 private val ITAG = Regex("[?&]itag=(\\d+)")
-
-/** Why a song couldn't be played, in words for the screen. */
-enum class PlayerError(val message: String, val skippable: Boolean) {
-    Unavailable("This song isn't available", skippable = true),
-    AgeRestricted("This song is age-restricted on YouTube", skippable = true),
-    Offline("No internet connection", skippable = false),
-    RateLimited("YouTube is limiting requests; try again shortly", skippable = false),
-    ExtractorOutdated("YouTube changed something; the app needs an update", skippable = false),
-    Other("Couldn't play this song", skippable = true);
-
-    companion object {
-        fun from(reason: AudioUnavailableException.Reason) = when (reason) {
-            AudioUnavailableException.Reason.Unavailable -> Unavailable
-            AudioUnavailableException.Reason.AgeRestricted -> AgeRestricted
-            AudioUnavailableException.Reason.Offline -> Offline
-            AudioUnavailableException.Reason.RateLimited -> RateLimited
-            AudioUnavailableException.Reason.ExtractorOutdated -> ExtractorOutdated
-        }
-    }
-}
