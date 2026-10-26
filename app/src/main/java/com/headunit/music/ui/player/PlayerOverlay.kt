@@ -38,6 +38,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Path
+import androidx.compose.foundation.Canvas
+import androidx.compose.animation.core.Animatable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlurEffect
@@ -462,6 +468,7 @@ private fun NowPlaying(
                 contentDescription = stringResource(R.string.shuffle),
                 active = player.shuffle,
                 onClick = player::toggleShuffle,
+                onAnimation = { t -> ShuffleGlyph(t) },
             )
             GlassTile(
                 icon = R.drawable.ic_repeat,
@@ -673,7 +680,31 @@ private fun GlassTile(
     active: Boolean,
     onClick: () -> Unit,
     activeIcon: Int = icon,
+    /**
+     * Played when the tile is tapped on (not off): drawn instead of the icon with
+     * progress 0 → 1 → 0. The glass snaps on once it's finished.
+     */
+    onAnimation: (@Composable (Float) -> Unit)? = null,
 ) {
+    val anim = remember { Animatable(0f) }
+    var animating by remember { mutableStateOf(false) }
+    // Only for taps: e.g. skipping to an already-liked song turns the heart on quietly.
+    var tapped by remember { mutableStateOf(false) }
+    LaunchedEffect(active) {
+        val fromTap = tapped
+        tapped = false
+        if (!active || !fromTap || onAnimation == null) return@LaunchedEffect
+        animating = true
+        try {
+            anim.snapTo(0f)
+            anim.animateTo(1f, tween(TILE_ANIM_HALF_MS, easing = FastOutSlowInEasing))
+            anim.animateTo(0f, tween(TILE_ANIM_HALF_MS, easing = FastOutSlowInEasing))
+        } finally {
+            animating = false
+        }
+    }
+    val lit = active && !animating
+
     with(LocalDesignScale.current) {
         val shape = RoundedCornerShape(30.u)
         Box(
@@ -683,22 +714,61 @@ private fun GlassTile(
                 .height(116.u)
                 .clip(shape)
                 .then(
-                    if (active) Modifier.background(PlayerGlass.Tile).border(1.5f.u, PlayerGlass.Edge, shape)
+                    if (lit) Modifier.background(PlayerGlass.Tile).border(1.5f.u, PlayerGlass.Edge, shape)
                     else Modifier
                 )
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = ripple(color = Color.White),
-                    onClick = onClick,
+                    onClick = { tapped = true; onClick() },
                 ),
         ) {
-            Icon(
-                painterResource(if (active) activeIcon else icon),
-                contentDescription,
-                tint = Color.White,
-                modifier = Modifier.size(60.u),
-            )
+            if (animating && onAnimation != null) {
+                Box(Modifier.size(60.u)) { onAnimation(anim.value) }
+            } else {
+                Icon(
+                    painterResource(if (active) activeIcon else icon),
+                    contentDescription,
+                    tint = Color.White,
+                    modifier = Modifier.size(60.u),
+                )
+            }
         }
+    }
+}
+
+/** Half of a tile animation (out, then back). */
+private const val TILE_ANIM_HALF_MS = 280
+
+/**
+ * The shuffle icon drawn live, for its animation: at [t] = 0 it's the normal
+ * (bold) icon; as [t] goes to 1 the two lines swing across each other until
+ * they've swapped places, then they swing back as [t] returns to 0.
+ */
+@Composable
+private fun ShuffleGlyph(t: Float) {
+    Canvas(Modifier.fillMaxSize()) {
+        val k = size.minDimension / 24f // the icon's 24x24 grid
+        val stroke = Stroke(width = 2.8f * k, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        fun lerp(a: Float, b: Float) = a + (b - a) * t
+        /** One line of the icon: flat, an S-bend from [yLeft] to [yRight], flat, and its arrowhead. */
+        fun line(yLeft: Float, yRight: Float) {
+            val path = Path().apply {
+                moveTo(3f * k, yLeft * k)
+                lineTo(6.5f * k, yLeft * k)
+                cubicTo(11f * k, yLeft * k, 13f * k, yRight * k, 17.5f * k, yRight * k)
+                lineTo(20f * k, yRight * k)
+                // Arrowhead
+                moveTo(17.5f * k, (yRight - 2.5f) * k)
+                lineTo(20f * k, yRight * k)
+                lineTo(17.5f * k, (yRight + 2.5f) * k)
+            }
+            drawPath(path, Color.White, style = stroke)
+        }
+        // At rest: one line runs from top-left (7) to bottom-right (16), the other from
+        // bottom-left (17) to top-right (7). Each swings to where the other one was.
+        line(lerp(7f, 17f), lerp(16f, 7f))
+        line(lerp(17f, 7f), lerp(7f, 16f))
     }
 }
 
