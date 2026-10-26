@@ -284,19 +284,24 @@ class PlayerController(context: Context) {
         if (from == index + 1 || to == index + 1) preloadNext()
     }
 
-    /** Queue page double-tap: the song at [i] plays next. */
+    /**
+     * Queue page double-tap: the song at [i] joins the songs you've queued,
+     * at the end of them (like hold-to-queue), ahead of the rest of the list or mix.
+     */
     fun playNext(i: Int) {
-        if (i !in queue.indices || i == index || i == index + 1) return
+        if (i !in queue.indices || i == index) return
         val track = queue[i]
         val list = queue.toMutableList()
         list.removeAt(i)
         val now = if (i < index) index - 1 else index
-        list.add(now + 1, track)
+        val queuedAhead = list.drop(now + 1).takeWhile { it.videoId in heldQueued && it.videoId != track.videoId }.size
+        val at = now + 1 + queuedAhead
+        list.add(at, track)
         queue = list
         index = now
         heldQueued += track.videoId
         keepOrderInSync()
-        preloadNext()
+        if (at == now + 1 || i == now + 1) preloadNext()
     }
 
     /** Hand-arranged queue: unshuffled, the "original" order is simply what's shown. */
