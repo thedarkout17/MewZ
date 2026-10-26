@@ -42,46 +42,97 @@ object LyricsRepository {
 
     private val cache = ConcurrentHashMap<String, Cached>()
 
-    /** Lyrics for [track], or null if there are none. Throws [IOException] when offline. */
+    /**
+     * Lyrics for [track], or null if there are none. Throws [IOException] only
+     * when the device is actually offline; a slow or failing LRCLIB just means
+     * "none" (not remembered, so it's tried again next time).
+     *
+     * Slowed / reverb / sped-up / nightcore uploads get the original song's
+     * lyrics, unsynced (the original's timings wouldn't match).
+     */
     suspend fun find(track: Track): Lyrics? = withContext(Dispatchers.IO) {
         when (val c = cache[track.videoId]) {
             is Cached.Found -> return@withContext c.lyrics
             Cached.None -> return@withContext null
             null -> {}
         }
-        val title = track.title.trim()
+        val altered = ALTERED.containsMatchIn(track.title)
+        val title = originalTitle(track.title)
         // "The Weeknd ft. Daft Punk" → "The Weeknd": LRCLIB lists the main artist.
         val artist = track.artist.split(Regex("""\s+(?:ft\.?|feat\.?|featuring)\s+""", RegexOption.IGNORE_CASE))
             .first().trim()
+        // An altered version's length doesn't match the original's.
+        val duration = track.durationSeconds?.takeIf { !altered }
 
-        // 1. Exact match (title + artist, and length when we know it).
-        val exact = get(
-            "get",
-            "track_name" to title,
-            "artist_name" to artist,
-            *(track.durationSeconds?.let { arrayOf("duration" to it.toString()) } ?: emptyArray()),
-        )?.let { JSONObject(it) }
-
-        // 2. Search, preferring results with synced lyrics and a length close to this song's.
-        val best = exact?.takeIf { it.hasLyrics() } ?: run {
-            val body = get("search", "track_name" to title, "artist_name" to artist)
-                ?: get("search", "q" to "$title $artist")
-            val results = body?.let { JSONArray(it) } ?: JSONArray()
-            (0 until results.length()).map { results.getJSONObject(it) }
-                .filter { it.hasLyrics() }
-                .minByOrNull { r ->
-                    val synced = if (r.optString("syncedLyrics").isNotBlank()) 0 else 1000
-                    val off = track.durationSeconds?.let { d -> kotlin.math.abs(r.optDouble("duration", 0.0) - d) } ?: 0.0
-                    synced + off
-                }
+        var offline: IOException? = null
+        var failed = false
+        /** One request; remembers why it failed instead of giving up on the rest. */
+        fun tryGet(endpoint: String, vararg params: Pair<String, String>): String? = try {
+            get(endpoint, *params)
+        } catch (e: IOException) {
+            Log.w("MuZ", "LRCLIB $endpoint failed: ${e.javaClass.simpleName} ${e.message}")
+            if (isOffline(e)) offline = e else failed = true
+            null
+        }
+        fun results(body: String?): List<JSONObject> {
+            val arr = body?.let { runCatching { JSONArray(it) }.getOrNull() } ?: return emptyList()
+            return (0 until arr.length()).map { arr.getJSONObject(it) }.filter { it.hasLyrics() }
+        }
+        fun pick(list: List<JSONObject>): JSONObject? = list.minByOrNull { r ->
+            val synced = if (r.optString("syncedLyrics").isNotBlank()) 0.0 else 1000.0
+            val off = duration?.let { d -> kotlin.math.abs(r.optDouble("duration", 0.0) - d) } ?: 0.0
+            synced + off
         }
 
-        val lyrics = best?.toLyrics()
-        cache[track.videoId] = if (lyrics != null) Cached.Found(lyrics) else Cached.None
-        Log.d("MuZ", "Lyrics for \"$title\" by \"$artist\": " +
-            when { lyrics == null -> "none"; lyrics.synced -> "synced"; else -> "plain" })
+        // 1. Exact match from LRCLIB's own database ("get-cached": quick; the plain "get"
+        //    goes off to other sources for unknown songs and can take ages).
+        val exact = tryGet(
+            "get-cached",
+            "track_name" to title,
+            "artist_name" to artist,
+            *(duration?.let { arrayOf("duration" to it.toString()) } ?: emptyArray()),
+        )?.let { runCatching { JSONObject(it) }.getOrNull() }?.takeIf { it.hasLyrics() }
+
+        // 2. Search by title + artist, then 3. by both as free text.
+        val best = exact
+            ?: pick(results(tryGet("search", "track_name" to title, "artist_name" to artist)))
+            ?: pick(results(tryGet("search", "q" to "$title $artist")))
+
+        var lyrics = best?.toLyrics()
+        // Slowed / sped up: the original's words, without its (wrong) timings.
+        if (lyrics != null && altered && lyrics.synced) {
+            lyrics = Lyrics(lyrics.lines.map { LyricLine(null, it.text) }, synced = false)
+        }
+        Log.d("MuZ", "Lyrics for \"$title\" by \"$artist\"" + (if (altered) " (altered version)" else "") + ": " +
+            when { lyrics != null -> if (lyrics.synced) "synced" else "plain"; offline != null -> "offline"; failed -> "LRCLIB error"; else -> "none" })
+
+        when {
+            lyrics != null -> cache[track.videoId] = Cached.Found(lyrics)
+            offline != null -> throw offline!!
+            // Only remember "none" when LRCLIB actually answered; errors get another try later.
+            !failed -> cache[track.videoId] = Cached.None
+        }
         lyrics
     }
+
+    /** "Starboy (Slowed + Reverb)" / "Starboy - sped up" → "Starboy". */
+    private fun originalTitle(title: String): String {
+        var t = title.replace(Regex("""\s*[(\[][^)\]]*[)\]]""")) { m ->
+            if (ALTERED.containsMatchIn(m.value)) "" else m.value
+        }
+        t = t.replace(Regex("""\s*[-|–—]\s*[^-|–—]*(?:${ALTERED.pattern})[^-|–—]*$""", RegexOption.IGNORE_CASE), "")
+        t = t.replace(ALTERED, "").replace(Regex("""\s+[+&x]\s*$"""), "")
+        return t.replace(Regex("""\s{2,}"""), " ").trim().ifEmpty { title.trim() }
+    }
+
+    /** Can't reach the internet at all (as opposed to LRCLIB being slow or erroring). */
+    private fun isOffline(e: IOException) =
+        e is java.net.UnknownHostException || e is java.net.ConnectException || e is java.net.NoRouteToHostException
+
+    private val ALTERED = Regex(
+        """slowed|reverb|sped[\s-]*up|speed[\s-]*up|nightcore|daycore|8d\s*audio|bass\s*boosted|chopped|screwed""",
+        RegexOption.IGNORE_CASE,
+    )
 
     private fun JSONObject.hasLyrics() =
         !optBoolean("instrumental") &&
