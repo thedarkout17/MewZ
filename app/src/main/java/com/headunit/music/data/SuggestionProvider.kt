@@ -33,7 +33,10 @@ class LocalSuggestionProvider(
     }
 
     companion object {
-        private val COMPLETION_SUFFIXES = listOf("songs", "live", "remix", "playlist", "acoustic")
+        private val COMPLETION_SUFFIXES = listOf(
+            "songs", "live", "remix", "playlist", "acoustic",
+            "lyrics", "slowed", "sped up", "instrumental", "mix",
+        )
 
         val DEFAULT_CATALOGUE = listOf(
             "Taylor Swift", "Taylor Swift Cruel Summer", "Taylor Swift Anti-Hero",
