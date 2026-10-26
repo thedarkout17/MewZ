@@ -54,6 +54,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
@@ -85,6 +87,11 @@ sealed interface ResultsState {
 
 /** Start fetching the next page when this many rows are left below the screen. */
 private const val LOAD_MORE_AHEAD = 4
+
+private const val PLAYED_ALPHA = 0.7f
+private val Greyscale = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
+private val PlayedTitle = Color(0xFFB8B8B8)
+private val PlayedDetail = Color(0xFF8E8E8E)
 
 private val TextShadow = Shadow(Color(0x55000000), Offset(0f, 2f), blurRadius = 8f)
 private val Secondary = Color.White.copy(alpha = 0.72f)
@@ -212,7 +219,20 @@ private fun TrackList(
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
-internal fun TrackRow(track: Track, index: Int, onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
+internal fun TrackRow(
+    track: Track,
+    index: Int,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+    /** Shown before the artist, e.g. "Now playing", "Queued", "Previous". */
+    label: String? = null,
+    /** Already played (queue): faded, greyed-out artwork and grey text. */
+    played: Boolean = false,
+    /** The song playing now (queue): a soft glass highlight behind the row. */
+    highlighted: Boolean = false,
+    /** Extra control at the end of the row (the queue's ×). */
+    trailing: (@Composable () -> Unit)? = null,
+) {
     val haptics = LocalHapticFeedback.current
     // First screenful staggers in; rows further down just appear as you scroll.
     val anim = remember { Animatable(if (index < 6) 0f else 1f) }
@@ -231,10 +251,11 @@ internal fun TrackRow(track: Track, index: Int, onClick: () -> Unit, onLongClick
                 .fillMaxWidth()
                 .height(220.u)
                 .graphicsLayer {
-                    alpha = anim.value
+                    alpha = anim.value * (if (played) PLAYED_ALPHA else 1f)
                     translationY = (1f - anim.value) * slide.toPx()
                 }
                 .clip(RoundedCornerShape(28.u))
+                .then(if (highlighted) Modifier.background(Color(0x24FFFFFF)) else Modifier)
                 .combinedClickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = ripple(color = Color.White),
@@ -254,6 +275,7 @@ internal fun TrackRow(track: Track, index: Int, onClick: () -> Unit, onLongClick
                 model = track.thumbnailUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                colorFilter = if (played) Greyscale else null,
                 modifier = Modifier
                     .width(348.u)
                     .height(196.u)
@@ -268,19 +290,20 @@ internal fun TrackRow(track: Track, index: Int, onClick: () -> Unit, onLongClick
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = TextStyle(
-                        color = Color.White,
+                        color = if (played) PlayedTitle else Color.White,
                         fontSize = 66.usp,
                         fontWeight = FontWeight.Medium,
                         shadow = TextShadow,
                     ),
                 )
                 Text(
-                    text = listOfNotNull(track.artist, track.durationText).joinToString("  ·  "),
+                    text = listOfNotNull(label, track.artist, track.durationText).joinToString("  ·  "),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = TextStyle(color = Secondary, fontSize = 46.usp, shadow = TextShadow),
+                    style = TextStyle(color = if (played) PlayedDetail else Secondary, fontSize = 46.usp, shadow = TextShadow),
                 )
             }
+            trailing?.invoke()
         }
     }
 }

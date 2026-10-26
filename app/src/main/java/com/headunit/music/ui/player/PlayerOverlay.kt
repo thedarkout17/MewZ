@@ -31,6 +31,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -157,6 +158,17 @@ fun PlayerOverlay(
     )
     BackHandler(enabled = player.expanded) { onMinimize() }
 
+    // Queue page over Now Playing (registered after the player's Back, so Back closes it first).
+    var showingQueue by remember { mutableStateOf(false) }
+    // Minimizing closes it, so Now Playing opens normally next time.
+    LaunchedEffect(player.expanded) { if (!player.expanded) showingQueue = false }
+    BackHandler(enabled = showingQueue) { showingQueue = false }
+    val q by animateFloatAsState(
+        targetValue = if (showingQueue) 1f else 0f,
+        animationSpec = tween(340, easing = FastOutSlowInEasing),
+        label = "queue",
+    )
+
     Box(Modifier.fillMaxSize()) {
         if (e > 0f) {
             BlurredArtBackground(
@@ -195,10 +207,11 @@ fun PlayerOverlay(
                 }
 
                 // ---- Now Playing (expanded) ----
-                if (e > 0f) {
+                if (e > 0f && q < 1f) {
                     NowPlaying(
                         player = player, libraries = libraries, width = w, screenHeight = h, shiftY = shiftY,
-                        alpha = e, onNewLibrary = onNewLibrary,
+                        alpha = e * (1f - q), onNewLibrary = onNewLibrary,
+                        onOpenQueue = { showingQueue = true },
                     )
                 }
 
@@ -211,7 +224,10 @@ fun PlayerOverlay(
                 Box(
                     modifier = Modifier
                         .offset(x = x.u, y = y.u)
-                        .graphicsLayer { translationY = (awayShift * (1f - e)).u.toPx() }
+                        .graphicsLayer {
+                            translationY = (awayShift * (1f - e)).u.toPx()
+                            alpha = 1f - q // the queue page takes over the screen
+                        }
                         .size(artSize.u)
                         .clip(shape)
                         .background(Color.Black)
@@ -241,6 +257,18 @@ fun PlayerOverlay(
                         )
                     }
                     ArtOverlay(player)
+                }
+
+                // ---- Queue page, over everything (Now Playing's backdrop stays behind it) ----
+                if (q > 0f) {
+                    QueuePage(
+                        player = player,
+                        onClose = { showingQueue = false },
+                        modifier = Modifier.graphicsLayer {
+                            alpha = q * e
+                            translationY = (1f - q) * 48.u.toPx()
+                        },
+                    )
                 }
             }
         }
@@ -318,17 +346,10 @@ private fun NowPlaying(
     shiftY: Float,
     alpha: Float,
     onNewLibrary: (Track) -> Unit,
+    onOpenQueue: () -> Unit,
 ) {
     val track = player.current ?: return
     var picking by remember { mutableStateOf(false) }
-    var showingQueue by remember { mutableStateOf(false) }
-    // Back closes the queue first (registered after the player's own Back, so it wins).
-    BackHandler(enabled = showingQueue) { showingQueue = false }
-    val queueIn by animateFloatAsState(
-        targetValue = if (showingQueue) 1f else 0f,
-        animationSpec = tween(320, easing = FastOutSlowInEasing),
-        label = "queue",
-    )
     with(LocalDesignScale.current) {
         val colX = ART_FULL_X + ART_FULL + COLUMN_GAP
         val colW = width - colX - SIDE
@@ -341,7 +362,7 @@ private fun NowPlaying(
             icon = R.drawable.ic_queue,
             contentDescription = stringResource(R.string.queue),
             size = 130f, glyph = 64f,
-            onClick = { picking = false; showingQueue = !showingQueue },
+            onClick = { picking = false; onOpenQueue() },
             modifier = Modifier
                 .offset(x = (width - SIDE - 130f).u, y = (48f + shiftY).u)
                 .graphicsLayer { this.alpha = alpha },
@@ -506,34 +527,6 @@ private fun NowPlaying(
             }
         }
 
-        // Queue sheet, sliding in from the right. A tap anywhere else closes it.
-        if (queueIn > 0f) {
-            Box(
-                contentAlignment = Alignment.CenterEnd,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer { this.alpha = alpha }
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { showingQueue = false }
-                    .padding(top = 40.u, bottom = 40.u, end = 40.u),
-            ) {
-                QueuePanel(
-                    player = player,
-                    modifier = Modifier
-                        .graphicsLayer {
-                            this.alpha = queueIn
-                            translationX = (1f - queueIn) * (QUEUE_PANEL_WIDTH + 40f).u.toPx()
-                        }
-                        // Taps on the sheet itself shouldn't close it.
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                        ) { },
-                )
-            }
-        }
     }
 }
 
