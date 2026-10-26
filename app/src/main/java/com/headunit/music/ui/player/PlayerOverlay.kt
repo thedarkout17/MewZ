@@ -5,6 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -75,9 +76,19 @@ private val Secondary = Color.White.copy(alpha = 0.78f)
 private val Tertiary = Color.White.copy(alpha = 0.62f)
 
 private object PlayerGlass {
-    /** Dock background: the same dark wine as the keyboard, but nearly solid (~80%). */
-    val SheetTint = Color(0xCC300008)
-    val SheetSheen = Brush.verticalGradient(listOf(Color(0x30FFFFFF), Color(0x10FFFFFF)))
+    /**
+     * Dock: frosted glass texture (fully opaque) under a dark wine tint, so
+     * there's a hint of colour drifting through it but nothing behind shows.
+     */
+    val DockTint = Color(0xD12A0508)
+    /** Light along the top of the glass, fading quickly, with a faint lift at the bottom. */
+    val DockSheen = Brush.verticalGradient(
+        0f to Color(0x38FFFFFF), 0.35f to Color(0x0DFFFFFF), 0.85f to Color(0x05FFFFFF), 1f to Color(0x12FFFFFF),
+    )
+    /** Diagonal glint, like the library tiles. */
+    val DockGlint = Brush.linearGradient(
+        0f to Color(0x00FFFFFF), 0.45f to Color(0x00FFFFFF), 0.5f to Color(0x14FFFFFF), 0.55f to Color(0x00FFFFFF),
+    )
     val Edge = Brush.verticalGradient(listOf(Color(0x80FFFFFF), Color(0x1FFFFFFF)))
     val Tile = Brush.verticalGradient(listOf(Color(0x2EFFFFFF), Color(0x14FFFFFF)))
 }
@@ -537,23 +548,26 @@ private fun Dock(player: PlayerController, width: Float, modifier: Modifier) {
                 .width(width.u)
                 .height(DOCK_HEIGHT.u)
                 .clip(shape)
-                .background(PlayerGlass.SheetTint)
-                .background(PlayerGlass.SheetSheen)
-                .border(2.u, PlayerGlass.Edge, shape)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = { player.expanded = true },
                 ),
         ) {
-            // Thin progress line along the top edge
-            val fraction = if (player.durationSeconds > 0f) player.positionSeconds / player.durationSeconds else 0f
+            // Opaque frosted glass: texture, tint, sheen, glint, bright edge.
+            Image(
+                painter = painterResource(R.drawable.library_glass),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize(),
+            )
             Box(
                 Modifier
-                    .padding(horizontal = 56.u)
-                    .fillMaxWidth(fraction.coerceIn(0f, 1f))
-                    .height(6.u)
-                    .background(Brand.Red, RoundedCornerShape(3.u)),
+                    .matchParentSize()
+                    .background(PlayerGlass.DockTint)
+                    .background(PlayerGlass.DockSheen)
+                    .background(PlayerGlass.DockGlint)
+                    .border(2.u, PlayerGlass.Edge, shape),
             )
             Row(
                 verticalAlignment = Alignment.CenterVertically,
