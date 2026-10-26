@@ -817,7 +817,7 @@ private fun LoopGlyph(p: Float) {
  * The loop icon's track: a rounded rectangle from (4,7) to (20,17), corner radius 3,
  * walked clockwise starting at (4,14), the bottom of its left side.
  */
-private val LOOP_PERIMETER: Float = 4f * 4f + 2f * 10f + 2f * 3f * PI.toFloat() // straights + four quarter-circles
+private val LOOP_PERIMETER: Float = 2f * 4f + 2f * 10f + 2f * 3f * PI.toFloat() // two sides, top and bottom, four quarter-circles
 /** Length of each arrow's line at rest. */
 private val LOOP_ARROW: Float = 1f + 1.5f * PI.toFloat() + 12f
 
