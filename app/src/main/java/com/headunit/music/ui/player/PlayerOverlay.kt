@@ -77,10 +77,10 @@ private val Tertiary = Color.White.copy(alpha = 0.62f)
 
 private object PlayerGlass {
     /**
-     * Dock: frosted glass texture (fully opaque) under a rose-red tint, so
+     * Dock: frosted glass texture (fully opaque) under an orange-red tint, so
      * there's a hint of colour drifting through it but nothing behind shows.
      */
-    val DockTint = Color(0x9ED8344F)
+    val DockTint = Color(0xAAE6482A)
     /** Light along the top of the glass, fading quickly, with a faint lift at the bottom. */
     val DockSheen = Brush.verticalGradient(
         0f to Color(0x38FFFFFF), 0.35f to Color(0x0DFFFFFF), 0.85f to Color(0x05FFFFFF), 1f to Color(0x12FFFFFF),
