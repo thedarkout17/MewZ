@@ -28,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,7 +53,8 @@ import com.headunit.music.ui.theme.LocalDesignScale
 private const val MAX_NAME = 40
 
 /**
- * "New library": type a name on the glass keyboard, then Create.
+ * "New library": type a name on the glass keyboard, then Create. A tap on
+ * empty space (or Back, or the keyboard's hide key) cancels.
  * Drawn over everything (it can be opened from Now Playing's + too).
  */
 @Composable
@@ -73,6 +75,7 @@ fun NewLibrarySheet(
     BackHandler(enabled = visible, onBack = onCancel)
 
     val shown = name
+    val cancel by rememberUpdatedState(onCancel)
     // Reads the name when Create is pressed (not when the screen was first drawn),
     // so the keyboard's remembered action never sees a stale, empty name.
     fun create() {
@@ -84,7 +87,8 @@ fun NewLibrarySheet(
         Modifier
             .fillMaxSize()
             .graphicsLayer { alpha = p }
-            .pointerInput(Unit) { detectTapGestures { } }, // nothing underneath reacts
+            // A tap on empty space cancels (and nothing underneath reacts).
+            .pointerInput(Unit) { detectTapGestures(onTap = { cancel() }) },
     ) {
         Image(
             painter = painterResource(R.drawable.home_background_blur),
@@ -96,24 +100,6 @@ fun NewLibrarySheet(
 
         DesignCanvas(Modifier.fillMaxSize()) {
             with(LocalDesignScale.current) {
-                // Cancel, top-left
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .offset(x = 56.u, y = 48.u)
-                        .size(130.u)
-                        .clip(CircleShape)
-                        .background(Brush.verticalGradient(listOf(Color(0x2EFFFFFF), Color(0x14FFFFFF))))
-                        .border(1.5f.u, LibraryGlass.Edge, CircleShape)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = ripple(color = Color.White),
-                            onClick = onCancel,
-                        ),
-                ) {
-                    Icon(painterResource(R.drawable.ic_close), stringResource(R.string.back), tint = Color.White, modifier = Modifier.size(64.u))
-                }
-
                 Text(
                     stringResource(R.string.new_library),
                     style = TextStyle(Color.White, fontSize = 80.usp, fontWeight = FontWeight.SemiBold, shadow = LibraryTextShadow),
@@ -130,6 +116,8 @@ fun NewLibrarySheet(
                         .height(200.u)
                         .clip(RoundedCornerShape(percent = 50))
                         .background(Brand.Frost)
+                        // Taps on the name field don't count as empty space.
+                        .pointerInput(Unit) { detectTapGestures { } }
                         .padding(horizontal = 80.u),
                 ) {
                     val style = TextStyle(Brand.RedText, fontSize = 84.usp)
