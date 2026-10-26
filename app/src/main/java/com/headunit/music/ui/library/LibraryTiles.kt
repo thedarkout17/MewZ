@@ -321,6 +321,33 @@ internal fun CoverCollage(
 }
 
 /**
+ * A card of the same frosted glass as the library tiles (the blurred, lifted
+ * home background, sheen, glint and bright edge), with a light dark wash so
+ * white text reads on it. Used for the hold menu and its confirmations.
+ */
+@Composable
+internal fun FrostedCard(
+    modifier: Modifier,
+    shape: androidx.compose.ui.graphics.Shape,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+) {
+    with(LocalDesignScale.current) {
+        Box(modifier.clip(shape)) {
+            GlassPane(Modifier.matchParentSize())
+            Box(Modifier.matchParentSize().background(Color(0x38140306)))
+            Box(Modifier.matchParentSize().border(3.u, LibraryGlass.Edge, shape))
+            Column(content = content)
+        }
+    }
+}
+
+/** Glass pill for options in a [FrostedCard], like Now Playing's tiles. */
+internal val GlassOption = Brush.verticalGradient(listOf(Color(0x33FFFFFF), Color(0x14FFFFFF)))
+/** The same pill with a soft pink hue, for Delete. */
+internal val GlassOptionDanger = Brush.verticalGradient(listOf(Color(0x66FF7FA0), Color(0x38FF5C8A)))
+internal val GlassOptionDangerEdge = Brush.verticalGradient(listOf(Color(0xCCFFC2D4), Color(0x40FFC2D4)))
+
+/**
  * Static frosted glass: the home background, heavily blurred and lifted toward
  * white (baked into library_glass.jpg so it looks the same on every Android
  * version), half see-through, with a sheen and a diagonal glint on top.

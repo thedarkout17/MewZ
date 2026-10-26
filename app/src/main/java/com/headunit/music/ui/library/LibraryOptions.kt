@@ -247,7 +247,7 @@ private fun MenuPanel(
 ) {
     with(LocalDesignScale.current) {
         val shape = RoundedCornerShape(64.u)
-        Column(
+        FrostedCard(
             modifier = modifier
                 .width(900.u)
                 .graphicsLayer {
@@ -255,20 +255,16 @@ private fun MenuPanel(
                     val s = 0.94f + 0.06f * alpha
                     scaleX = s; scaleY = s
                 }
-                .clip(shape)
-                .background(LibraryGlass.Panel)
-                .background(Brush.verticalGradient(listOf(Color(0x24FFFFFF), Color(0x08FFFFFF))))
-                .border(2.u, LibraryGlass.Edge, shape)
                 // Taps on the panel itself don't close it.
-                .pointerInput(Unit) { detectTapGestures { } }
-                .padding(vertical = 32.u),
+                .pointerInput(Unit) { detectTapGestures { } },
+            shape = shape,
         ) {
             Text(
                 library.name,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                style = TextStyle(Color.White, fontSize = 60.usp, fontWeight = FontWeight.SemiBold),
-                modifier = Modifier.padding(start = 64.u, end = 64.u, top = 12.u, bottom = 20.u),
+                style = TextStyle(Color.White, fontSize = 60.usp, fontWeight = FontWeight.SemiBold, shadow = LibraryTextShadow),
+                modifier = Modifier.padding(start = 64.u, end = 64.u, top = 52.u, bottom = 24.u),
             )
             MenuRow(R.drawable.ic_arrow_up, "Move To Front", onClick = onMoveToFront)
             MenuRow(
@@ -277,6 +273,7 @@ private fun MenuPanel(
                 onClick = onChangeCover,
             )
             MenuRow(R.drawable.ic_trash, "Delete Library", danger = true, onClick = onDelete)
+            Spacer(Modifier.height(32.u))
         }
     }
 }
@@ -288,11 +285,13 @@ private fun MenuRow(icon: Int, text: String, danger: Boolean = false, enabled: B
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.u, vertical = 6.u)
-                .height(140.u)
-                .clip(RoundedCornerShape(36.u))
-                .then(if (danger) Modifier.background(DeleteTint) else Modifier)
+                .padding(horizontal = 40.u, vertical = 8.u)
+                .height(136.u)
                 .graphicsLayer { alpha = if (enabled) 1f else 0.4f }
+                .clip(RoundedCornerShape(40.u))
+                // Each option is its own pane of glass; Delete's has a pink hue.
+                .background(if (danger) GlassOptionDanger else GlassOption)
+                .border(1.5f.u, if (danger) GlassOptionDangerEdge else LibraryGlass.Edge, RoundedCornerShape(40.u))
                 .clickable(
                     enabled = enabled,
                     interactionSource = remember { MutableInteractionSource() },
@@ -305,7 +304,7 @@ private fun MenuRow(icon: Int, text: String, danger: Boolean = false, enabled: B
             Spacer(Modifier.width(36.u))
             Text(
                 text,
-                style = TextStyle(if (danger) DeleteText else Color.White, fontSize = 52.usp, fontWeight = FontWeight.Medium),
+                style = TextStyle(if (danger) DeleteText else Color.White, fontSize = 52.usp, fontWeight = FontWeight.Medium, shadow = LibraryTextShadow),
             )
         }
     }

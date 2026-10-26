@@ -80,8 +80,7 @@ fun DeleteLibraryDialog(
         DesignCanvas(Modifier.fillMaxSize()) {
             with(LocalDesignScale.current) {
                 val shape = RoundedCornerShape(64.u)
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                FrostedCard(
                     modifier = Modifier
                         .align(Alignment.Center)
                         .width(1040.u)
@@ -89,20 +88,20 @@ fun DeleteLibraryDialog(
                             val s = 0.94f + 0.06f * p
                             scaleX = s; scaleY = s
                         }
-                        .clip(shape)
-                        .background(LibraryGlass.Panel)
-                        .background(Brush.verticalGradient(listOf(Color(0x24FFFFFF), Color(0x08FFFFFF))))
-                        .border(2.u, LibraryGlass.Edge, shape)
                         // Taps on the card itself don't cancel.
-                        .pointerInput(Unit) { detectTapGestures { } }
-                        .padding(start = 72.u, end = 72.u, top = 72.u, bottom = 56.u),
+                        .pointerInput(Unit) { detectTapGestures { } },
+                    shape = shape,
+                ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(start = 72.u, end = 72.u, top = 72.u, bottom = 56.u),
                 ) {
                     Text(
                         "Delete “${lib.name}”?",
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center,
-                        style = TextStyle(Color.White, fontSize = 68.usp, fontWeight = FontWeight.SemiBold),
+                        style = TextStyle(Color.White, fontSize = 68.usp, fontWeight = FontWeight.SemiBold, shadow = LibraryTextShadow),
                     )
                     Spacer(Modifier.height(20.u))
                     Text(
@@ -119,6 +118,7 @@ fun DeleteLibraryDialog(
                         DialogButton("Delete", danger = true, onClick = { onDelete(lib) }, modifier = Modifier.weight(1f))
                     }
                 }
+                }
             }
         }
     }
@@ -134,7 +134,9 @@ private fun DialogButton(text: String, danger: Boolean, onClick: () -> Unit, mod
                 .height(150.u)
                 .clip(shape)
                 .then(
-                    if (danger) Modifier.background(Brand.Red)
+                    if (danger) Modifier
+                        .background(GlassOptionDanger)
+                        .border(1.5f.u, GlassOptionDangerEdge, shape)
                     else Modifier
                         .background(Brush.verticalGradient(listOf(Color(0x2EFFFFFF), Color(0x14FFFFFF))))
                         .border(1.5f.u, LibraryGlass.Edge, shape)
