@@ -1,8 +1,11 @@
+@file:OptIn(UnstableApi::class)
+
 package com.headunit.music.player
 
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
+import androidx.annotation.OptIn
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -14,7 +17,11 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.CacheWriter
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.headunit.music.data.Track
@@ -29,6 +36,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Plays songs as audio only (no video is downloaded) and keeps a simple queue.
@@ -100,12 +108,23 @@ class PlayerController(context: Context) {
     private var tapAt = 0L
     private var linkMs = 0L
 
-    private val exo: ExoPlayer = ExoPlayer.Builder(context.applicationContext)
-        .setMediaSourceFactory(
-            DefaultMediaSourceFactory(
-                DefaultHttpDataSource.Factory().setUserAgent(NewPipeDownloader.USER_AGENT),
-            ),
+    /**
+     * Reads audio through the on-disk cache: pre-buffered starts come from disk,
+     * the rest streams from YouTube (and is cached as it plays).
+     */
+    private val dataSource: CacheDataSource.Factory = CacheDataSource.Factory()
+        .setCache(AudioCache.get(context))
+        .setUpstreamDataSourceFactory(
+            DefaultHttpDataSource.Factory().setUserAgent(NewPipeDownloader.USER_AGENT),
         )
+        .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+
+    /** Downloading the next song's first seconds (cancelled if you move on). */
+    private var preloadJob: Job? = null
+    @Volatile private var preloadWriter: CacheWriter? = null
+
+    private val exo: ExoPlayer = ExoPlayer.Builder(context.applicationContext)
+        .setMediaSourceFactory(DefaultMediaSourceFactory(dataSource))
         // Pause for navigation prompts / calls, and when headphones or Bluetooth drop.
         .setAudioAttributes(
             AudioAttributes.Builder()
@@ -163,7 +182,7 @@ class PlayerController(context: Context) {
             queue = originalOrder
             index = originalOrder.indexOf(now).coerceAtLeast(0)
         }
-        prefetchNext()
+        preloadNext()
     }
 
     fun toggleLoop() {
@@ -194,6 +213,7 @@ class PlayerController(context: Context) {
     }
 
     fun release() {
+        preloadWriter?.cancel()
         scope.cancel()
         exo.release()
     }
@@ -216,22 +236,57 @@ class PlayerController(context: Context) {
                 val url = AudioStreams.urlFor(track.videoId)
                 linkMs = SystemClock.elapsedRealtime() - tapAt
                 if (current?.videoId != track.videoId) return@launch // moved on meanwhile
-                exo.setMediaItem(MediaItem.fromUri(url), resumeAtMs)
+                exo.setMediaItem(mediaItem(track.videoId, url), resumeAtMs)
                 exo.prepare()
                 exo.play()
-                prefetchNext()
+                preloadNext()
             } catch (e: AudioUnavailableException) {
                 fail(PlayerError.from(e.reason))
             }
         }
     }
 
-    /** Look up the next song's audio while this one plays. */
-    private fun prefetchNext() {
+    /**
+     * While this song plays, get the next one ready: look up its audio link and
+     * download its first ~5 seconds into the cache, so skipping starts instantly.
+     */
+    private fun preloadNext() {
+        preloadJob?.cancel()
+        preloadWriter?.cancel()
         val next = queue.getOrNull(index + 1) ?: if (wrapQueue) queue.firstOrNull() else null
         next ?: return
-        scope.launch { AudioStreams.prefetch(next.videoId) }
+        preloadJob = scope.launch {
+            val url = runCatching { AudioStreams.urlFor(next.videoId) }.getOrNull() ?: return@launch
+            withContext(Dispatchers.IO) {
+                val writer = CacheWriter(
+                    dataSource.createDataSource(),
+                    DataSpec.Builder()
+                        .setUri(url)
+                        .setKey(cacheKey(next.videoId, url)) // same key playback uses
+                        .setPosition(0)
+                        .setLength(PRELOAD_BYTES)
+                        .build(),
+                    /* temporaryBuffer = */ null,
+                    /* progressListener = */ null,
+                )
+                preloadWriter = writer
+                // Already cached (e.g. played recently) costs nothing; failures just mean no head start.
+                runCatching { writer.cache() }
+                if (preloadWriter === writer) preloadWriter = null
+            }
+        }
     }
+
+    private fun mediaItem(videoId: String, url: String): MediaItem =
+        MediaItem.Builder().setUri(url).setCustomCacheKey(cacheKey(videoId, url)).build()
+
+    /**
+     * Cache entries are keyed by video + audio format (YouTube's "itag"), not by
+     * the stream link, which expires and changes on every lookup. The format is
+     * part of the key so bytes from one format are never mixed with another.
+     */
+    private fun cacheKey(videoId: String, url: String): String =
+        "$videoId:" + (ITAG.find(url)?.groupValues?.get(1) ?: "audio")
 
     private fun fail(e: PlayerError) {
         error = e
@@ -284,6 +339,14 @@ class PlayerController(context: Context) {
 }
 
 private const val TAG = "MuZ"
+
+/**
+ * How much of the next song to download ahead: ~5 s of 128 kbps audio (80 KB)
+ * plus room for the file's header at the start (~48 KB).
+ */
+private const val PRELOAD_BYTES = 128L * 1024
+
+private val ITAG = Regex("[?&]itag=(\\d+)")
 
 /** Why a song couldn't be played, in words for the screen. */
 enum class PlayerError(val message: String, val skippable: Boolean) {

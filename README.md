@@ -15,8 +15,11 @@ Search and playback go through **[NewPipeExtractor](https://github.com/TeamNewPi
 - **Search** reads YouTube's own search results; titles and durations come back in one request.
 - **Playback is audio only.** For each song the app finds YouTube's audio-only stream
   (~128 kbps AAC) and plays it with Media3 ExoPlayer, so no video is downloaded:
-  roughly **60–100 MB per hour** instead of 300–550 MB. The next song's stream is looked
-  up in the background, so skipping is near-instant. Stream links expire after a few
+  roughly **60–100 MB per hour** instead of 300–550 MB.
+- **Pre-buffering:** when a song starts, the next one's audio link is looked up and its
+  first ~5 seconds (128 KB) are downloaded into an on-disk cache, so skipping starts instantly.
+  Everything played goes through the same cache (64 MB, least recently played dropped first),
+  so replaying a recent song costs no data. Stream links expire after a few
   hours; the player fetches a fresh one and carries on if that happens.
 
 **Things to know**
