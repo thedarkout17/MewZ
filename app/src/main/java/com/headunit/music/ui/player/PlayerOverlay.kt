@@ -373,18 +373,19 @@ private fun NowPlaying(
                 horizontalArrangement = Arrangement.spacedBy(150.u, Alignment.CenterHorizontally),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                GlyphButton(R.drawable.ic_skip_previous, stringResource(R.string.previous_song), 180f, 120f, onClick = player::previous)
+                GlyphButton(R.drawable.ic_skip_previous, stringResource(R.string.previous_song), 200f, 140f, onClick = player::previous)
                 GlyphButton(
                     if (player.isPlaying) R.drawable.ic_pause else R.drawable.ic_play,
                     stringResource(if (player.isPlaying) R.string.pause else R.string.play),
-                    210f, 150f, onClick = player::togglePlay,
+                    240f, 172f, onClick = player::togglePlay,
                 )
                 GlyphButton(
-                    R.drawable.ic_skip_next, stringResource(R.string.next_song), 180f, 120f,
+                    R.drawable.ic_skip_next, stringResource(R.string.next_song), 200f, 140f,
                     enabled = player.hasNext, onClick = player::next,
                 )
             }
-            Spacer(Modifier.height(30.u))
+            // Lifts the transport a little off the artwork's bottom edge.
+            Spacer(Modifier.height(60.u))
         }
 
         // Seek bar across the whole screen, margin to margin
