@@ -51,7 +51,7 @@ private const val MAX_HISTORY_WHILE_TYPING = 2
 private const val SUGGEST_DEBOUNCE_MS = 120L
 
 /** How many past searches the empty search bar lists (scrollable). */
-private const val MAX_RECENT_SHOWN = 15
+private const val MAX_RECENT_SHOWN = 30
 
 /**
  * Home screen.

@@ -36,7 +36,7 @@ Use `with(LocalDesignScale.current) { 232.u }` for sizes and `92.usp` for text.
 - Glass in-app keyboard (no system keyboard), suggestions as you type
 - YouTube song search: music videos that allow embedding, with durations; titles cleaned up
   ("Artist - Song (Official Video)" → song + artist); loading, empty and error states
-- Recent searches: the last 15, saved on the device (older ones drop off), scrollable, × to remove
+- Recent searches (saved on the device, scrollable, × to remove)
 - Player: songs play through YouTube's official embedded player (IFrame API in a WebView).
   Now Playing screen (big video, seek bar, previous / play-pause / next, "Up next"),
   minimizes to a glass dock at the bottom so music keeps going while you browse.
