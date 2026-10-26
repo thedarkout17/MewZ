@@ -42,6 +42,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -197,8 +198,10 @@ class PlayerController private constructor(context: Context) {
         .setLoadControl(
             DefaultLoadControl.Builder()
                 .setBackBuffer(BACK_BUFFER_MS, /* retainBackBufferFromKeyframe = */ true)
+                // Fills to 5 minutes ahead, then waits until it's down to 4 before topping up,
+                // so it loads in bursts and the next songs' downloads get the gaps in between.
                 .setBufferDurationsMs(
-                    /* minBufferMs = */ AHEAD_BUFFER_MS,
+                    /* minBufferMs = */ AHEAD_BUFFER_MS - TOP_UP_GAP_MS,
                     /* maxBufferMs = */ AHEAD_BUFFER_MS,
                     /* bufferForPlaybackMs = */ 2_500,
                     /* bufferForPlaybackAfterRebufferMs = */ 5_000,
@@ -632,16 +635,21 @@ class PlayerController private constructor(context: Context) {
         preloadWriter?.cancel()
         val next = queuedAhead(1) ?: return
         val after = queuedAhead(2)?.takeIf { it.videoId != next.videoId }
+        // Strictly in order, one at a time, so nothing competes for a weak signal:
+        //   1. the song playing (ExoPlayer buffers it 5 minutes ahead) always comes first;
+        //   2. then the next song's first 5 minutes;
+        //   3. then the first ~5 seconds of the one after.
+        // Whenever the song playing needs more, the download in progress pauses for it.
         preloadJob = scope.launch {
-            // Let the song that's playing finish loading first (it buffers 5 minutes ahead), so
-            // the downloads don't fight over a weak signal.
-            delay(1_500)
-            while (exo.isLoading) delay(500)
-            // The next song: its first 5 minutes (the whole song for most).
+            delay(1_500) // let the song that's playing get going
             cacheStart(next) { url -> firstMinutesBytes(url) }
-            // The one after: just its first ~5 seconds, so skipping twice starts instantly too.
             if (after != null) cacheStart(after) { SONG_START_BYTES }
         }
+    }
+
+    /** Waits while the song that's playing is loading (it always goes first). */
+    private suspend fun waitForPlayingSong() {
+        while (exo.isLoading) delay(500)
     }
 
     /** The song [steps] places after the current one (libraries wrap round), if any. */
@@ -661,8 +669,10 @@ class PlayerController private constructor(context: Context) {
      * costs nothing; failures just mean no head start.
      */
     private suspend fun cacheStart(track: Track, bytes: (url: String) -> Long) {
+        waitForPlayingSong()
         val url = runCatching { AudioStreams.urlFor(track.videoId) }.getOrNull() ?: return
-        withContext(Dispatchers.IO) {
+        while (true) {
+            waitForPlayingSong()
             val writer = CacheWriter(
                 dataSource.createDataSource(),
                 DataSpec.Builder()
@@ -675,8 +685,23 @@ class PlayerController private constructor(context: Context) {
                 /* progressListener = */ null,
             )
             preloadWriter = writer
-            runCatching { writer.cache() }
+            val finished = coroutineScope {
+                // The song playing needs data: pause this download (it resumes where it stopped).
+                val yieldToPlaying = launch {
+                    while (true) {
+                        delay(300)
+                        if (exo.isLoading) { writer.cancel(); break }
+                    }
+                }
+                val ok = withContext(Dispatchers.IO) { runCatching { writer.cache() }.isSuccess }
+                yieldToPlaying.cancel()
+                ok
+            }
             if (preloadWriter === writer) preloadWriter = null
+            if (finished) return
+            // Paused for the song playing: carry on once it's done. Any other failure: give up
+            // (it just means no head start).
+            if (!exo.isLoading) return
         }
     }
 
@@ -788,6 +813,8 @@ private const val COUNTS_AS_PLAYED_MS = 3_000L
 
 /** Load the song that's playing this far ahead (the whole song for most). */
 private const val AHEAD_BUFFER_MS = 5 * 60_000
+/** ...topping it up only once it's this much below that. */
+private const val TOP_UP_GAP_MS = 60_000
 /** Memory allowed for that (5 min at 128 kbps is ~5 MB; some streams run higher). */
 private const val TARGET_BUFFER_BYTES = 16 * 1024 * 1024
 /**
