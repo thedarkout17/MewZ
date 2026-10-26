@@ -29,6 +29,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.foundation.gestures.scrollBy
 import com.headunit.music.data.Track
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -65,6 +67,9 @@ private const val TITLE_BIG = 132f
 private const val TITLE_SMALL = 76f
 /** A row (220) plus the gap under it (20). */
 private const val ROW_STEP = 240f
+/** Edge auto-scroll while dragging: how close to an edge it starts, and the top speed per frame. */
+private const val EDGE_ZONE = 160f
+private const val EDGE_SPEED = 26f
 
 /**
  * The queue, laid out like an open library over Now Playing's blurred artwork:
@@ -100,6 +105,21 @@ fun QueuePage(player: PlayerController, onClose: () -> Unit, modifier: Modifier 
         val stepPx = with(density) { ROW_STEP.u.toPx() }
         val haptics = LocalHapticFeedback.current
 
+        /** Past halfway into a neighbour's slot: swap with it (repeats if pulled far). */
+        fun settleDrag() {
+            while (true) {
+                val from = keysOf(player.queue).indexOf(dragKey)
+                if (from < 0) return
+                if (dragOffset > stepPx / 2 && from + 1 < player.queue.size) {
+                    player.moveInQueue(from, from + 1)
+                    dragOffset -= stepPx
+                } else if (dragOffset < -stepPx / 2 && from - 1 > player.index) {
+                    player.moveInQueue(from, from - 1)
+                    dragOffset += stepPx
+                } else return
+            }
+        }
+
         val collapseDistance = (HEADER_TALL - HEADER_SHORT).u
         val c by remember {
             derivedStateOf {
@@ -108,6 +128,34 @@ fun QueuePage(player: PlayerController, onClose: () -> Unit, modifier: Modifier 
             }
         }
         val headerH = HEADER_TALL + (HEADER_SHORT - HEADER_TALL) * c
+
+        // Edge auto-scroll: while a song is held near the top (under the title) or the
+        // bottom of the list, scroll that way, faster the closer it gets, so it can be
+        // moved anywhere without letting go. The song stays under the finger.
+        val zonePx = with(density) { EDGE_ZONE.u.toPx() }
+        val maxSpeedPx = with(density) { EDGE_SPEED.u.toPx() }
+        val headerPx by rememberUpdatedState(with(density) { headerH.u.toPx() })
+        LaunchedEffect(dragKey) {
+            val key = dragKey ?: return@LaunchedEffect
+            while (true) {
+                withFrameNanos { }
+                val info = list.layoutInfo
+                val item = info.visibleItemsInfo.firstOrNull { it.key == key } ?: continue
+                val top = item.offset - info.viewportStartOffset + dragOffset
+                val bottom = top + item.size
+                val height = (info.viewportEndOffset - info.viewportStartOffset).toFloat()
+                val speed = when {
+                    top < headerPx + zonePx -> -maxSpeedPx * ((headerPx + zonePx - top) / zonePx).coerceAtMost(1f)
+                    bottom > height - zonePx -> maxSpeedPx * ((bottom - (height - zonePx)) / zonePx).coerceAtMost(1f)
+                    else -> 0f
+                }
+                if (speed == 0f) continue
+                val moved = list.scrollBy(speed)
+                // The row's slot moved with the list; pull it back under the finger.
+                dragOffset += moved
+                settleDrag()
+            }
+        }
 
         // A tap on empty space (not a song or button) goes back to Now Playing.
         Box(modifier.fillMaxSize().pointerInput(onClose) { detectTapGestures(onTap = { onClose() }) }) {
@@ -186,16 +234,7 @@ fun QueuePage(player: PlayerController, onClose: () -> Unit, modifier: Modifier 
                                     onDrag = { change, amount ->
                                         change.consume()
                                         dragOffset += amount.y
-                                        // Past halfway into a neighbour's slot: swap with it.
-                                        val from = keysOf(player.queue).indexOf(dragKey)
-                                        if (from < 0) return@detectDragGesturesAfterLongPress
-                                        if (dragOffset > stepPx / 2 && from + 1 < player.queue.size) {
-                                            player.moveInQueue(from, from + 1)
-                                            dragOffset -= stepPx
-                                        } else if (dragOffset < -stepPx / 2 && from - 1 > player.index) {
-                                            player.moveInQueue(from, from - 1)
-                                            dragOffset += stepPx
-                                        }
+                                        settleDrag()
                                     },
                                     onDragEnd = { dragKey = null; dragOffset = 0f },
                                     onDragCancel = { dragKey = null; dragOffset = 0f },
