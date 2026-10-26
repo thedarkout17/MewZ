@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Listen</string>
+    <string name="app_name">MewZ</string>
     <string name="search_hint">Search</string>
     <string name="voice_search">Voice search</string>
     <string name="clear_search">Clear search</string>

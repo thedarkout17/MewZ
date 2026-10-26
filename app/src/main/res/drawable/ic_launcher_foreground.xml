@@ -3,8 +3,16 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Simple music note inside the adaptive-icon safe zone -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M64,34v28.5a8,8 0,1 1,-4 -6.9V42l-16,4v22.5a8,8 0,1 1,-4 -6.9V40z" />
+    <!-- An eighth note, centred in the adaptive-icon safe zone -->
+    <group android:rotation="-22" android:pivotX="46" android:pivotY="68">
+        <!-- Head -->
+        <path android:fillColor="#FFFFFFFF"
+            android:pathData="M46,68m-10,0a10,7.2 0,1 0,20 0a10,7.2 0,1 0,-20 0" />
+    </group>
+    <!-- Stem -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M51.6,66.5V31.5h4.4V66.5z" />
+    <!-- Flag -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M51.6,31.5h4.4c0,6 3.4,8.6 7.4,11.6c4.2,3.2 7.4,7 5.2,14.6c-0.4,1.4 -1.8,1.2 -1.6,-0.2c0.8,-5.6 -1.8,-8.4 -5.2,-10.8c-3.2,-2.2 -6.6,-3.6 -10.2,-6.2z" />
 </vector>
