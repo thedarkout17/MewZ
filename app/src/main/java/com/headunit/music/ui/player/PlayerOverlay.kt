@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -82,6 +83,13 @@ private object PlayerGlass {
     val Tile = Brush.verticalGradient(listOf(Color(0x2EFFFFFF), Color(0x14FFFFFF)))
 }
 
+/**
+ * Size of each hidden YouTube player in real screen pixels. YouTube picks the
+ * video quality from the player's size, so this keeps it at its lowest (~144p).
+ */
+private const val HIDDEN_PLAYER_W_PX = 128
+private const val HIDDEN_PLAYER_H_PX = 72
+
 // ---- Layout (design px on the 2000x1200 canvas), after the CarPlay Now Playing ----
 //   ⌄                                         “starboy” — 3 of 20     ← y 48–178
 //   ┌──────────┐        Song title
@@ -111,10 +119,9 @@ private const val ART_MINI_X = 56f
  * **Dock** (minimized): a glass bar along the bottom with the artwork, song and
  * controls. Tap it to open Now Playing.
  *
- * The YouTube player sits directly behind the artwork. Tapping the artwork on
- * Now Playing flips to the live video (YouTube's terms want the player visible
- * while it plays, so that's the compliant view). One artwork/video frame glides
- * between dock and Now Playing, so playback never restarts.
+ * Audio only, as far as you can see: the two YouTube players sit tiny behind
+ * the artwork. The artwork square glides between dock and Now Playing, and the
+ * players move with it, so playback never restarts.
  * [dockHidden] slides the dock away (e.g. while our keyboard is up).
  */
 @Composable
@@ -136,13 +143,6 @@ fun PlayerOverlay(
         animationSpec = tween(320, easing = FastOutSlowInEasing),
         label = "dockAway",
     )
-    // Video only ever shows on Now Playing; the dock always shows artwork.
-    val video by animateFloatAsState(
-        targetValue = if (player.showVideo && player.expanded) 1f else 0f,
-        animationSpec = tween(300),
-        label = "video",
-    )
-
     BackHandler(enabled = player.expanded) { onMinimize() }
 
     Box(Modifier.fillMaxSize()) {
@@ -204,16 +204,23 @@ fun PlayerOverlay(
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                        ) {
-                            if (player.expanded) player.showVideo = !player.showVideo
-                            else player.expanded = true
-                        },
+                        ) { if (!player.expanded) player.expanded = true },
                 ) {
-                    AndroidView(
-                        factory = { player.webView.also { (it.parent as? ViewGroup)?.removeView(it) } },
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    if (video < 1f) {
+                    // The two YouTube players: on screen (they need to be to play) but
+                    // tiny and covered by the artwork. Tiny = YouTube's lowest video
+                    // quality, so data use stays close to audio-only.
+                    val density = LocalDensity.current
+                    Row(Modifier.align(Alignment.Center)) {
+                        player.playerViews.forEach { view ->
+                            AndroidView(
+                                factory = { view.also { (it.parent as? ViewGroup)?.removeView(it) } },
+                                modifier = with(density) {
+                                    Modifier.size(width = HIDDEN_PLAYER_W_PX.toDp(), height = HIDDEN_PLAYER_H_PX.toDp())
+                                },
+                            )
+                        }
+                    }
+                    run {
                         val context = LocalContext.current
                         val artRequest = remember(track.artworkUrl) {
                             ImageRequest.Builder(context)
@@ -229,21 +236,10 @@ fun PlayerOverlay(
                             model = artRequest,
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer { alpha = 1f - video },
+                            modifier = Modifier.fillMaxSize(),
                         )
                     }
-                    VideoOverlay(player)
-                    if (e > 0f) {
-                        ArtChip(
-                            text = stringResource(if (player.showVideo) R.string.show_artwork else R.string.show_video),
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(24.u)
-                                .graphicsLayer { alpha = e },
-                        )
-                    }
+                    ArtOverlay(player)
                 }
             }
         }
@@ -286,7 +282,7 @@ private fun BlurredArtBackground(track: Track, modifier: Modifier) {
 
 /** Buffering spinner or YouTube's refusal message, over the artwork. */
 @Composable
-private fun VideoOverlay(player: PlayerController) {
+private fun ArtOverlay(player: PlayerController) {
     with(LocalDesignScale.current) {
         val error = player.error
         when {
@@ -309,20 +305,6 @@ private fun VideoOverlay(player: PlayerController) {
                 CircularProgressIndicator(color = Color.White, strokeWidth = 5.u, modifier = Modifier.size(72.u))
             }
         }
-    }
-}
-
-@Composable
-private fun ArtChip(text: String, modifier: Modifier) {
-    with(LocalDesignScale.current) {
-        Text(
-            text,
-            style = TextStyle(Color.White, fontSize = 30.usp, fontWeight = FontWeight.Medium),
-            modifier = modifier
-                .clip(RoundedCornerShape(50))
-                .background(Color(0x73000000))
-                .padding(horizontal = 26.u, vertical = 12.u),
-        )
     }
 }
 

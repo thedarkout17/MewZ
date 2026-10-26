@@ -1,13 +1,11 @@
 package com.headunit.music.player
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import android.webkit.JavascriptInterface
-import android.webkit.WebChromeClient
+import android.os.SystemClock
+import android.util.Log
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -15,15 +13,18 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.headunit.music.data.Track
-import org.json.JSONObject
+import com.headunit.music.player.HiddenYouTubePlayer.Companion.STATE_BUFFERING
+import com.headunit.music.player.HiddenYouTubePlayer.Companion.STATE_ENDED
+import com.headunit.music.player.HiddenYouTubePlayer.Companion.STATE_PLAYING
+import com.headunit.music.player.HiddenYouTubePlayer.Companion.STATE_UNSTARTED
 
 /**
- * Plays songs through YouTube's official embedded player (IFrame Player API)
- * inside a WebView, and keeps a simple queue.
+ * Plays songs through YouTube's own player, hidden: you see the artwork and
+ * hear the song. Keeps a simple queue.
  *
- * The WebView is the video you see on the Now Playing screen and in the mini
- * player. YouTube's terms require the embedded player to stay visible while it
- * plays, so it's never hidden behind the UI.
+ * Two hidden players take turns. One plays the current song; once it's
+ * playing, the other loads the next song muted and holds it at 0:00. Skipping
+ * (or the song ending) swaps them, so the next song starts instantly.
  *
  * All state is Compose state, so the screens update on their own.
  */
@@ -62,10 +63,7 @@ class PlayerController(context: Context) {
     var wrapQueue by mutableStateOf(false)
         private set
 
-    /** Now Playing shows the artwork (false) or the live YouTube video (true). */
-    var showVideo by mutableStateOf(false)
-
-    // ---- Playback (fed by the player's JavaScript) ----
+    // ---- Playback (fed by the active player) ----
     var isPlaying by mutableStateOf(false)
         private set
     var isBuffering by mutableStateOf(false)
@@ -82,23 +80,37 @@ class PlayerController(context: Context) {
     var expanded by mutableStateOf(false)
 
     private val main = Handler(Looper.getMainLooper())
-    private var ready = false
-    private var pendingVideoId: String? = null
     private var skipOnError: Runnable? = null
 
-    @SuppressLint("SetJavaScriptEnabled")
-    val webView: WebView = WebView(context.applicationContext).apply {
-        setBackgroundColor(android.graphics.Color.BLACK)
-        settings.javaScriptEnabled = true
-        settings.domStorageEnabled = true
-        // Start songs without a second tap inside the video.
-        settings.mediaPlaybackRequiresUserGesture = false
-        webChromeClient = WebChromeClient()
-        webViewClient = WebViewClient()
-        addJavascriptInterface(Bridge(), "Android")
-        isVerticalScrollBarEnabled = false
-        isHorizontalScrollBarEnabled = false
+    private val events = object : HiddenYouTubePlayer.Events {
+        override fun onState(player: HiddenYouTubePlayer, state: Int) {
+            if (player === active) onActiveState(state)
+        }
+
+        override fun onTime(player: HiddenYouTubePlayer, position: Double, duration: Double) {
+            if (player !== active) return
+            positionSeconds = position.toFloat()
+            if (duration > 0) durationSeconds = duration.toFloat()
+        }
+
+        override fun onError(player: HiddenYouTubePlayer, code: Int) {
+            if (player === active) onActiveError(code)
+        }
     }
+
+    private val players = listOf(
+        HiddenYouTubePlayer(context, events),
+        HiddenYouTubePlayer(context, events),
+    )
+    private var active = players[0]
+    private val standby get() = if (active === players[0]) players[1] else players[0]
+
+    /** Both hidden players' views; the overlay keeps them on screen, tiny, behind the artwork. */
+    val playerViews: List<WebView> get() = players.map { it.view }
+
+    // Load timing for the log: tap → first sound. Filter Logcat by "MuZ".
+    private var tapAt = 0L
+    private var startedFromPreload = false
 
     // ---- Controls ----
 
@@ -135,6 +147,8 @@ class PlayerController(context: Context) {
             queue = originalOrder
             index = originalOrder.indexOf(now).coerceAtLeast(0)
         }
+        // The next song changed: get the new one ready instead.
+        if (isPlaying) preloadNext()
     }
 
     fun toggleLoop() {
@@ -143,7 +157,7 @@ class PlayerController(context: Context) {
 
     fun togglePlay() {
         if (current == null) return
-        js(if (isPlaying) "pause()" else "play()")
+        if (isPlaying) active.pause() else active.play()
     }
 
     fun next() {
@@ -160,12 +174,12 @@ class PlayerController(context: Context) {
 
     fun seekTo(seconds: Float) {
         positionSeconds = seconds.coerceIn(0f, durationSeconds.coerceAtLeast(0f))
-        js("seek(${positionSeconds})")
+        active.seek(positionSeconds)
     }
 
     fun release() {
         main.removeCallbacksAndMessages(null)
-        webView.destroy()
+        players.forEach { it.destroy() }
     }
 
     private fun playAt(i: Int) {
@@ -176,123 +190,65 @@ class PlayerController(context: Context) {
         positionSeconds = 0f
         durationSeconds = (track.durationSeconds ?: 0).toFloat()
         isBuffering = true
-        if (!pageLoaded) {
-            pageLoaded = true
-            pendingVideoId = track.videoId
-            webView.loadDataWithBaseURL(BASE_URL, playerHtml(track.videoId), "text/html", "utf-8", null)
-        } else if (!ready) {
-            pendingVideoId = track.videoId
+        tapAt = SystemClock.elapsedRealtime()
+
+        val ready = standby
+        if (ready.videoId == track.videoId && ready.preloaded) {
+            // The other player already has this song buffered at 0:00: swap and go.
+            active.stop()
+            active = ready
+            active.activate()
+            startedFromPreload = true
         } else {
-            js("load(${JSONObject.quote(track.videoId)})")
+            standby.stop() // whatever it was holding isn't next anymore
+            active.load(track.videoId)
+            startedFromPreload = false
         }
     }
 
-    private var pageLoaded = false
-
-    private fun js(call: String) {
-        if (ready) webView.evaluateJavascript(call, null)
+    /** Get the next song ready in the standby player (only once this one is playing). */
+    private fun preloadNext() {
+        val next = queue.getOrNull(index + 1) ?: if (wrapQueue) queue.firstOrNull() else null
+        if (next == null || next.videoId == current?.videoId) return
+        if (standby.videoId == next.videoId) return // already there (or on its way)
+        standby.preload(next.videoId)
     }
 
-    // ---- Events from the page (arrive on a background thread) ----
-
-    private inner class Bridge {
-        @JavascriptInterface
-        fun onReady() = main.post {
-            ready = true
-            // A song picked while the player was still loading.
-            pendingVideoId?.let { id ->
-                pendingVideoId = null
-                if (id != current?.videoId) js("load(${JSONObject.quote(id)})")
+    private fun onActiveState(state: Int) {
+        isPlaying = state == STATE_PLAYING
+        isBuffering = state == STATE_BUFFERING || state == STATE_UNSTARTED
+        active.view.keepScreenOn = isPlaying
+        if (state == STATE_PLAYING) {
+            if (tapAt > 0) {
+                val ms = SystemClock.elapsedRealtime() - tapAt
+                Log.d(TAG, "Load \"${current?.title}\": ${ms} ms" + if (startedFromPreload) " (preloaded)" else "")
+                tapAt = 0
             }
+            // Playing smoothly now, so the next song can use some bandwidth.
+            preloadNext()
         }
-
-        @JavascriptInterface
-        fun onState(state: Int) = main.post {
-            isPlaying = state == STATE_PLAYING
-            isBuffering = state == STATE_BUFFERING || state == STATE_UNSTARTED
-            webView.keepScreenOn = isPlaying
-            if (state == STATE_ENDED) {
-                when {
-                    loopSong -> { js("seek(0)"); js("play()") }
-                    hasNext -> next()
-                    else -> isBuffering = false
-                }
-            }
-        }
-
-        @JavascriptInterface
-        fun onTime(position: Double, duration: Double) = main.post {
-            positionSeconds = position.toFloat()
-            if (duration > 0) durationSeconds = duration.toFloat()
-        }
-
-        @JavascriptInterface
-        fun onError(code: Int) = main.post {
-            val e = PlayerError.from(code)
-            error = e
-            isPlaying = false
-            isBuffering = false
-            // Songs YouTube won't play here: move on by themselves.
-            if (e.skippable && hasNext) {
-                skipOnError = Runnable { next() }.also { main.postDelayed(it, 2500) }
+        if (state == STATE_ENDED) {
+            when {
+                loopSong -> { active.seek(0f); active.play() }
+                hasNext -> next()
+                else -> isBuffering = false
             }
         }
     }
 
-    companion object {
-        /**
-         * The page needs a real https address. YouTube rejects embeds that arrive
-         * with no origin/referrer (error 152/153), which is what a bare local page sends.
-         */
-        private const val BASE_URL = "https://com.headunit.music/"
-
-        private const val STATE_UNSTARTED = -1
-        private const val STATE_ENDED = 0
-        private const val STATE_PLAYING = 1
-        private const val STATE_BUFFERING = 3
-
-        private fun playerHtml(firstVideoId: String): String {
-            val origin = BASE_URL.trimEnd('/')
-            // controls=0: our own big buttons drive it. playsinline: no forced fullscreen.
-            val src = "https://www.youtube.com/embed/$firstVideoId?enablejsapi=1&autoplay=1&controls=0" +
-                "&disablekb=1&fs=0&iv_load_policy=3&playsinline=1&rel=0&origin=$origin"
-            return """
-                <!doctype html>
-                <html><head>
-                <meta name="viewport" content="width=device-width, initial-scale=1">
-                <meta name="referrer" content="strict-origin-when-cross-origin">
-                <style>
-                  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
-                  iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
-                </style>
-                </head><body>
-                <iframe id="p" src="$src" allow="autoplay; encrypted-media"
-                        referrerpolicy="strict-origin-when-cross-origin"></iframe>
-                <script src="https://www.youtube.com/iframe_api"></script>
-                <script>
-                  var player;
-                  function onYouTubeIframeAPIReady() {
-                    player = new YT.Player('p', { events: {
-                      onReady: function () { Android.onReady(); },
-                      onStateChange: function (e) { Android.onState(e.data); },
-                      onError: function (e) { Android.onError(e.data); }
-                    }});
-                  }
-                  function load(id) { player.loadVideoById(id); }
-                  function play() { player.playVideo(); }
-                  function pause() { player.pauseVideo(); }
-                  function seek(s) { player.seekTo(s, true); }
-                  setInterval(function () {
-                    if (player && player.getCurrentTime) {
-                      Android.onTime(player.getCurrentTime() || 0, player.getDuration() || 0);
-                    }
-                  }, 250);
-                </script>
-                </body></html>
-            """.trimIndent()
+    private fun onActiveError(code: Int) {
+        val e = PlayerError.from(code)
+        error = e
+        isPlaying = false
+        isBuffering = false
+        // Songs YouTube won't play here: move on by themselves.
+        if (e.skippable && hasNext) {
+            skipOnError = Runnable { next() }.also { main.postDelayed(it, 2500) }
         }
     }
 }
+
+private const val TAG = "MuZ"
 
 /** Why YouTube wouldn't play a video, in words for the screen. */
 enum class PlayerError(val message: String, val skippable: Boolean) {

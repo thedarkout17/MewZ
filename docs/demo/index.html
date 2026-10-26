@@ -259,19 +259,9 @@ body {
 }
 .kb-up:not(.expanded) .art { transform: translateY(calc(320 * var(--u))); }
 .expanded .art { left: calc(96 * var(--u)); top: calc(210 * var(--u)); width: calc(600 * var(--u)); height: calc(600 * var(--u)); border-radius: calc(40 * var(--u)); box-shadow: 0 calc(30 * var(--u)) calc(80 * var(--u)) rgba(0,0,0,.35); }
-.art .vid { position: absolute; inset: 0; display: grid; place-items: center; background: #000;
-  font: 500 calc(34 * var(--u)) var(--font-app); color: rgba(255,255,255,.7); text-align: center; padding: 10%; }
 .art .cover { position: absolute; inset: 0; transition: opacity .3s; }
 .art .cover span { position: absolute; inset: 0; display: grid; place-items: center; font: 700 calc(220 * var(--u)) var(--font-app); color: rgba(255,255,255,.85); transition: font-size .44s var(--ease); }
 .art:not(.big) .cover span { font-size: calc(90 * var(--u)); }
-.art.video-on .cover { opacity: 0; }
-.art .chip {
-  position: absolute; right: calc(24 * var(--u)); bottom: calc(24 * var(--u));
-  font: 500 calc(30 * var(--u)) var(--font-app); color: #fff;
-  background: rgba(0,0,0,.45); padding: calc(12 * var(--u)) calc(26 * var(--u)); border-radius: 999px;
-  opacity: 0; transition: opacity .3s;
-}
-.art.big .chip { opacity: 1; }
 
 .np { opacity: 0; pointer-events: none; transition: opacity .44s var(--ease); color: #fff; }
 .expanded .np { opacity: 1; pointer-events: auto; }
@@ -525,9 +515,7 @@ body {
           </div>
         </div>
         <div class="art" id="art">
-          <div class="vid">YouTube video plays here in the app</div>
           <div class="cover" id="cover"><span></span></div>
-          <div class="chip" id="artChip">Show video</div>
         </div>
       </div>
 
@@ -555,7 +543,7 @@ body {
       <span class="chip">Canvas <b>2000×1200</b></span>
       <span class="chip">Scale <b id="scale">–</b></span>
       <span class="chip">Back <b>Esc</b></span>
-      <span class="chip">Build <b>v0.25 · player</b></span>
+      <span class="chip">Build <b>v0.27 · hidden players</b></span>
       <label class="chip" for="mode">Results
         <select class="sel" id="mode">
           <option value="ok">Sample songs</option>
@@ -753,7 +741,7 @@ function back() {
 }
 // ---------- Player (mirrors PlayerController.kt; playback is simulated here) ----------
 const P = { queue: [], original: [], name: null, index: -1, playing: false, pos: 0, dur: 0,
-            expanded: false, shuffle: false, loop: false, wrap: false, showVideo: false, timer: null };
+            expanded: false, shuffle: false, loop: false, wrap: false, timer: null };
 const PICON = { play: "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M8.5 5.3c0-.8.9-1.3 1.6-.9l9.3 5.9c.7.4.7 1.5 0 1.9l-9.3 5.9c-.7.4-1.6-.1-1.6-.9z\" fill=\"#fff\"/></svg>", pause: "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M7 4.5h2.6a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1zM14.4 4.5H17a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-2.6a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z\" fill=\"#fff\"/></svg>" };
 const cur = () => P.queue[P.index];
 // wrap = start over after the last song (libraries / playlists); search results don't.
@@ -800,7 +788,7 @@ function toggleShuffle() {
   logEvent('player', `shuffle ${P.shuffle ? 'on' : 'off'}`); renderPlayer();
 }
 function toggleLoop() { P.loop = !P.loop; logEvent('player', `loop this song ${P.loop ? 'on' : 'off'}`); renderPlayer(); }
-function setExpanded(v) { P.expanded = v; if (!v) P.showVideo = false; logEvent('player', v ? 'expand' : 'minimize'); renderPlayer(); }
+function setExpanded(v) { P.expanded = v; logEvent('player', v ? 'expand' : 'minimize'); renderPlayer(); }
 // ⌄ / Back on Now Playing: minimize to the dock AND go back to the "Listen..." home.
 function minimizeToHome() {
   setExpanded(false);
@@ -837,8 +825,6 @@ function renderPlayer() {
   $('cover').firstChild.textContent = t.artist[0];
   $('npBackdrop').style.setProperty('--song', art);
   $('art').classList.toggle('big', P.expanded);
-  $('art').classList.toggle('video-on', P.expanded && P.showVideo);
-  $('artChip').textContent = P.showVideo ? 'Show artwork' : 'Show video';
   playerEl.querySelectorAll('[data-act="toggle"]').forEach(b => {
     b.innerHTML = P.playing ? PICON.pause : PICON.play; b.setAttribute('aria-label', P.playing ? 'Pause' : 'Play');
   });
@@ -860,8 +846,7 @@ playerEl.addEventListener('click', (e) => {
     return;
   }
   if (e.target.closest('.art')) {
-    if (P.expanded) { P.showVideo = !P.showVideo; logEvent('player', P.showVideo ? 'show video' : 'show artwork'); renderPlayer(); }
-    else setExpanded(true);
+    if (!P.expanded) setExpanded(true);
     return;
   }
   if (!P.expanded && e.target.closest('.dock')) setExpanded(true);
