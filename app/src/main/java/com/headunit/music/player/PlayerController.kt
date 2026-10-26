@@ -82,7 +82,7 @@ class PlayerController(context: Context) {
     private val main = Handler(Looper.getMainLooper())
     private var skipOnError: Runnable? = null
 
-    private val events = object : HiddenYouTubePlayer.Events {
+    private val events: HiddenYouTubePlayer.Events = object : HiddenYouTubePlayer.Events {
         override fun onState(player: HiddenYouTubePlayer, state: Int) {
             if (player === active) onActiveState(state)
         }
@@ -98,12 +98,13 @@ class PlayerController(context: Context) {
         }
     }
 
-    private val players = listOf(
+    private val players: List<HiddenYouTubePlayer> = listOf(
         HiddenYouTubePlayer(context, events),
         HiddenYouTubePlayer(context, events),
     )
-    private var active = players[0]
-    private val standby get() = if (active === players[0]) players[1] else players[0]
+    private var active: HiddenYouTubePlayer = players[0]
+    private val standby: HiddenYouTubePlayer
+        get() = if (active === players[0]) players[1] else players[0]
 
     /** Both hidden players' views; the overlay keeps them on screen, tiny, behind the artwork. */
     val playerViews: List<WebView> get() = players.map { it.view }
