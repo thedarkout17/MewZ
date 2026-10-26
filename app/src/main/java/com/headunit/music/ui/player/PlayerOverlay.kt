@@ -117,7 +117,12 @@ private const val ART_MINI_X = 56f
  * [dockHidden] slides the dock away (e.g. while our keyboard is up).
  */
 @Composable
-fun PlayerOverlay(player: PlayerController, dockHidden: Boolean) {
+fun PlayerOverlay(
+    player: PlayerController,
+    dockHidden: Boolean,
+    /** ⌄ or Back on Now Playing: shrink to the dock (the caller also goes back home). */
+    onMinimize: () -> Unit = { player.expanded = false },
+) {
     val track = player.current ?: return
 
     val e by animateFloatAsState(
@@ -137,7 +142,7 @@ fun PlayerOverlay(player: PlayerController, dockHidden: Boolean) {
         label = "video",
     )
 
-    BackHandler(enabled = player.expanded) { player.expanded = false }
+    BackHandler(enabled = player.expanded) { onMinimize() }
 
     Box(Modifier.fillMaxSize()) {
         if (e > 0f) {
@@ -178,7 +183,7 @@ fun PlayerOverlay(player: PlayerController, dockHidden: Boolean) {
 
                 // ---- Now Playing (expanded) ----
                 if (e > 0f) {
-                    NowPlaying(player = player, width = w, shiftY = shiftY, alpha = e)
+                    NowPlaying(player = player, width = w, shiftY = shiftY, alpha = e, onMinimize = onMinimize)
                 }
 
                 // ---- Artwork, with the YouTube player right behind it ----
@@ -317,7 +322,13 @@ private fun ArtChip(text: String, modifier: Modifier) {
 }
 
 @Composable
-private fun NowPlaying(player: PlayerController, width: Float, shiftY: Float, alpha: Float) {
+private fun NowPlaying(
+    player: PlayerController,
+    width: Float,
+    shiftY: Float,
+    alpha: Float,
+    onMinimize: () -> Unit,
+) {
     val track = player.current ?: return
     val context = LocalContext.current
     with(LocalDesignScale.current) {
@@ -330,7 +341,7 @@ private fun NowPlaying(player: PlayerController, width: Float, shiftY: Float, al
             icon = R.drawable.ic_keyboard_hide,
             contentDescription = stringResource(R.string.minimize_player),
             size = 130f, glyph = 64f,
-            onClick = { player.expanded = false },
+            onClick = onMinimize,
             modifier = Modifier.offset(x = 56.u, y = (48f + shiftY).u).graphicsLayer { this.alpha = alpha },
         )
 

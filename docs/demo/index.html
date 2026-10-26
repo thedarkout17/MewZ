@@ -555,7 +555,7 @@ body {
       <span class="chip">Canvas <b>2000×1200</b></span>
       <span class="chip">Scale <b id="scale">–</b></span>
       <span class="chip">Back <b>Esc</b></span>
-      <span class="chip">Build <b>v0.23 · player</b></span>
+      <span class="chip">Build <b>v0.24 · player</b></span>
       <label class="chip" for="mode">Results
         <select class="sel" id="mode">
           <option value="ok">Sample songs</option>
@@ -801,6 +801,14 @@ function toggleShuffle() {
 }
 function toggleLoop() { P.loop = !P.loop; logEvent('player', `loop this song ${P.loop ? 'on' : 'off'}`); renderPlayer(); }
 function setExpanded(v) { P.expanded = v; if (!v) P.showVideo = false; logEvent('player', v ? 'expand' : 'minimize'); renderPlayer(); }
+// ⌄ / Back on Now Playing: minimize to the dock AND go back to the "Listen..." home.
+function minimizeToHome() {
+  setExpanded(false);
+  query = ''; open = false; keyboard = false; suggestions = []; submitted = null;
+  clearTimeout(searchTimer);
+  logEvent('home', 'back to Listen…');
+  render();
+}
 // Search results play as a plain queue: no library/playlist name, so no "3 of 20".
 function play(t) { playQueue(results.tracks, results.tracks.indexOf(t), null); }
 
@@ -845,7 +853,7 @@ playerEl.addEventListener('click', (e) => {
   const b = e.target.closest('[data-act]');
   if (b) {
     e.stopPropagation();
-    ({ prev: previous, next, toggle: togglePlay, min: () => setExpanded(false),
+    ({ prev: previous, next, toggle: togglePlay, min: minimizeToHome,
        shuffle: toggleShuffle, repeat: toggleLoop,
        add: () => { logEvent('player', 'add to library (coming later)'); toast('Libraries are coming soon'); },
     })[b.dataset.act]();
@@ -1078,7 +1086,7 @@ buildKeyboard();
 document.addEventListener('keydown', (e) => {
   if (!voice.hidden || e.target.closest?.('.btn, .voice')) return;
   if (e.key === 'Escape') {
-    if (P.expanded && cur()) setExpanded(false);    // player's BackHandler wins
+    if (P.expanded && cur()) minimizeToHome();       // player's BackHandler wins
     else if (searching()) back();
     return;
   }

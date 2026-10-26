@@ -10,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -52,6 +53,7 @@ class MainActivity : ComponentActivity() {
                 val youtube = remember { YouTubeSearch(BuildConfig.YOUTUBE_API_KEY) }
                 val history = remember { SearchHistory(applicationContext) }
                 var keyboardUp by remember { mutableStateOf(false) }
+                var goHomeRequests by remember { mutableIntStateOf(0) }
 
                 Box(Modifier.fillMaxSize()) {
                     HomeScreen(
@@ -61,6 +63,7 @@ class MainActivity : ComponentActivity() {
                         onPlay = { tracks, index, _ -> player.playQueue(tracks, index) },
                         dockInset = if (player.current != null) DOCK_HEIGHT else 0f,
                         onKeyboardShownChange = { keyboardUp = it },
+                        goHomeRequests = goHomeRequests,
                         onVoiceSearch = {
                             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                                 putExtra(
@@ -81,7 +84,15 @@ class MainActivity : ComponentActivity() {
                         onVoiceResultConsumed = { voiceResult = null },
                     )
                     // Now Playing / mini player, over everything.
-                    PlayerOverlay(player = player, dockHidden = keyboardUp)
+                    PlayerOverlay(
+                        player = player,
+                        dockHidden = keyboardUp,
+                        // Minimizing goes to the "Listen..." home, with the song in the dock.
+                        onMinimize = {
+                            player.expanded = false
+                            goHomeRequests++
+                        },
+                    )
                 }
             }
         }

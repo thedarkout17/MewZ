@@ -85,6 +85,8 @@ fun HomeScreen(
     dockInset: Float = 0f,
     /** Tells the player dock to slide away while our keyboard is up. */
     onKeyboardShownChange: (Boolean) -> Unit = {},
+    /** Bump this to send the screen back to the idle "Listen..." home (e.g. after minimizing the player). */
+    goHomeRequests: Int = 0,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var open by rememberSaveable { mutableStateOf(false) }       // search panel open
@@ -178,6 +180,8 @@ fun HomeScreen(
     }
 
     LaunchedEffect(keyboardShown) { onKeyboardShownChange(keyboardShown) }
+
+    LaunchedEffect(goHomeRequests) { if (goHomeRequests > 0) goHome() }
 
     // Back: panel open over results → back to results; otherwise → idle home.
     BackHandler(enabled = searching) {
