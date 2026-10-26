@@ -60,7 +60,10 @@ object YouTubeAlbums {
      */
     fun relevant(albums: List<Album>, query: String, topSongs: List<Track>, max: Int = 6): List<Album> {
         // Words like "album" or "by" in the search don't need to be in the title.
-        val q = words(query) - FILLER
+        val typed = words(query)
+        val q = typed - FILLER
+        // Asked for the album itself ("starboy album"): show every edition (Deluxe too).
+        val wantsEditions = typed.any { it in EDITION_WORDS }
         if (q.isEmpty()) return emptyList()
         // Artists that matter for this search: the first few song results'.
         val popular = topSongs.take(TOP_SONGS).map { words(it.artist) }
@@ -69,15 +72,15 @@ object YouTubeAlbums {
         val namedWords = albums.map { words(it.artist) }
             .filter { it.isNotEmpty() && q.containsAll(it) }
             .flatten().toSet()
-        return albums.filter { album ->
+        val kept = albums.filterIndexed { rank, album ->
             val artist = words(album.artist)
-            if (artist.isEmpty()) return@filter false
+            if (artist.isEmpty()) return@filterIndexed false
             val named = q.containsAll(artist)
             val title = words(coreTitle(album.title))
             // (Never strip words that are in this album's own title.)
             val rest = q - (if (named) artist else namedWords - title)
             val playedForThis = popular.any { it.containsAll(artist) }
-            when {
+            val keep = when {
                 // "the weeknd": their albums (if they're who the song results are by too,
                 // so an unknown act that happens to be called "Starboy" doesn't count).
                 named && rest.isEmpty() -> playedForThis
@@ -85,12 +88,18 @@ object YouTubeAlbums {
                 title.isEmpty() || rest != title -> false
                 // ...by an artist named in the search, or one people actually play for it.
                 named -> true
-                else -> playedForThis
+                // Not named: an artist people play for this search, or YouTube Music's own
+                // top album for it (it ranks by popularity, so that's the well-known one).
+                else -> playedForThis || rank == 0
             }
+            Log.d("MuZ", "Album \"${album.title}\" by \"${album.artist}\" (#${rank + 1}): " +
+                if (keep) "shown" else "hidden (title fits: ${rest == title}, artist in songs: $playedForThis)")
+            keep
         }
-            // One edition per album: "Starboy" and "Starboy (Deluxe)" → the higher-ranked one.
-            .distinctBy { words(coreTitle(it.title)) to words(it.artist) }
-            .take(max)
+        // One edition per album ("Starboy" / "Starboy (Deluxe)" → the higher-ranked one),
+        // unless the album itself was asked for.
+        val editions = if (wantsEditions) kept else kept.distinctBy { words(coreTitle(it.title)) to words(it.artist) }
+        return editions.take(max)
     }
 
     /** "Starboy (Deluxe Edition) [Remastered]" → "Starboy". */
@@ -108,6 +117,7 @@ object YouTubeAlbums {
 
     private const val TOP_SONGS = 6
     private val FILLER = setOf("album", "albums", "full", "by", "lp", "ep", "deluxe", "edition")
+    private val EDITION_WORDS = setOf("album", "albums", "deluxe", "edition", "lp", "ep")
 
     /**
      * The album's songs, in order. Each one uses the album's square cover as its
