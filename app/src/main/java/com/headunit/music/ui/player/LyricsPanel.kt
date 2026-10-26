@@ -51,8 +51,6 @@ import com.headunit.music.core.model.Lyrics
 import com.headunit.music.data.LyricsRepository
 import com.headunit.music.core.model.Track
 import com.headunit.music.player.PlayerController
-import com.headunit.music.ui.library.LibrarySecondary
-import com.headunit.music.ui.library.LibraryTextShadow
 import com.headunit.music.ui.theme.LocalDesignScale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -206,7 +204,7 @@ private fun LyricsList(player: PlayerController, lyrics: Lyrics, height: android
                                 indication = androidx.compose.material3.ripple(color = Color.White),
                             ) {
                                 touchedAt = 0L // follow from the new spot straight away
-                                player.seekTo(line.time)
+                                line.time?.let(player::seekTo)
                             } else Modifier
                         )
                         .padding(horizontal = 12.u, vertical = 4.u),

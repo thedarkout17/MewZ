@@ -87,11 +87,18 @@ object AlbumMatching {
     /** Lower-case words, without punctuation or a leading "the" (so "The Weeknd" matches "weeknd"). */
     private fun words(text: String): Set<String> = wordList(text).toSet()
 
-    private fun wordList(text: String): List<String> =
-        text.lowercase()
-            .replace("&", " and ")
-            .split(Regex("""[^\p{L}\p{N}]+"""))
-            .filter { it.isNotEmpty() && it != "the" }
+    // Split on anything that isn't a letter or digit, in any script. (Not a \p{L} regex:
+    // iOS's Kotlin regex engine rejects Unicode classes, which the iPhone tests caught.)
+    private fun wordList(text: String): List<String> {
+        val words = mutableListOf<String>()
+        val word = StringBuilder()
+        for (c in text.lowercase().replace("&", " and ")) {
+            if (c.isLetterOrDigit()) word.append(c)
+            else if (word.isNotEmpty()) { words += word.toString(); word.clear() }
+        }
+        if (word.isNotEmpty()) words += word.toString()
+        return words.filter { it != "the" }
+    }
 
     private const val TOP_SONGS = 6
     private val FILLER = setOf("album", "albums", "full", "by", "lp", "ep", "deluxe", "edition")

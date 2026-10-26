@@ -94,6 +94,7 @@ jobs:
           exit ${PIPESTATUS[0]}
 
       - name: Build the app
+        if: ${{ !cancelled() }}
         shell: bash
         env:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
@@ -108,6 +109,7 @@ jobs:
           exit ${PIPESTATUS[0]}
 
       - name: Package MewZ.ipa
+        if: ${{ !cancelled() }}
         run: |
           app=$(find iosApp/build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | head -1)
           mkdir -p Payload && cp -R "$app" Payload/
