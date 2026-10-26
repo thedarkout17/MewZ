@@ -400,12 +400,12 @@ class PlayerController(context: Context) {
     }
 
     /**
-     * Like most players: restarts the song if you're past 3 seconds, else goes back one.
+     * Like most players: restarts the song if you're past 2.5 seconds, else goes back one.
      * In a library (which loops), back from the first song goes to the last.
      */
     fun previous() {
         when {
-            positionSeconds > 3f || !hasPrevious -> seekTo(0f)
+            positionSeconds > 2.5f || !hasPrevious -> seekTo(0f)
             index > 0 -> playAt(index - 1)
             else -> playAt(queue.size - 1) // first song of a looping library → the last
         }
