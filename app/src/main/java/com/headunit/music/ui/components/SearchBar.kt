@@ -52,8 +52,8 @@ import com.headunit.music.ui.theme.LocalDesignScale
 import kotlinx.coroutines.delay
 
 /** Bar height at rest and in search mode (design px). HomeScreen uses these to place things below it. */
-const val BAR_HEIGHT_IDLE = 232f
-const val BAR_HEIGHT_COMPACT = 168f
+const val BAR_HEIGHT_IDLE = 186f
+const val BAR_HEIGHT_COMPACT = 134f
 
 /**
  * Frosted pill search bar from the mockup: magnifier, query, clear, mic.
@@ -80,7 +80,7 @@ fun SearchBar(
     val typing by animateFloatAsState(if (active) 1f else 0f, tween(200), label = "searchOutline")
 
     with(LocalDesignScale.current) {
-        val fontSize = shrink(92f, 72f)
+        val fontSize = shrink(84f, 66f)
         val textStyle = TextStyle(
             color = Brand.RedText,
             fontSize = fontSize.usp,
@@ -112,7 +112,7 @@ fun SearchBar(
                 painter = painterResource(R.drawable.ic_search),
                 contentDescription = null,
                 tint = Brand.Red,
-                modifier = Modifier.size(shrink(108f, 84f).u),
+                modifier = Modifier.size(shrink(96f, 76f).u),
             )
 
             Spacer(Modifier.width(shrink(36f, 30f).u))
@@ -149,8 +149,8 @@ fun SearchBar(
                     painter = painterResource(R.drawable.ic_close),
                     contentDescription = stringResource(R.string.clear_search),
                     tint = Brand.RedMuted,
-                    glyph = shrink(80f, 66f),
-                    target = shrink(150f, 130f),
+                    glyph = shrink(74f, 60f),
+                    target = shrink(140f, 118f),
                     onClick = onClear,
                 )
             }
@@ -159,8 +159,8 @@ fun SearchBar(
                 painter = painterResource(R.drawable.ic_mic),
                 contentDescription = stringResource(R.string.voice_search),
                 tint = Brand.RedMuted,
-                glyph = shrink(96f, 80f),
-                target = shrink(150f, 130f),
+                glyph = shrink(88f, 72f),
+                target = shrink(140f, 118f),
                 onClick = onVoiceSearch,
             )
         }
