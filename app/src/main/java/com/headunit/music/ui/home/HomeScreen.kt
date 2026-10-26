@@ -550,8 +550,8 @@ fun HomeScreen(
 
                 if (libP < 1f && albumP < 1f) SearchBar(
                     query = query,
-                    // Blinking cursor while typing, and on the idle screen like the mockup.
-                    active = keyboardShown || !searching,
+                    // Blinking cursor and white outline only while typing.
+                    active = keyboardShown,
                     onActivate = ::activate,
                     onClear = { query = ""; activate() },
                     onVoiceSearch = onVoiceSearch,

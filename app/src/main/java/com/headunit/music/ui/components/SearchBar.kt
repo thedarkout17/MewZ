@@ -31,6 +31,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.border
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -57,8 +60,8 @@ const val BAR_HEIGHT_COMPACT = 168f
  * All sizes are design pixels on the 2000x1200 canvas.
  *
  * It's a display, not a system text field: typing comes from our own
- * GlassKeyboard, so Android's keyboard never pops up. [active] shows the
- * blinking cursor while our keyboard is up.
+ * GlassKeyboard, so Android's keyboard never pops up. [active] (our keyboard
+ * is up) shows the blinking cursor and a white outline.
  *
  * [compact] runs 0 → 1 as search mode opens: the bar gets thinner and its
  * text and icons shrink with it.
@@ -74,6 +77,7 @@ fun SearchBar(
     compact: Float = 0f,
 ) {
     fun shrink(idle: Float, small: Float) = idle + (small - idle) * compact
+    val typing by animateFloatAsState(if (active) 1f else 0f, tween(200), label = "searchOutline")
 
     with(LocalDesignScale.current) {
         val fontSize = shrink(92f, 72f)
@@ -89,6 +93,8 @@ fun SearchBar(
                 .height(shrink(BAR_HEIGHT_IDLE, BAR_HEIGHT_COMPACT).u)
                 .clip(RoundedCornerShape(percent = 50))
                 .background(Brand.Frost)
+                // White outline while typing, fading in and out.
+                .border(3.5f.u, Color.White.copy(alpha = typing), RoundedCornerShape(percent = 50))
                 // Tapping anywhere on the pill opens the keyboard: big target for driving.
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
