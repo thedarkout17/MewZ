@@ -50,7 +50,7 @@ Use `with(LocalDesignScale.current) { 232.u }` for sizes and `92.usp` for text.
   played are skipped. Personal project: pulling audio this way isn't allowed by YouTube's
   terms, and Google could disable the API key if it notices.
 - Libraries: scroll down from "Listen..." to big glass squares, two per row: **Liked**,
-  **History** (last 30 songs that played for 3+ seconds), your own libraries, and **+** to
+  **History** (last 50 songs that played for 3+ seconds), your own libraries, and **+** to
   make one (named on the glass keyboard). Opening one lists its songs under its name, which
   shrinks as you scroll; nothing plays until you pick a song, then the library loops and
   Now Playing shows "Name — 3 of 20". On Now Playing, ♡ likes the song and + adds it to one

@@ -182,7 +182,7 @@ class LibraryStore(context: Context) {
     }
 
     private companion object {
-        const val HISTORY_SIZE = 30
+        const val HISTORY_SIZE = 50
         const val KEY_LIKED = "liked"
         const val KEY_HISTORY = "history"
         const val KEY_CUSTOM = "custom"
