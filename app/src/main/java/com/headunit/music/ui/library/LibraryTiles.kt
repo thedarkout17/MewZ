@@ -42,9 +42,9 @@ import com.headunit.music.data.LIKED_ID
 import com.headunit.music.data.Library
 import com.headunit.music.ui.theme.LocalDesignScale
 
-/** Library squares on the home screen (design px). Two side by side, 120 from the screen edges. */
+/** Library squares on the home screen (design px). Two side by side, 80 from the screen edges. */
 const val LIBRARY_TILE = 760f
-const val LIBRARY_TILE_GAP = 240f
+const val LIBRARY_TILE_GAP = 320f
 /** Tile plus the name and song count under it. */
 const val LIBRARY_ROW_HEIGHT = LIBRARY_TILE + 190f
 
@@ -85,7 +85,7 @@ fun LibraryGrid(
         custom.map { LibraryTileItem.Open(it) } + LibraryTileItem.Create
 
     with(LocalDesignScale.current) {
-        Column(modifier, verticalArrangement = Arrangement.spacedBy(0.u)) {
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(80.u)) {
             items.chunked(2).forEach { row ->
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(LIBRARY_TILE_GAP.u),
