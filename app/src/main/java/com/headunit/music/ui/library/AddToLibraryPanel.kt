@@ -37,7 +37,7 @@ import com.headunit.music.R
 import com.headunit.music.data.Library
 import com.headunit.music.ui.theme.LocalDesignScale
 
-private const val ROW = 136f
+private const val ROW = 152f
 
 /**
  * Opened by + on Now Playing: your libraries (Liked isn't listed; adding
@@ -53,20 +53,13 @@ fun AddToLibraryPanel(
     modifier: Modifier = Modifier,
 ) {
     with(LocalDesignScale.current) {
-        val shape = RoundedCornerShape(56.u)
-        Column(
-            modifier = modifier
-                .width(1000.u)
-                .clip(shape)
-                .background(LibraryGlass.Panel)
-                .background(Brush.verticalGradient(listOf(Color(0x24FFFFFF), Color(0x08FFFFFF))))
-                .border(2.u, LibraryGlass.Edge, shape)
-                .padding(vertical = 28.u),
-        ) {
+        val shape = RoundedCornerShape(64.u)
+        // The same frosted glass as the library tiles and the hold menu.
+        FrostedCard(modifier = modifier.width(1000.u), shape = shape) {
             Text(
                 stringResource(R.string.add_to_library),
-                style = TextStyle(LibrarySecondary, fontSize = 44.usp, fontWeight = FontWeight.Medium),
-                modifier = Modifier.padding(start = 56.u, bottom = 12.u),
+                style = TextStyle(Color.White, fontSize = 56.usp, fontWeight = FontWeight.SemiBold, shadow = LibraryTextShadow),
+                modifier = Modifier.padding(start = 64.u, top = 48.u, bottom = 20.u),
             )
             LazyColumn(Modifier.heightIn(max = (ROW * 4).u)) {
                 items(libraries, key = { it.id }) { lib ->
@@ -86,47 +79,58 @@ fun AddToLibraryPanel(
                 checked = false,
                 onClick = onNewLibrary,
             )
+            Spacer(Modifier.height(32.u))
         }
     }
 }
 
+/** One choice: its own pane of glass, like the hold menu's options. A tick on ones that already have the song. */
 @Composable
 private fun PanelRow(icon: Int, title: String, subtitle: String?, checked: Boolean, onClick: () -> Unit) {
     with(LocalDesignScale.current) {
+        val shape = RoundedCornerShape(40.u)
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(ROW.u)
+                .padding(horizontal = 40.u, vertical = 8.u)
+                .height((ROW - 16f).u)
+                .clip(shape)
+                // Ones that already have the song are a little brighter.
+                .background(if (checked) GlassOptionLit else GlassOption)
+                .border(1.5f.u, LibraryGlass.Edge, shape)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = ripple(color = Color.White),
                     onClick = onClick,
                 )
-                .padding(horizontal = 40.u),
+                .padding(horizontal = 32.u),
         ) {
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(96.u)
+                    .size(88.u)
                     .clip(RoundedCornerShape(24.u))
                     .background(Brush.verticalGradient(listOf(Color(0x2EFFFFFF), Color(0x14FFFFFF)))),
             ) {
-                Icon(painterResource(icon), null, tint = Color.White, modifier = Modifier.size(52.u))
+                Icon(painterResource(icon), null, tint = Color.White, modifier = Modifier.size(50.u))
             }
-            Spacer(Modifier.width(36.u))
+            Spacer(Modifier.width(32.u))
             Column(Modifier.weight(1f)) {
                 Text(
                     title, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    style = TextStyle(Color.White, fontSize = 52.usp, fontWeight = FontWeight.Medium),
+                    style = TextStyle(Color.White, fontSize = 50.usp, fontWeight = FontWeight.Medium, shadow = LibraryTextShadow),
                 )
                 if (subtitle != null) {
-                    Text(subtitle, style = TextStyle(LibrarySecondary, fontSize = 36.usp))
+                    Text(subtitle, style = TextStyle(LibrarySecondary, fontSize = 36.usp, shadow = LibraryTextShadow))
                 }
             }
             if (checked) {
-                Icon(painterResource(R.drawable.ic_check), null, tint = Color.White, modifier = Modifier.size(60.u))
+                Icon(painterResource(R.drawable.ic_check), null, tint = Color.White, modifier = Modifier.size(56.u))
             }
         }
     }
 }
+
+/** A checked option: the same glass, a touch brighter. */
+private val GlassOptionLit = Brush.verticalGradient(listOf(Color(0x4DFFFFFF), Color(0x24FFFFFF)))
