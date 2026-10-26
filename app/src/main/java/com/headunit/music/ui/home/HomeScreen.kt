@@ -419,7 +419,10 @@ fun HomeScreen(
                         library = pageLibrary,
                         onBack = { openLibraryId = null },
                         // Libraries play in a loop, showing "Name — 3 of 20" on Now Playing.
-                        onPlay = { i -> onPlay(pageLibrary.tracks, i, pageLibrary.name) },
+                        onPlay = { i ->
+                            libraries.touch(pageLibrary.id) // most recently played moves to the front
+                            onPlay(pageLibrary.tracks, i, pageLibrary.name)
+                        },
                         onQueue = onQueue,
                         dockInset = dockInset,
                         modifier = Modifier.graphicsLayer {

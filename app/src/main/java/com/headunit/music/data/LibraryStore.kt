@@ -73,9 +73,21 @@ class LibraryStore(context: Context) {
 
     fun create(name: String): Library {
         val lib = Library(UUID.randomUUID().toString(), name.trim(), emptyList())
-        custom = custom + lib
+        // Newest first: a new library goes to the front.
+        custom = listOf(lib) + custom
         writeCustom()
         return lib
+    }
+
+    /**
+     * A song was played from this library: move it to the front, so your
+     * libraries stay in most-recently-used order. (Liked and History stay put.)
+     */
+    fun touch(libraryId: String) {
+        val lib = custom.firstOrNull { it.id == libraryId } ?: return
+        if (custom.first() === lib) return
+        custom = listOf(lib) + custom.filterNot { it.id == libraryId }
+        writeCustom()
     }
 
     /** Removes a library you made. Liked and History can't be deleted; its songs stay liked. */
