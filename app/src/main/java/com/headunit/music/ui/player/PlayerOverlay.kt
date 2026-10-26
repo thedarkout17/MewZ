@@ -3,6 +3,10 @@ package com.headunit.music.ui.player
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
+import kotlinx.coroutines.launch
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -674,29 +678,69 @@ private fun GlassTile(
     onClick: () -> Unit,
     activeIcon: Int = icon,
 ) {
+    // Switching on: the icon pops (shrinks, then springs past full size and settles)
+    // and a soft glass ring flashes out from it. Switching off just fades back.
+    val pop = remember { Animatable(1f) }
+    val ring = remember { Animatable(0f) }
+    val glass by animateFloatAsState(if (active) 1f else 0f, tween(220), label = "tileGlass")
+    // Only for taps: skipping to an already-liked song turns the heart on without a pop.
+    var tapped by remember { mutableStateOf(false) }
+    LaunchedEffect(active) {
+        val fromTap = tapped
+        tapped = false
+        if (!active || !fromTap) return@LaunchedEffect
+        launch {
+            pop.snapTo(0.72f)
+            pop.animateTo(1f, spring(dampingRatio = 0.32f, stiffness = Spring.StiffnessMediumLow))
+        }
+        launch {
+            ring.snapTo(0f)
+            ring.animateTo(1f, tween(520, easing = FastOutSlowInEasing))
+            ring.snapTo(0f)
+        }
+    }
+
     with(LocalDesignScale.current) {
         val shape = RoundedCornerShape(30.u)
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .width(190.u)
-                .height(116.u)
-                .clip(shape)
-                .then(
-                    if (active) Modifier.background(PlayerGlass.Tile).border(1.5f.u, PlayerGlass.Edge, shape)
-                    else Modifier
+        // One tile: the glass (fading in when on) takes the taps; the ring and icon sit on
+        // top without catching taps, and the ring may spill a little past the tile's edge.
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.width(190.u).height(116.u)) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .clip(shape)
+                    .then(
+                        if (glass > 0f) Modifier
+                            .graphicsLayer { alpha = glass }
+                            .background(PlayerGlass.Tile)
+                            .border(1.5f.u, PlayerGlass.Edge, shape)
+                        else Modifier
+                    )
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = ripple(color = Color.White),
+                        onClick = { tapped = true; onClick() },
+                    ),
+            )
+            if (ring.value > 0f) {
+                Box(
+                    Modifier
+                        .size(60.u)
+                        .graphicsLayer {
+                            val s = 1f + 1.1f * ring.value
+                            scaleX = s; scaleY = s
+                            alpha = 0.55f * (1f - ring.value)
+                        }
+                        .border(3.u, Color.White, CircleShape),
                 )
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = ripple(color = Color.White),
-                    onClick = onClick,
-                ),
-        ) {
+            }
             Icon(
                 painterResource(if (active) activeIcon else icon),
                 contentDescription,
                 tint = Color.White,
-                modifier = Modifier.size(60.u),
+                modifier = Modifier
+                    .size(60.u)
+                    .graphicsLayer { scaleX = pop.value; scaleY = pop.value },
             )
         }
     }
