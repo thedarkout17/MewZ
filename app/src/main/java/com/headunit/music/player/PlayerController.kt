@@ -43,7 +43,7 @@ class PlayerController(context: Context) {
     val current: Track? by derivedStateOf { queue.getOrNull(index) }
     val hasPrevious: Boolean by derivedStateOf { index > 0 }
     val hasNext: Boolean by derivedStateOf {
-        index in 0 until queue.size - 1 || (repeat == RepeatMode.All && queue.isNotEmpty())
+        index in 0 until queue.size - 1 || (wrapQueue && queue.isNotEmpty())
     }
 
     /** The queue in its original order, so turning shuffle off puts it back. */
@@ -51,7 +51,15 @@ class PlayerController(context: Context) {
 
     var shuffle by mutableStateOf(false)
         private set
-    var repeat by mutableStateOf(RepeatMode.Off)
+    /** Loop button: replay the current song when it ends. */
+    var loopSong by mutableStateOf(false)
+        private set
+
+    /**
+     * Go back to the first song after the last one. Libraries and playlists
+     * will play this way; search results don't.
+     */
+    var wrapQueue by mutableStateOf(false)
         private set
 
     /** Now Playing shows the artwork (false) or the live YouTube video (true). */
@@ -94,11 +102,15 @@ class PlayerController(context: Context) {
 
     // ---- Controls ----
 
-    /** Plays [tracks] starting at [startIndex]; the rest become the queue. */
-    fun playQueue(tracks: List<Track>, startIndex: Int, name: String? = null) {
+    /**
+     * Plays [tracks] starting at [startIndex]; the rest become the queue.
+     * [wrap]: start over after the last song (libraries / playlists pass true).
+     */
+    fun playQueue(tracks: List<Track>, startIndex: Int, name: String? = null, wrap: Boolean = false) {
         if (startIndex !in tracks.indices) return
         originalOrder = tracks
         queueName = name
+        wrapQueue = wrap
         if (shuffle) {
             // Keep the tapped song first, shuffle the rest after it.
             val first = tracks[startIndex]
@@ -125,13 +137,8 @@ class PlayerController(context: Context) {
         }
     }
 
-    /** Off → loop the whole queue → loop this song → off. */
-    fun cycleRepeat() {
-        repeat = when (repeat) {
-            RepeatMode.Off -> RepeatMode.All
-            RepeatMode.All -> RepeatMode.One
-            RepeatMode.One -> RepeatMode.Off
-        }
+    fun toggleLoop() {
+        loopSong = !loopSong
     }
 
     fun togglePlay() {
@@ -142,7 +149,7 @@ class PlayerController(context: Context) {
     fun next() {
         when {
             index < queue.size - 1 -> playAt(index + 1)
-            repeat == RepeatMode.All && queue.isNotEmpty() -> playAt(0) // wrap around
+            wrapQueue && queue.isNotEmpty() -> playAt(0) // back to the start
         }
     }
 
@@ -206,7 +213,7 @@ class PlayerController(context: Context) {
             webView.keepScreenOn = isPlaying
             if (state == STATE_ENDED) {
                 when {
-                    repeat == RepeatMode.One -> { js("seek(0)"); js("play()") }
+                    loopSong -> { js("seek(0)"); js("play()") }
                     hasNext -> next()
                     else -> isBuffering = false
                 }
@@ -306,5 +313,3 @@ enum class PlayerError(val message: String, val skippable: Boolean) {
     }
 }
 
-/** Loop setting: off, the whole queue, or the current song. */
-enum class RepeatMode { Off, All, One }

@@ -520,7 +520,7 @@ body {
           </div>
           <div class="tiles">
             <button class="tile" type="button" data-act="shuffle" aria-label="Shuffle" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3.5c1.6 0 3 .8 3.9 2.1l3.2 4.8c.9 1.3 2.3 2.1 3.9 2.1H20M3 17h3.5c1.6 0 3-.8 3.9-2.1M13.6 9.1c.9-1.3 2.3-2.1 3.9-2.1H20M17.5 4.5 20 7l-2.5 2.5M17.5 13.5 20 16l-2.5 2.5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-            <button class="tile" type="button" data-act="repeat" aria-label="Loop off" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11v-1a3 3 0 0 1 3-3h12M16.5 4.5 19 7l-2.5 2.5M20 13v1a3 3 0 0 1-3 3H5M7.5 19.5 5 17l2.5-2.5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <button class="tile" type="button" data-act="repeat" aria-label="Loop this song" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11v-1a3 3 0 0 1 3-3h12M16.5 4.5 19 7l-2.5 2.5M20 13v1a3 3 0 0 1-3 3H5M7.5 19.5 5 17l2.5-2.5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             <button class="tile" type="button" data-act="add" aria-label="Add to library"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg></button>
           </div>
         </div>
@@ -555,7 +555,7 @@ body {
       <span class="chip">Canvas <b>2000×1200</b></span>
       <span class="chip">Scale <b id="scale">–</b></span>
       <span class="chip">Back <b>Esc</b></span>
-      <span class="chip">Build <b>v0.22 · player</b></span>
+      <span class="chip">Build <b>v0.23 · player</b></span>
       <label class="chip" for="mode">Results
         <select class="sel" id="mode">
           <option value="ok">Sample songs</option>
@@ -753,10 +753,11 @@ function back() {
 }
 // ---------- Player (mirrors PlayerController.kt; playback is simulated here) ----------
 const P = { queue: [], original: [], name: null, index: -1, playing: false, pos: 0, dur: 0,
-            expanded: false, shuffle: false, repeat: 'off', showVideo: false, timer: null };
-const PICON = { play: "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M8.5 5.3c0-.8.9-1.3 1.6-.9l9.3 5.9c.7.4.7 1.5 0 1.9l-9.3 5.9c-.7.4-1.6-.1-1.6-.9z\" fill=\"#fff\"/></svg>", pause: "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M7 4.5h2.6a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1zM14.4 4.5H17a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-2.6a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z\" fill=\"#fff\"/></svg>", repeat: "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 11v-1a3 3 0 0 1 3-3h12M16.5 4.5 19 7l-2.5 2.5M20 13v1a3 3 0 0 1-3 3H5M7.5 19.5 5 17l2.5-2.5\" fill=\"none\" stroke=\"#fff\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>", repeat1: "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M4 11v-1a3 3 0 0 1 3-3h12M16.5 4.5 19 7l-2.5 2.5M20 13v1a3 3 0 0 1-3 3H5M7.5 19.5 5 17l2.5-2.5\" fill=\"none\" stroke=\"#fff\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M11 10.6l1.3-.9v4.8\" fill=\"none\" stroke=\"#fff\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>" };
+            expanded: false, shuffle: false, loop: false, wrap: false, showVideo: false, timer: null };
+const PICON = { play: "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M8.5 5.3c0-.8.9-1.3 1.6-.9l9.3 5.9c.7.4.7 1.5 0 1.9l-9.3 5.9c-.7.4-1.6-.1-1.6-.9z\" fill=\"#fff\"/></svg>", pause: "<svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M7 4.5h2.6a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1zM14.4 4.5H17a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-2.6a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1z\" fill=\"#fff\"/></svg>" };
 const cur = () => P.queue[P.index];
-const hasNext = () => P.index < P.queue.length - 1 || (P.repeat === 'all' && P.queue.length > 0);
+// wrap = start over after the last song (libraries / playlists); search results don't.
+const hasNext = () => P.index < P.queue.length - 1 || (P.wrap && P.queue.length > 0);
 const toSec = d => { const [m, s] = d.split(':').map(Number); return m * 60 + s; };
 const fmt = s => { s = Math.max(0, Math.floor(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 const shuffled = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
@@ -779,7 +780,7 @@ function tick() {
     if (!P.playing) return;
     P.pos += 0.25;
     if (P.pos >= P.dur) {                               // STATE_ENDED
-      if (P.repeat === 'one') { P.pos = 0; logEvent('player.ended', 'loop this song'); }
+      if (P.loop) { P.pos = 0; logEvent('player.ended', 'loop this song'); }
       else if (hasNext()) { logEvent('player.ended', 'next in queue'); next(); return; }
       else { P.pos = P.dur; P.playing = false; logEvent('player.ended', 'end of queue'); renderPlayer(); }
     }
@@ -789,7 +790,7 @@ function tick() {
 function togglePlay() { P.playing = !P.playing; logEvent('player', P.playing ? 'play' : 'pause'); renderPlayer(); }
 function next() {
   if (P.index < P.queue.length - 1) playAt(P.index + 1);
-  else if (P.repeat === 'all' && P.queue.length) playAt(0);
+  else if (P.wrap && P.queue.length) playAt(0);
 }
 function previous() { if (P.pos > 3 || P.index === 0) { P.pos = 0; logEvent('player', 'restart'); renderProgress(); } else playAt(P.index - 1); }
 function toggleShuffle() {
@@ -798,10 +799,7 @@ function toggleShuffle() {
   else { P.queue = P.original; P.index = Math.max(0, P.original.indexOf(now)); }
   logEvent('player', `shuffle ${P.shuffle ? 'on' : 'off'}`); renderPlayer();
 }
-function cycleRepeat() {
-  P.repeat = { off: 'all', all: 'one', one: 'off' }[P.repeat];
-  logEvent('player', `loop ${({ off: 'off', all: 'queue', one: 'this song' })[P.repeat]}`); renderPlayer();
-}
+function toggleLoop() { P.loop = !P.loop; logEvent('player', `loop this song ${P.loop ? 'on' : 'off'}`); renderPlayer(); }
 function setExpanded(v) { P.expanded = v; if (!v) P.showVideo = false; logEvent('player', v ? 'expand' : 'minimize'); renderPlayer(); }
 // Search results play as a plain queue: no library/playlist name, so no "3 of 20".
 function play(t) { playQueue(results.tracks, results.tracks.indexOf(t), null); }
@@ -840,9 +838,7 @@ function renderPlayer() {
   const sh = playerEl.querySelector('[data-act="shuffle"]');
   sh.classList.toggle('on', P.shuffle); sh.setAttribute('aria-pressed', P.shuffle);
   const rp = playerEl.querySelector('[data-act="repeat"]');
-  rp.classList.toggle('on', P.repeat !== 'off'); rp.setAttribute('aria-pressed', P.repeat !== 'off');
-  rp.innerHTML = P.repeat === 'one' ? PPICON.repeat1 : PICON.repeat;
-  rp.setAttribute('aria-label', ({ off: 'Loop off', all: 'Loop queue', one: 'Loop this song' })[P.repeat]);
+  rp.classList.toggle('on', P.loop); rp.setAttribute('aria-pressed', P.loop);
   renderProgress();
 }
 playerEl.addEventListener('click', (e) => {
@@ -850,7 +846,7 @@ playerEl.addEventListener('click', (e) => {
   if (b) {
     e.stopPropagation();
     ({ prev: previous, next, toggle: togglePlay, min: () => setExpanded(false),
-       shuffle: toggleShuffle, repeat: cycleRepeat,
+       shuffle: toggleShuffle, repeat: toggleLoop,
        add: () => { logEvent('player', 'add to library (coming later)'); toast('Libraries are coming soon'); },
     })[b.dataset.act]();
     return;

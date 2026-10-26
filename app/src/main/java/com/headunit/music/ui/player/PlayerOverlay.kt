@@ -63,7 +63,6 @@ import coil.request.ImageRequest
 import com.headunit.music.R
 import com.headunit.music.data.Track
 import com.headunit.music.player.PlayerController
-import com.headunit.music.player.RepeatMode
 import com.headunit.music.ui.theme.Brand
 import com.headunit.music.ui.theme.DesignCanvas
 import com.headunit.music.ui.theme.LocalDesignScale
@@ -431,16 +430,10 @@ private fun NowPlaying(player: PlayerController, width: Float, shiftY: Float, al
             )
             GlassTile(
                 icon = R.drawable.ic_repeat,
-                activeIcon = if (player.repeat == RepeatMode.One) R.drawable.ic_repeat_one_bold else R.drawable.ic_repeat_bold,
-                contentDescription = stringResource(
-                    when (player.repeat) {
-                        RepeatMode.Off -> R.string.repeat_off
-                        RepeatMode.All -> R.string.repeat_all
-                        RepeatMode.One -> R.string.repeat_one
-                    }
-                ),
-                active = player.repeat != RepeatMode.Off,
-                onClick = player::cycleRepeat,
+                activeIcon = R.drawable.ic_repeat_bold,
+                contentDescription = stringResource(R.string.loop_song),
+                active = player.loopSong,
+                onClick = player::toggleLoop,
             )
             GlassTile(
                 icon = R.drawable.ic_add,
