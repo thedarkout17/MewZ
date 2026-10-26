@@ -325,10 +325,10 @@ fun HomeScreen(
                             .width(1090.u)
                             .graphicsLayer {
                                 val s = 1f - 0.35f * progress
-                                // Over-scroll squish, stronger than the search bar's: flatter and wider.
-                                val k = squish.pull / squishMaxPx
-                                scaleX = s * (1f + LISTEN_SQUISH_X * k)
-                                scaleY = s * (1f - LISTEN_SQUISH_Y * k)
+                                // Over-scroll: grows as you pull, springs back with the bar.
+                                val g = 1f + LISTEN_GROW * (squish.pull / squishMaxPx)
+                                scaleX = s * g
+                                scaleY = s * g
                                 translationY = -homeScroll.value.toFloat()
                                 alpha = home * (1f - homeScroll.value / scrollFadePx).coerceIn(0f, 1f)
                             },
@@ -504,9 +504,8 @@ private const val SQUISH_PULL = 320f
 /** At full pull the bar is this much shorter / wider. */
 private const val SQUISH_Y = 0.16f
 private const val SQUISH_X = 0.035f
-/** "Listen..." squishes more than the bar. */
-private const val LISTEN_SQUISH_Y = 0.26f
-private const val LISTEN_SQUISH_X = 0.09f
+/** "Listen..." grows this much at full pull. */
+private const val LISTEN_GROW = 0.18f
 
 /** How far the home page is being dragged past its end (px; 0 = at rest). */
 private class SquishState {
