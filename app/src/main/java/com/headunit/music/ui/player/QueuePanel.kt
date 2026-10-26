@@ -18,18 +18,26 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -49,9 +57,10 @@ const val QUEUE_PANEL_WIDTH = 860f
 private const val ROW = 150f
 
 /**
- * Opened by the queue button on Now Playing: the song playing now, then
- * everything coming up. Tap a song to jump to it; × takes it out. Songs added
- * with a hold are marked "Queued".
+ * Opened by the queue button on Now Playing: opens on the song playing now,
+ * with everything coming up below it. Scroll up to see what already played
+ * (faded and greyed out). Tap a song to jump to it; × takes an upcoming one
+ * out. Songs added with a hold are marked "Queued".
  */
 @Composable
 fun QueuePanel(player: PlayerController, modifier: Modifier = Modifier) {
@@ -59,8 +68,14 @@ fun QueuePanel(player: PlayerController, modifier: Modifier = Modifier) {
         val shape = RoundedCornerShape(56.u)
         val queue = player.queue
         val now = player.index
-        // Positions in the queue, from the current song on.
-        val shown = if (now in queue.indices) (now until queue.size).toList() else emptyList()
+        val shown = queue.indices.toList()
+        // Opens with the current song at the top; earlier songs are above it.
+        val list = rememberLazyListState(initialFirstVisibleItemIndex = now.coerceAtLeast(0))
+        var opened by remember { mutableStateOf(false) }
+        LaunchedEffect(now) {
+            // Follow along when the song changes while the sheet is open.
+            if (opened && now >= 0) list.animateScrollToItem(now) else opened = true
+        }
 
         Column(
             modifier = modifier
@@ -80,14 +95,20 @@ fun QueuePanel(player: PlayerController, modifier: Modifier = Modifier) {
                     style = TextStyle(Color.White, fontSize = 60.usp, fontWeight = FontWeight.SemiBold),
                     modifier = Modifier.weight(1f),
                 )
-                val upcoming = (shown.size - 1).coerceAtLeast(0)
-                Text(
-                    if (upcoming == 1) "1 song" else "$upcoming songs",
-                    style = TextStyle(LibrarySecondary, fontSize = 40.usp),
-                )
+                // How many are lined up: in a mix only the songs you added count
+                // (the mix itself is endless); in a library, everything still to come.
+                val ahead = queue.drop(now + 1)
+                val count = if (player.autoMix) ahead.count { player.isHeldQueued(it) } else ahead.size
+                if (count > 0) {
+                    Text(
+                        if (count == 1) "1 song" else "$count songs",
+                        style = TextStyle(LibrarySecondary, fontSize = 40.usp),
+                    )
+                }
             }
 
             LazyColumn(
+                state = list,
                 contentPadding = PaddingValues(bottom = 28.u),
                 modifier = Modifier.fillMaxWidth().weight(1f),
             ) {
@@ -96,9 +117,10 @@ fun QueuePanel(player: PlayerController, modifier: Modifier = Modifier) {
                     QueueRow(
                         track = track,
                         playing = i == now,
-                        held = player.isHeldQueued(track),
+                        played = i < now,
+                        held = i > now && player.isHeldQueued(track),
                         onClick = { player.skipTo(i) },
-                        onRemove = if (i == now) null else ({ player.removeFromQueue(i) }),
+                        onRemove = if (i > now) ({ player.removeFromQueue(i) }) else null,
                     )
                 }
                 if (player.autoMix) {
@@ -119,6 +141,8 @@ fun QueuePanel(player: PlayerController, modifier: Modifier = Modifier) {
 private fun QueueRow(
     track: Track,
     playing: Boolean,
+    /** Already played: shown faded and greyed out. */
+    played: Boolean,
     held: Boolean,
     onClick: () -> Unit,
     onRemove: (() -> Unit)?,
@@ -129,6 +153,7 @@ private fun QueueRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(ROW.u)
+                .graphicsLayer { alpha = if (played) 0.75f else 1f }
                 .then(if (playing) Modifier.background(Color(0x1FFFFFFF)) else Modifier)
                 .clickable(
                     enabled = !playing,
@@ -142,6 +167,7 @@ private fun QueueRow(
                 model = track.thumbnailUrl,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                colorFilter = if (played) Desaturated else null,
                 modifier = Modifier
                     .width(184.u)
                     .height(104.u)
@@ -193,3 +219,6 @@ private fun QueueRow(
         }
     }
 }
+
+/** Mostly grey (20% of the colour left) for songs that already played. */
+private val Desaturated = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0.2f) })
