@@ -45,7 +45,8 @@ Use `with(LocalDesignScale.current) { 232.u }` for sizes and `92.usp` for text.
   Pauses for navigation prompts / calls and when Bluetooth drops.
   Now Playing laid out like CarPlay (720×720 artwork, full-width seek bar, shuffle /
   loop-this-song / add); ⌄ minimizes to a glass dock and returns home.
-  Tapping a result queues the rest of that list; songs auto-advance; songs that can't be
+  Tapping a result plays it followed by its YouTube Mix (like YouTube autoplay, refilled as it
+  runs low); songs auto-advance; songs that can't be
   played are skipped. Personal project: pulling audio this way isn't allowed by YouTube's
   terms, and Google could disable the API key if it notices.
 - Libraries: scroll down from "Listen..." to big glass squares, two per row: **Liked**,
