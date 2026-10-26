@@ -38,9 +38,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.viewinterop.AndroidView
-import android.view.ViewGroup
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlurEffect
@@ -121,9 +118,6 @@ private const val SEEK_TOP = 862f
 private const val TILES_TOP = 1006f
 private const val ART_MINI = 224f       // artwork square in the dock
 private const val ART_MINI_X = 56f
-/** Each hidden YouTube player's size in real pixels: small enough for YouTube's lowest quality. */
-private const val HIDDEN_PLAYER_W_PX = 128
-private const val HIDDEN_PLAYER_H_PX = 72
 
 /**
  * The player, drawn over everything.
@@ -136,8 +130,7 @@ private const val HIDDEN_PLAYER_H_PX = 72
  * **Dock** (minimized): a glass bar along the bottom with the artwork, song and
  * controls. Tap it to open Now Playing.
  *
- * The YouTube players sit tiny behind the artwork, so you only ever see the
- * cover. The artwork square glides between the dock
+ * Audio only: there's no video. The artwork square glides between the dock
  * and Now Playing.
  * [dockHidden] slides the dock away (e.g. while our keyboard is up).
  */
@@ -244,20 +237,6 @@ fun PlayerOverlay(
                             indication = null,
                         ) { if (!player.expanded) player.expanded = true },
                 ) {
-                    // The two YouTube players: on screen (they need to be to play) but
-                    // tiny and covered by the artwork. Tiny = YouTube's lowest video
-                    // quality, so data use stays low.
-                    val density = LocalDensity.current
-                    Row(Modifier.align(Alignment.Center)) {
-                        player.playerViews.forEach { view ->
-                            AndroidView(
-                                factory = { view.also { (it.parent as? ViewGroup)?.removeView(it) } },
-                                modifier = with(density) {
-                                    Modifier.size(width = HIDDEN_PLAYER_W_PX.toDp(), height = HIDDEN_PLAYER_H_PX.toDp())
-                                },
-                            )
-                        }
-                    }
                     run {
                         val context = LocalContext.current
                         val artRequest = remember(track.artworkUrl) {
