@@ -37,6 +37,14 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.headunit.music.ui.home.TrackRow
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
@@ -74,8 +82,8 @@ private val DeleteText = Color(0xFFFFC2D4)
  * - **Menu**: Move To Front, Change Cover Songs, Delete Library (pink).
  * - **Change Cover Songs**: the tile's cover grows out of the tile into the
  *   middle of the screen, "Select Song To Replace" above it. Tap one of its
- *   squares and the library's songs appear beside it; pick one and its artwork
- *   takes that spot.
+ *   squares: the cover moves to the right and the library's songs fill the rest
+ *   of the screen like the queue; pick one and its artwork takes that spot.
  * A tap on empty space or Back steps back (song list → cover → closed).
  */
 @Composable
@@ -126,7 +134,8 @@ fun LibraryOptions(
         Modifier
             .fillMaxSize()
             .graphicsLayer { alpha = p }
-            .background(Color(0x99000000))
+            // Darker behind the song list so it reads like a page of its own.
+            .background(Color.Black.copy(alpha = 0.6f + 0.25f * aside))
             // A tap on empty space steps back (and nothing underneath reacts).
             .pointerInput(Unit) { detectTapGestures(onTap = { back() }) },
     ) {
@@ -150,9 +159,12 @@ fun LibraryOptions(
 
             // ---- Cover, growing from its tile into the middle ----
             if (grow > 0f) {
-                val big = with(density) { COVER_BIG.u.toPx() }
-                val centerX = screenW / 2f - aside * screenW * 0.2f
-                val centerY = screenH / 2f + with(density) { 40.u.toPx() }
+                // Big in the middle; while choosing a song, a bit smaller on the right so it
+                // stays in view beside the list.
+                val big = with(density) { (COVER_BIG + (COVER_SIDE - COVER_BIG) * aside).u.toPx() }
+                val rightX = screenW - with(density) { COVER_RIGHT.u.toPx() } - big / 2f
+                val centerX = screenW / 2f + (rightX - screenW / 2f) * aside
+                val centerY = screenH / 2f + with(density) { (40f * (1f - aside)).u.toPx() }
                 val target = Rect(centerX - big / 2f, centerY - big / 2f, centerX + big / 2f, centerY + big / 2f)
                 val r = lerp(h.tile, target, grow)
                 val sizeDp = with(density) { r.width.toDp() }
@@ -165,7 +177,7 @@ fun LibraryOptions(
                     modifier = Modifier
                         .offset { IntOffset((r.center.x - screenW / 2f).roundToInt(), (r.top - with(density) { 120.u.toPx() }).roundToInt()) }
                         .fillMaxWidth()
-                        .graphicsLayer { alpha = grow },
+                        .graphicsLayer { alpha = grow * (1f - aside) },
                 )
                 Box(
                     Modifier
@@ -186,9 +198,9 @@ fun LibraryOptions(
                 }
             }
 
-            // ---- Songs to choose from, beside the cover ----
+            // ---- Songs to choose from: a page like the queue, left of the cover ----
             if (aside > 0f) {
-                SongPicker(
+                SongPickerPage(
                     tracks = library.tracks,
                     current = library.coverTracks.getOrNull(slot),
                     onPick = { track ->
@@ -196,11 +208,11 @@ fun LibraryOptions(
                         stage = Stage.Cover
                     },
                     modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = 64.u, top = 64.u, bottom = 64.u)
+                        .fillMaxHeight()
+                        .width(with(density) { (screenW - (COVER_SIDE + COVER_RIGHT + 64f).u.toPx()).toDp() })
                         .graphicsLayer {
                             alpha = aside
-                            translationX = (1f - aside) * 80.u.toPx()
+                            translationX = -(1f - aside) * 80.u.toPx()
                         },
                 )
             }
@@ -209,6 +221,13 @@ fun LibraryOptions(
 }
 
 private const val COVER_BIG = 760f
+/** The cover's size and right margin while the song list is open. */
+private const val COVER_SIDE = 620f
+private const val COVER_RIGHT = 96f
+
+// Song list header (design px), like the queue's: big title shrinking as you scroll.
+private const val PICK_HEADER_TALL = 470f
+private const val PICK_HEADER_SHORT = 190f
 
 private fun lerp(a: Rect, b: Rect, t: Float) = Rect(
     a.left + (b.left - a.left) * t,
@@ -292,67 +311,74 @@ private fun MenuRow(icon: Int, text: String, danger: Boolean = false, enabled: B
     }
 }
 
-/** The library's songs, to pick one for the chosen cover spot. */
+/**
+ * The library's songs, laid out like the queue: a big "Choose A Song" that
+ * shrinks as you scroll, then the songs. The one in the chosen spot now is
+ * highlighted. Tap one to put its artwork there.
+ */
 @Composable
-private fun SongPicker(tracks: List<Track>, current: Track?, onPick: (Track) -> Unit, modifier: Modifier) {
+private fun SongPickerPage(tracks: List<Track>, current: Track?, onPick: (Track) -> Unit, modifier: Modifier) {
+    val list = rememberLazyListState()
+    val density = LocalDensity.current
     with(LocalDesignScale.current) {
-        val shape = RoundedCornerShape(56.u)
-        Column(
-            modifier = modifier
-                .width(820.u)
-                .fillMaxHeight()
-                .clip(shape)
-                .background(LibraryGlass.Panel)
-                .background(Brush.verticalGradient(listOf(Color(0x24FFFFFF), Color(0x08FFFFFF))))
-                .border(2.u, LibraryGlass.Edge, shape)
-                .pointerInput(Unit) { detectTapGestures { } },
-        ) {
-            Text(
-                "Choose a song",
-                style = TextStyle(Color.White, fontSize = 56.usp, fontWeight = FontWeight.SemiBold),
-                modifier = Modifier.padding(start = 56.u, top = 44.u, bottom = 16.u),
-            )
-            LazyColumn(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(4.u)) {
-                items(tracks, key = { it.videoId }) { track ->
-                    val isCurrent = track.videoId == current?.videoId
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(150.u)
-                            .then(if (isCurrent) Modifier.background(Color(0x1FFFFFFF)) else Modifier)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = ripple(color = Color.White),
-                            ) { onPick(track) }
-                            .padding(horizontal = 40.u),
-                    ) {
-                        AsyncImage(
-                            model = track.thumbnailUrl,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .width(184.u)
-                                .height(104.u)
-                                .clip(RoundedCornerShape(18.u))
-                                .background(Color.White.copy(alpha = 0.10f)),
+        val collapseDistance = (PICK_HEADER_TALL - PICK_HEADER_SHORT).u
+        val c by remember {
+            derivedStateOf {
+                if (list.firstVisibleItemIndex > 0) 1f
+                else (list.firstVisibleItemScrollOffset / with(density) { collapseDistance.toPx() }).coerceIn(0f, 1f)
+            }
+        }
+        val headerH = PICK_HEADER_TALL + (PICK_HEADER_SHORT - PICK_HEADER_TALL) * c
+        Box(modifier) {
+            LazyColumn(
+                state = list,
+                verticalArrangement = Arrangement.spacedBy(20.u),
+                contentPadding = PaddingValues(top = PICK_HEADER_TALL.u, bottom = 64.u, start = 80.u),
+                modifier = Modifier
+                    .fillMaxSize()
+                    // Rows dissolve as they slide up under the title.
+                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        val top = headerH.u.toPx() - 30.u.toPx()
+                        val solid = top + 60.u.toPx()
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                0f to Color.Transparent,
+                                (top / size.height) to Color.Transparent,
+                                (solid / size.height) to Color.Black,
+                            ),
+                            blendMode = BlendMode.DstIn,
                         )
-                        Spacer(Modifier.width(32.u))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                track.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                style = TextStyle(Color.White, fontSize = 46.usp, fontWeight = FontWeight.Medium),
-                            )
-                            Text(
-                                track.artist, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                style = TextStyle(LibrarySecondary, fontSize = 36.usp),
-                            )
-                        }
-                        if (isCurrent) {
-                            Icon(painterResource(R.drawable.ic_check), null, tint = Color.White, modifier = Modifier.size(52.u))
-                        }
-                    }
+                    },
+            ) {
+                itemsIndexed(tracks, key = { _, t -> t.videoId }) { i, track ->
+                    val isCurrent = track.videoId == current?.videoId
+                    TrackRow(
+                        track = track,
+                        index = i,
+                        onClick = { onPick(track) },
+                        label = if (isCurrent) "On cover" else null,
+                        highlighted = isCurrent,
+                    )
                 }
+            }
+            Column(Modifier.offset(x = 96.u, y = (226f + (64f - 226f) * c).u)) {
+                Text(
+                    "Choose A Song",
+                    maxLines = 1,
+                    style = TextStyle(
+                        Color.White,
+                        fontSize = (132f + (76f - 132f) * c).usp,
+                        fontWeight = FontWeight.SemiBold,
+                        shadow = LibraryTextShadow,
+                    ),
+                )
+                Text(
+                    "Its artwork replaces the outlined square",
+                    style = TextStyle(LibrarySecondary, fontSize = 46.usp, shadow = LibraryTextShadow),
+                    modifier = Modifier.graphicsLayer { alpha = 1f - c },
+                )
             }
         }
     }
