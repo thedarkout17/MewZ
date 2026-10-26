@@ -27,6 +27,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.headunit.music.data.Track
 import com.headunit.music.data.youtube.AudioStreams
 import com.headunit.music.data.youtube.AudioUnavailableException
+import com.headunit.music.data.youtube.YouTubeMix
 import com.headunit.music.data.youtube.NewPipeDownloader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,7 +43,8 @@ import kotlinx.coroutines.withContext
  * Plays songs as audio only (no video is downloaded) and keeps a simple queue.
  *
  * Each song's audio stream is found with NewPipeExtractor ([AudioStreams]) and
- * played with Media3 ExoPlayer. While a song plays, the next one is looked up
+ * played with Media3 ExoPlayer. A song played from search is followed by its
+ * YouTube Mix ([YouTubeMix]), like YouTube's autoplay. While a song plays, the next one is looked up
  * in the background, so skipping is near-instant.
  *
  * All state is Compose state, so the screens update on their own.
@@ -63,7 +65,7 @@ class PlayerController(context: Context) {
     val current: Track? by derivedStateOf { queue.getOrNull(index) }
     val hasPrevious: Boolean by derivedStateOf { index > 0 }
     val hasNext: Boolean by derivedStateOf {
-        index in 0 until queue.size - 1 || (wrapQueue && queue.isNotEmpty())
+        index in 0 until queue.size - 1 || (wrapQueue && queue.isNotEmpty()) || autoMix
     }
 
     /** The queue in its original order, so turning shuffle off puts it back. */
@@ -81,6 +83,18 @@ class PlayerController(context: Context) {
      */
     var wrapQueue by mutableStateOf(false)
         private set
+
+    /**
+     * Playing a song from search: the queue is that song's YouTube Mix (like
+     * YouTube's autoplay), topped up as it runs low so it never ends.
+     */
+    var autoMix by mutableStateOf(false)
+        private set
+    private var mixJob: Job? = null
+    /** Songs already in this mix queue, so top-ups don't repeat them. */
+    private val mixSeen = HashSet<String>()
+    /** Reached the end while a top-up was still loading: play on once it arrives. */
+    private var advanceWhenMixArrives = false
 
     // ---- Playback ----
     var isPlaying by mutableStateOf(false)
@@ -170,6 +184,7 @@ class PlayerController(context: Context) {
      */
     fun playQueue(tracks: List<Track>, startIndex: Int, name: String? = null, wrap: Boolean = false) {
         if (startIndex !in tracks.indices) return
+        stopMix()
         originalOrder = tracks
         queueName = name
         wrapQueue = wrap
@@ -185,11 +200,60 @@ class PlayerController(context: Context) {
         expanded = true
     }
 
+    /**
+     * Plays [track] (tapped in search results), followed by YouTube's Mix for it
+     * rather than the other search results.
+     */
+    fun playWithMix(track: Track) {
+        stopMix()
+        autoMix = true
+        mixSeen += track.videoId
+        originalOrder = listOf(track)
+        queueName = null
+        wrapQueue = false
+        queue = listOf(track)
+        playAt(0) // also starts loading the mix
+        expanded = true
+    }
+
+    private fun stopMix() {
+        mixJob?.cancel()
+        mixJob = null
+        autoMix = false
+        advanceWhenMixArrives = false
+        mixSeen.clear()
+    }
+
+    /** Append [seed]'s Mix to the queue (only new songs). */
+    private fun extendMix(seed: Track) {
+        if (mixJob?.isActive == true) return
+        mixJob = scope.launch {
+            val more = YouTubeMix.upNext(seed).filter { mixSeen.add(it.videoId) }
+            if (!autoMix || more.isEmpty()) return@launch
+            val hadNext = index < queue.size - 1
+            originalOrder = originalOrder + more
+            queue = queue + if (shuffle) more.shuffled() else more
+            if (!hadNext) preloadNext()
+            if (advanceWhenMixArrives) {
+                advanceWhenMixArrives = false
+                next()
+            }
+        }
+    }
+
     /** Shuffle the songs after the current one; turning it off restores the original order. */
     fun toggleShuffle() {
         val now = current
         shuffle = !shuffle
         if (now == null) return
+        if (autoMix) {
+            // A mix keeps what's been played behind you; only the songs ahead move.
+            val played = queue.take(index + 1)
+            val ahead = originalOrder.filter { it !in played }
+            queue = played + if (shuffle) ahead.shuffled() else ahead
+            preloadNext()
+            return
+        }
         if (shuffle) {
             queue = listOf(now) + (originalOrder - now).shuffled()
             index = 0
@@ -214,6 +278,10 @@ class PlayerController(context: Context) {
         when {
             index < queue.size - 1 -> playAt(index + 1)
             wrapQueue && queue.isNotEmpty() -> playAt(0) // back to the start
+            autoMix -> current?.let { // more songs on the way (or try again if the last top-up failed)
+                advanceWhenMixArrives = true
+                extendMix(it)
+            }
         }
     }
 
@@ -240,6 +308,9 @@ class PlayerController(context: Context) {
         loadJob?.cancel()
         index = i
         error = null
+        advanceWhenMixArrives = false
+        // Mix running low: fetch more, seeded by this song so it keeps drifting naturally.
+        if (autoMix && i >= queue.size - 3) extendMix(track)
         // A fresh play (not a resume after a link refresh) starts the 3-second count again.
         if (resumeAtMs == 0L) {
             playedMs = 0L
@@ -340,7 +411,7 @@ class PlayerController(context: Context) {
             if (state == Player.STATE_ENDED) {
                 // (Loop-this-song is handled by ExoPlayer's repeat mode, so ENDED means move on.)
                 positionSeconds = durationSeconds
-                if (hasNext) next()
+                next()
             }
         }
 

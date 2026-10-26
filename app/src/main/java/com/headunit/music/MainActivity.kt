@@ -80,9 +80,11 @@ class MainActivity : ComponentActivity() {
                         youtube = youtube,
                         history = history,
                         libraries = libraries,
-                        // Search results play as a plain queue; libraries loop and show their name.
+                        // A search result plays followed by its YouTube Mix (like autoplay);
+                        // libraries play their own songs, loop, and show their name.
                         onPlay = { tracks, index, collection ->
-                            player.playQueue(tracks, index, name = collection, wrap = collection != null)
+                            if (collection == null) player.playWithMix(tracks[index])
+                            else player.playQueue(tracks, index, name = collection, wrap = true)
                         },
                         onCreateLibrary = { namingFor = null; naming = true },
                         dockInset = if (player.current != null) DOCK_HEIGHT else 0f,
