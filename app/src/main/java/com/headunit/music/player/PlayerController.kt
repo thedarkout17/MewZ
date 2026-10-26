@@ -67,7 +67,8 @@ class PlayerController(context: Context) {
     var queueName by mutableStateOf<String?>(null)
         private set
     val current: Track? by derivedStateOf { queue.getOrNull(index) }
-    val hasPrevious: Boolean by derivedStateOf { index > 0 }
+    /** Libraries loop both ways: back from the first song goes to the last. */
+    val hasPrevious: Boolean by derivedStateOf { index > 0 || (wrapQueue && queue.size > 1) }
     val hasNext: Boolean by derivedStateOf {
         index in 0 until queue.size - 1 || (wrapQueue && queue.isNotEmpty()) || autoMix
     }
@@ -398,9 +399,16 @@ class PlayerController(context: Context) {
         }
     }
 
-    /** Like most players: restarts the song if you're past 3 seconds, else goes back one. */
+    /**
+     * Like most players: restarts the song if you're past 3 seconds, else goes back one.
+     * In a library (which loops), back from the first song goes to the last.
+     */
     fun previous() {
-        if (positionSeconds > 3f || !hasPrevious) seekTo(0f) else playAt(index - 1)
+        when {
+            positionSeconds > 3f || !hasPrevious -> seekTo(0f)
+            index > 0 -> playAt(index - 1)
+            else -> playAt(queue.size - 1) // first song of a looping library → the last
+        }
     }
 
     fun seekTo(seconds: Float) {
