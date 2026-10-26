@@ -507,12 +507,12 @@ internal fun Message(
             Text(
                 title,
                 textAlign = TextAlign.Center,
-                style = TextStyle(Color.White, fontSize = 64.usp, fontWeight = FontWeight.Medium, shadow = TextShadow),
+                style = TextStyle(Color.White, fontSize = 70.usp, fontWeight = FontWeight.Medium, shadow = TextShadow),
             )
             Text(
                 detail,
                 textAlign = TextAlign.Center,
-                style = TextStyle(SecondaryText, fontSize = 42.usp, shadow = TextShadow),
+                style = TextStyle(SecondaryText, fontSize = 52.usp, shadow = TextShadow),
             )
             if (action != null) {
                 Spacer(Modifier.size(8.u))
