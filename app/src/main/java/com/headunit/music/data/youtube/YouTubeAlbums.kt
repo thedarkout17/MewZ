@@ -49,6 +49,58 @@ object YouTubeAlbums {
     }
 
     /**
+     * Keeps only albums that belong in the results for [query], so a search for a
+     * song or album name doesn't fill the row with every obscure album that
+     * happens to share the name. An album stays when:
+     *  - its title is what was searched for (ignoring "(Deluxe)" and the like),
+     *    and its artist is either named in the search or is one of the artists
+     *    in the top song results (YouTube ranks those by popularity, so the
+     *    well-known album makes it and look-alikes don't); or
+     *  - the search is just an artist's name: then that artist's albums.
+     */
+    fun relevant(albums: List<Album>, query: String, topSongs: List<Track>, max: Int = 6): List<Album> {
+        // Words like "album" or "by" in the search don't need to be in the title.
+        val q = words(query) - FILLER
+        if (q.isEmpty()) return emptyList()
+        // Artists that matter for this search: the first few song results'.
+        val popular = topSongs.take(TOP_SONGS).map { words(it.artist) }
+        return albums.filter { album ->
+            val artist = words(album.artist)
+            if (artist.isEmpty()) return@filter false
+            val named = q.containsAll(artist)
+            val rest = if (named) q - artist else q
+            val title = words(coreTitle(album.title))
+            val playedForThis = popular.any { it.containsAll(artist) }
+            when {
+                // "the weeknd": their albums (if they're who the song results are by too,
+                // so an unknown act that happens to be called "Starboy" doesn't count).
+                named && rest.isEmpty() -> playedForThis
+                // Title has to be what was asked for.
+                title.isEmpty() || rest != title -> false
+                // ...by an artist named in the search, or one people actually play for it.
+                named -> true
+                else -> playedForThis
+            }
+        }.take(max)
+    }
+
+    /** "Starboy (Deluxe Edition) [Remastered]" → "Starboy". */
+    private fun coreTitle(title: String): String =
+        title.replace(Regex("""\s*[(\[][^)\]]*[)\]]"""), "")
+            .replace(Regex("""\s+-\s+(deluxe|expanded|remaster(ed)?|anniversary|edition|version).*$""", RegexOption.IGNORE_CASE), "")
+
+    /** Lower-case words, without punctuation or a leading "the" (so "The Weeknd" matches "weeknd"). */
+    private fun words(text: String): Set<String> =
+        text.lowercase()
+            .replace("&", " and ")
+            .split(Regex("""[^\p{L}\p{N}]+"""))
+            .filter { it.isNotEmpty() && it != "the" }
+            .toSet()
+
+    private const val TOP_SONGS = 6
+    private val FILLER = setOf("album", "albums", "full", "by", "lp", "ep", "deluxe", "edition")
+
+    /**
      * The album's songs, in order. Each one uses the album's square cover as its
      * artwork (cleaner than the video stills). Throws on failure.
      */

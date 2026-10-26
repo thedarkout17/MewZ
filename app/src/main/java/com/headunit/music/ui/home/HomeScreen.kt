@@ -260,9 +260,11 @@ fun HomeScreen(
                 is SearchResult.Success -> ResultsState.Done(q, r.tracks, nextPage = r.nextPageToken)
                 is SearchResult.Failure -> ResultsState.Failed(r.reason)
             }
-            val found = albums.await()
             val now = results
-            if (found.isNotEmpty() && now is ResultsState.Done && now.query == q) results = now.copy(albums = found)
+            // Only albums that really fit this search (see YouTubeAlbums.relevant).
+            val found = YouTubeAlbums.relevant(albums.await(), q, (now as? ResultsState.Done)?.tracks.orEmpty())
+            val latest = results
+            if (found.isNotEmpty() && latest is ResultsState.Done && latest.query == q) results = latest.copy(albums = found)
         }
     }
 
