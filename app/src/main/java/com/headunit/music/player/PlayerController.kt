@@ -25,6 +25,10 @@ import androidx.media3.datasource.cache.CacheWriter
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.headunit.music.data.Track
+import com.headunit.music.data.toJson
+import com.headunit.music.data.toTracks
+import org.json.JSONArray
+import org.json.JSONObject
 import com.headunit.music.data.youtube.AudioStreams
 import com.headunit.music.data.youtube.AudioUnavailableException
 import com.headunit.music.data.youtube.YouTubeMix
@@ -124,6 +128,15 @@ class PlayerController(context: Context) {
     private var reportedPlay = false
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    /** Where the last song and queue are kept, so they're still there after the app closes. */
+    private val saved = context.applicationContext.getSharedPreferences("player", Context.MODE_PRIVATE)
+    /**
+     * Restored from last time but not loaded yet: the first Play loads the song
+     * and starts from here (ms) instead of the beginning.
+     */
+    private var restoredAtMs: Long? = null
+    private var sinceSaveMs = 0L
     private var loadJob: Job? = null
     private var skipJob: Job? = null
     /** One fresh-link retry per song (links expire after a few hours). */
@@ -163,12 +176,15 @@ class PlayerController(context: Context) {
         .apply { addListener(Listener()) }
 
     init {
+        restoreState()
         // Seek bar / timer: read the position a few times a second while playing.
         scope.launch {
             while (isActive) {
                 if (exo.isPlaying) {
                     positionSeconds = exo.currentPosition / 1000f
                     playedMs += POLL_MS
+                    sinceSaveMs += POLL_MS
+                    if (sinceSaveMs >= SAVE_EVERY_MS) saveState()
                     if (!reportedPlay && playedMs >= COUNTS_AS_PLAYED_MS) {
                         reportedPlay = true
                         current?.let { onPlayedLongEnough?.invoke(it) }
@@ -327,6 +343,11 @@ class PlayerController(context: Context) {
 
     fun togglePlay() {
         if (current == null) return
+        // First Play after reopening the app: load last time's song where it was left.
+        restoredAtMs?.let { at ->
+            playAt(index, resumeAtMs = at)
+            return
+        }
         if (exo.isPlaying) exo.pause() else exo.play()
     }
 
@@ -348,10 +369,74 @@ class PlayerController(context: Context) {
 
     fun seekTo(seconds: Float) {
         positionSeconds = seconds.coerceIn(0f, durationSeconds.coerceAtLeast(0f))
-        exo.seekTo((positionSeconds * 1000).toLong())
+        // Not loaded yet (restored from last time): Play will start from here.
+        if (restoredAtMs != null) restoredAtMs = (positionSeconds * 1000).toLong()
+        else exo.seekTo((positionSeconds * 1000).toLong())
+    }
+
+    // ---- Remembering the last song across app restarts ----
+
+    /** Saves the queue, the song and where it's at. Called as it plays, on pause, and when the app goes away. */
+    fun saveState() {
+        sinceSaveMs = 0L
+        val now = current
+        if (now == null) {
+            saved.edit().clear().apply()
+            return
+        }
+        // Keep the file small: at most a few hundred songs around the current one.
+        val from = (index - KEEP_BEHIND).coerceAtLeast(0)
+        val to = (index + KEEP_AHEAD).coerceAtMost(queue.size)
+        val kept = queue.subList(from, to)
+        val keptIds = kept.mapTo(HashSet()) { it.videoId }
+        val positionMs = restoredAtMs
+            ?: if (exo.mediaItemCount > 0) exo.currentPosition else (positionSeconds * 1000).toLong()
+        val state = JSONObject()
+            .put("queue", kept.toJson())
+            .put("original", originalOrder.filter { it.videoId in keptIds }.toJson())
+            .put("index", index - from)
+            .put("positionMs", positionMs)
+            .put("durationSeconds", durationSeconds.toDouble())
+            .put("wrap", wrapQueue)
+            .put("autoMix", autoMix)
+            .put("shuffle", shuffle)
+            .put("loop", loopSong)
+            .put("held", JSONArray(heldQueued.filter { it in keptIds }))
+            .apply { queueName?.let { put("name", it) } }
+        saved.edit().putString(KEY_STATE, state.toString()).apply()
+    }
+
+    /** Puts last time's song back in the dock, paused where it was left. Nothing loads until Play. */
+    private fun restoreState() {
+        val json = saved.getString(KEY_STATE, null) ?: return
+        runCatching {
+            val o = JSONObject(json)
+            val q = o.getJSONArray("queue").toTracks()
+            val i = o.getInt("index")
+            if (i !in q.indices) return
+            queue = q
+            originalOrder = o.optJSONArray("original")?.toTracks()?.takeIf { it.isNotEmpty() } ?: q
+            index = i
+            queueName = if (o.has("name")) o.getString("name") else null
+            wrapQueue = o.optBoolean("wrap")
+            autoMix = o.optBoolean("autoMix")
+            if (autoMix) q.mapTo(mixSeen) { it.videoId }
+            shuffle = o.optBoolean("shuffle")
+            loopSong = o.optBoolean("loop")
+            exo.repeatMode = if (loopSong) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+            o.optJSONArray("held")?.let { arr -> for (k in 0 until arr.length()) heldQueued += arr.getString(k) }
+            val at = o.optLong("positionMs")
+            restoredAtMs = at
+            positionSeconds = at / 1000f
+            durationSeconds = o.optDouble("durationSeconds", 0.0).toFloat()
+                .takeIf { it > 0f } ?: (q[i].durationSeconds ?: 0).toFloat()
+            // A whole new play only counts for History once it's played a while.
+            reportedPlay = true
+        }.onFailure { Log.w(TAG, "Couldn't restore last song: ${it.message}") }
     }
 
     fun release() {
+        saveState()
         preloadWriter?.cancel()
         scope.cancel()
         exo.release()
@@ -362,6 +447,7 @@ class PlayerController(context: Context) {
         if (track.videoId != retriedVideoId) retriedVideoId = null
         skipJob?.cancel()
         loadJob?.cancel()
+        restoredAtMs = null // loading for real now
         index = i
         error = null
         heldQueued -= track.videoId
@@ -452,6 +538,8 @@ class PlayerController(context: Context) {
     private inner class Listener : Player.Listener {
         override fun onIsPlayingChanged(playing: Boolean) {
             isPlaying = playing
+            // Paused: remember exactly where. (Not while switching songs, when the old one stops.)
+            if (!playing && !isBuffering) saveState()
             if (playing && tapAt > 0) {
                 val total = SystemClock.elapsedRealtime() - tapAt
                 Log.d(TAG, "Load \"${current?.title}\": find audio ${linkMs} ms + buffer ${total - linkMs} ms = ${total} ms")
@@ -489,6 +577,11 @@ class PlayerController(context: Context) {
 private const val TAG = "MuZ"
 
 private const val POLL_MS = 250L
+/** While playing, save where we are this often (so a sudden power-off loses little). */
+private const val SAVE_EVERY_MS = 5_000L
+private const val KEY_STATE = "state"
+private const val KEEP_BEHIND = 50
+private const val KEEP_AHEAD = 250
 /** A song goes into History once it has played this long. */
 private const val COUNTS_AS_PLAYED_MS = 3_000L
 

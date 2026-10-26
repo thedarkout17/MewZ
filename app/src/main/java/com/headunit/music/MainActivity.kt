@@ -139,6 +139,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStop() {
+        super.onStop()
+        // Leaving the app (or it's about to be closed): remember the song and where it's at.
+        player.saveState()
+    }
+
     override fun onDestroy() {
         player.release()
         super.onDestroy()
