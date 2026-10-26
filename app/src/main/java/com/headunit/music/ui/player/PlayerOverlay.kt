@@ -750,8 +750,8 @@ private const val TILE_ANIM_MS = 760
 
 /**
  * The heart, beating once for its animation: a strong "lub" then a softer "dub"
- * (with a little dip between them), then it settles. Filled throughout, since
- * it's being liked.
+ * (with a little dip between them), then it settles. It stays an outline until
+ * the beat is done, then fills in.
  */
 @Composable
 private fun HeartGlyph(t: Float) {
@@ -766,7 +766,8 @@ private fun HeartGlyph(t: Float) {
         0.08f * bump(0.29f, 0.04f) +
         0.22f * bump(0.42f, 0.06f)
     Icon(
-        painterResource(R.drawable.ic_heart_filled),
+        // Outline while it beats; it fills in (with the glass) once the beat is done.
+        painterResource(R.drawable.ic_heart),
         contentDescription = null,
         tint = Color.White,
         modifier = Modifier
@@ -780,13 +781,14 @@ private fun HeartGlyph(t: Float) {
  * loop (the icon's outline), and they chase each other once around it, back to
  * where they started. They keep their length, so the gap between each head and
  * the next tail stays the same all the way round. At [p] = 0 and 1 it's
- * the normal (bold) icon.
+ * the normal icon.
  */
 @Composable
 private fun LoopGlyph(p: Float) {
     Canvas(Modifier.fillMaxSize()) {
         val k = size.minDimension / 24f // the icon's 24x24 grid
-        val stroke = Stroke(width = 2.8f * k, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        // Regular weight while it moves; the bold icon (and the glass) come in once it's done.
+        val stroke = Stroke(width = 2f * k, cap = StrokeCap.Round, join = StrokeJoin.Round)
         val eased = if (p < 0.5f) 4f * p * p * p else 1f - (-2f * p + 2f).let { it * it * it } / 2f
         val shift = LOOP_PERIMETER * eased
         // Each arrow at rest: tail 3 units up the left side, 17.7 long (the other is half a lap on).
@@ -852,7 +854,8 @@ private fun loopPoint(distance: Float): Offset {
 private fun ShuffleGlyph(p: Float) {
     Canvas(Modifier.fillMaxSize()) {
         val k = size.minDimension / 24f // the icon's 24x24 grid
-        val stroke = Stroke(width = 2.8f * k, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        // Regular weight while it moves; the bold icon (and the glass) come in once it's done.
+        val stroke = Stroke(width = 2f * k, cap = StrokeCap.Round, join = StrokeJoin.Round)
         // Head (u = 1, the arrow) moves first; the tail (u = 0) follows this far behind.
         val lag = 0.55f
         // Wiggle: strongest mid-animation, gone at the start and end.
