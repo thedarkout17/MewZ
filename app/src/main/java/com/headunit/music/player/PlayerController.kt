@@ -54,8 +54,8 @@ import kotlinx.coroutines.withContext
  * played with Media3 ExoPlayer. A song played from search is followed by its
  * YouTube Mix ([YouTubeMix]), like YouTube's autoplay.
  *
- * For dead zones, the song playing buffers all the way to its end, and once it
- * has, the whole next song downloads into the disk cache.
+ * For dead zones, the song playing buffers up to 5 minutes ahead, and once
+ * it has, the next song's first 5 minutes download into the disk cache.
  *
  * There's one for the whole app ([get]); [PlaybackService] keeps it playing in
  * the background and exposes it ([sessionPlayer]) to the steering wheel,
@@ -192,7 +192,7 @@ class PlayerController private constructor(context: Context) {
         // so rewinds are instant. Anything older comes back from the disk cache, never
         // re-downloaded. (ExoPlayer fixes this when the player is made, so it can't vary per song.)
         //
-        // Ahead: keep loading until the whole song is in (up to 15 minutes), so it plays on
+        // Ahead: keep loading up to 5 minutes ahead (the whole song for most), so it plays on
         // through tunnels and dead zones instead of stopping 50 seconds later.
         .setLoadControl(
             DefaultLoadControl.Builder()
@@ -621,8 +621,9 @@ class PlayerController private constructor(context: Context) {
 
     /**
      * While this song plays, get the next one ready: once this one has finished
-     * loading, download the whole next song into the disk cache, so it starts
-     * instantly and plays through dead zones too. (Skipping it wastes that
+     * loading, download the next song's first 5 minutes (the whole song for
+     * most) into the disk cache, so it starts instantly and plays through dead
+     * zones too. (Skipping it wastes that
      * download; a cached song costs nothing to play again.)
      */
     private fun preloadNext() {
@@ -643,7 +644,7 @@ class PlayerController private constructor(context: Context) {
                         .setUri(url)
                         .setKey(cacheKey(next.videoId, url)) // same key playback uses
                         .setPosition(0)
-                        .setLength(C.LENGTH_UNSET.toLong()) // the whole song
+                        .setLength(firstMinutesBytes(url)) // its first 5 minutes (the whole song for most)
                         .build(),
                     /* temporaryBuffer = */ null,
                     /* progressListener = */ null,
@@ -677,6 +678,23 @@ class PlayerController private constructor(context: Context) {
      * the stream link, which expires and changes on every lookup. The format is
      * part of the key so bytes from one format are never mixed with another.
      */
+    /**
+     * How many bytes the first [NEXT_SONG_MS] of a stream take. YouTube's stream
+     * links say the file's size ("clen") and length in seconds ("dur"); without
+     * them, assume 160 kbps. Includes a little extra for the file's header.
+     */
+    private fun firstMinutesBytes(url: String): Long {
+        val size = CLEN.find(url)?.groupValues?.get(1)?.toLongOrNull()
+        val seconds = DUR.find(url)?.groupValues?.get(1)?.toDoubleOrNull()
+        val wanted = NEXT_SONG_MS / 1000.0
+        return if (size != null && seconds != null && seconds > 0) {
+            if (seconds <= wanted) C.LENGTH_UNSET.toLong() // shorter than that: the whole song
+            else (size * (wanted / seconds)).toLong() + HEADER_BYTES
+        } else {
+            (wanted * 160_000 / 8).toLong() + HEADER_BYTES
+        }
+    }
+
     private fun cacheKey(videoId: String, url: String): String =
         "$videoId:" + (ITAG.find(url)?.groupValues?.get(1) ?: "audio")
 
@@ -745,10 +763,16 @@ private const val KEEP_AHEAD = 250
 /** A song goes into History once it has played this long. */
 private const val COUNTS_AS_PLAYED_MS = 3_000L
 
-/** Load the song that's playing this far ahead: the whole song for almost all of them. */
-private const val AHEAD_BUFFER_MS = 15 * 60_000
-/** Memory allowed for that (15 min at 128 kbps is ~14 MB; some streams run higher). */
-private const val TARGET_BUFFER_BYTES = 32 * 1024 * 1024
+/** Load the song that's playing this far ahead (the whole song for most). */
+private const val AHEAD_BUFFER_MS = 5 * 60_000
+/** Memory allowed for that (5 min at 128 kbps is ~5 MB; some streams run higher). */
+private const val TARGET_BUFFER_BYTES = 16 * 1024 * 1024
+/** How much of the next song to download ahead of time. */
+private const val NEXT_SONG_MS = 5 * 60_000
+/** Room for the file's header / index at the start. */
+private const val HEADER_BYTES = 64L * 1024
+private val CLEN = Regex("[?&]clen=(\\d+)")
+private val DUR = Regex("[?&]dur=([\\d.]+)")
 
 private val ITAG = Regex("[?&]itag=(\\d+)")
 

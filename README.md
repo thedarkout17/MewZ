@@ -40,8 +40,8 @@ Use `with(LocalDesignScale.current) { 232.u }` for sizes and `92.usp` for text.
 - Player: **audio only**. Search uses the YouTube Data API; for each song the app finds
   YouTube's audio-only stream (~128 kbps AAC, via NewPipeExtractor) and plays it with
   Media3 ExoPlayer, so no video is downloaded: roughly 60 MB per hour.
-  The song playing buffers all the way to its end, and once it has, the whole next song
-  downloads into an on-disk cache (64 MB, also keeps recently played songs), so skipping
+  The song playing buffers up to 5 minutes ahead, and once it has, the next song's first
+  5 minutes download into an on-disk cache (64 MB, also keeps recently played songs), so skipping
   starts instantly and music keeps going through tunnels and dead zones.
   Keeps playing in the background (a media service), and the steering wheel, Bluetooth and
   the headunit's own media controls work, showing the song's title, artist and artwork.
