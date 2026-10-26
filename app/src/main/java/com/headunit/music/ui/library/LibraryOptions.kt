@@ -12,6 +12,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -23,7 +24,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -37,21 +39,11 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.headunit.music.ui.home.TrackRow
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -59,13 +51,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
-import coil.compose.AsyncImage
 import com.headunit.music.R
 import com.headunit.music.core.model.Library
-import com.headunit.music.data.LibraryStore
 import com.headunit.music.core.model.Track
+import com.headunit.music.data.LibraryStore
+import com.headunit.music.ui.components.FrostedCard
+import com.headunit.music.ui.components.Glass
+import com.headunit.music.ui.components.GlassOption
+import com.headunit.music.ui.components.GlassOptionDanger
+import com.headunit.music.ui.components.GlassOptionDangerEdge
+import com.headunit.music.ui.components.GlassPane
+import com.headunit.music.ui.components.fadeUnderHeader
+import com.headunit.music.ui.components.rememberHeaderCollapse
+import com.headunit.music.ui.home.TrackRow
 import com.headunit.music.ui.theme.DesignCanvas
 import com.headunit.music.ui.theme.LocalDesignScale
+import com.headunit.music.ui.theme.SecondaryText
+import com.headunit.music.ui.theme.TextShadow
 import kotlin.math.roundToInt
 
 /** A library that was held on the home screen, and where its tile is (screen px). */
@@ -176,7 +178,7 @@ fun LibraryOptions(
                 Text(
                     "Select Song To Replace",
                     textAlign = TextAlign.Center,
-                    style = TextStyle(Color.White, fontSize = 60.usp, fontWeight = FontWeight.SemiBold, shadow = LibraryTextShadow),
+                    style = TextStyle(Color.White, fontSize = 60.usp, fontWeight = FontWeight.SemiBold, shadow = TextShadow),
                     modifier = Modifier
                         .offset { IntOffset((r.center.x - screenW / 2f).roundToInt(), (r.top - with(density) { 120.u.toPx() }).roundToInt()) }
                         .fillMaxWidth()
@@ -191,7 +193,7 @@ fun LibraryOptions(
                         .pointerInput(Unit) { detectTapGestures { } },
                 ) {
                     GlassPane(Modifier.fillMaxSize())
-                    Box(Modifier.fillMaxSize().border(sizeDp * (3f / LIBRARY_TILE), LibraryGlass.Edge, shape))
+                    Box(Modifier.fillMaxSize().border(sizeDp * (3f / LIBRARY_TILE), Glass.Edge, shape))
                     CoverCollage(
                         tracks = library.coverTracks,
                         modifier = Modifier.fillMaxSize(),
@@ -267,7 +269,7 @@ private fun MenuPanel(
                 library.name,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                style = TextStyle(Color.White, fontSize = 60.usp, fontWeight = FontWeight.SemiBold, shadow = LibraryTextShadow),
+                style = TextStyle(Color.White, fontSize = 60.usp, fontWeight = FontWeight.SemiBold, shadow = TextShadow),
                 modifier = Modifier.padding(start = 64.u, end = 64.u, top = 52.u, bottom = 24.u),
             )
             MenuRow(R.drawable.ic_arrow_up, "Move To Front", onClick = onMoveToFront)
@@ -296,7 +298,7 @@ private fun MenuRow(icon: Int, text: String, danger: Boolean = false, enabled: B
                 .clip(RoundedCornerShape(40.u))
                 // Each option is its own pane of glass; Delete's has a pink hue.
                 .background(if (danger) GlassOptionDanger else GlassOption)
-                .border(1.5f.u, if (danger) GlassOptionDangerEdge else LibraryGlass.Edge, RoundedCornerShape(40.u))
+                .border(1.5f.u, if (danger) GlassOptionDangerEdge else Glass.Edge, RoundedCornerShape(40.u))
                 .clickable(
                     enabled = enabled,
                     interactionSource = remember { MutableInteractionSource() },
@@ -309,7 +311,7 @@ private fun MenuRow(icon: Int, text: String, danger: Boolean = false, enabled: B
             Spacer(Modifier.width(36.u))
             Text(
                 text,
-                style = TextStyle(if (danger) DeleteText else Color.White, fontSize = 52.usp, fontWeight = FontWeight.Medium, shadow = LibraryTextShadow),
+                style = TextStyle(if (danger) DeleteText else Color.White, fontSize = 52.usp, fontWeight = FontWeight.Medium, shadow = TextShadow),
             )
         }
     }
@@ -325,13 +327,7 @@ private fun SongPickerPage(tracks: List<Track>, current: Track?, onPick: (Track)
     val list = rememberLazyListState()
     val density = LocalDensity.current
     with(LocalDesignScale.current) {
-        val collapseDistance = (PICK_HEADER_TALL - PICK_HEADER_SHORT).u
-        val c by remember {
-            derivedStateOf {
-                if (list.firstVisibleItemIndex > 0) 1f
-                else (list.firstVisibleItemScrollOffset / with(density) { collapseDistance.toPx() }).coerceIn(0f, 1f)
-            }
-        }
+        val c by rememberHeaderCollapse(list, PICK_HEADER_TALL, PICK_HEADER_SHORT)
         val headerH = PICK_HEADER_TALL + (PICK_HEADER_SHORT - PICK_HEADER_TALL) * c
         Box(modifier) {
             LazyColumn(
@@ -341,20 +337,7 @@ private fun SongPickerPage(tracks: List<Track>, current: Track?, onPick: (Track)
                 modifier = Modifier
                     .fillMaxSize()
                     // Rows dissolve as they slide up under the title.
-                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                    .drawWithContent {
-                        drawContent()
-                        val top = headerH.u.toPx() - 30.u.toPx()
-                        val solid = top + 60.u.toPx()
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                0f to Color.Transparent,
-                                (top / size.height) to Color.Transparent,
-                                (solid / size.height) to Color.Black,
-                            ),
-                            blendMode = BlendMode.DstIn,
-                        )
-                    },
+                    .fadeUnderHeader(headerH.u, 30.u),
             ) {
                 itemsIndexed(tracks, key = { _, t -> t.videoId }) { i, track ->
                     val isCurrent = track.videoId == current?.videoId
@@ -376,12 +359,12 @@ private fun SongPickerPage(tracks: List<Track>, current: Track?, onPick: (Track)
                         Color.White,
                         fontSize = (132f + (76f - 132f) * c).usp,
                         fontWeight = FontWeight.SemiBold,
-                        shadow = LibraryTextShadow,
+                        shadow = TextShadow,
                     ),
                 )
                 Text(
                     "Its artwork replaces the outlined square",
-                    style = TextStyle(LibrarySecondary, fontSize = 46.usp, shadow = LibraryTextShadow),
+                    style = TextStyle(SecondaryText, fontSize = 46.usp, shadow = TextShadow),
                     modifier = Modifier.graphicsLayer { alpha = 1f - c },
                 )
             }

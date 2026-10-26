@@ -1,5 +1,7 @@
 package com.headunit.music.ui.home
 
+import com.headunit.music.ui.theme.SecondaryText
+import com.headunit.music.ui.theme.TextShadow
 import com.headunit.music.core.search.mixInAlbums
 import com.headunit.music.core.search.ResultRow
 import androidx.compose.animation.AnimatedContent
@@ -101,8 +103,6 @@ private val Greyscale = ColorFilter.colorMatrix(ColorMatrix().apply { setToSatur
 private val PlayedTitle = Color(0xFFB8B8B8)
 private val PlayedDetail = Color(0xFF8E8E8E)
 
-private val TextShadow = Shadow(Color(0x55000000), Offset(0f, 2f), blurRadius = 8f)
-private val Secondary = Color.White.copy(alpha = 0.72f)
 
 /**
  * Search results under the bar: big rows (thumbnail, song, artist · length),
@@ -223,7 +223,7 @@ private fun TrackList(
                                     Reason.Offline -> "No connection · Tap to try again"
                                     else -> "Couldn't load more · Tap to try again"
                                 },
-                                style = TextStyle(Secondary, fontSize = 44.usp, shadow = TextShadow),
+                                style = TextStyle(SecondaryText, fontSize = 44.usp, shadow = TextShadow),
                             )
                         }
                     }
@@ -325,7 +325,7 @@ internal fun TrackRow(
                     text = listOfNotNull(label, track.artist, track.durationText?.takeIf { showDuration }).joinToString("  ·  "),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = TextStyle(color = if (played) PlayedDetail else Secondary, fontSize = 46.usp, shadow = TextShadow),
+                    style = TextStyle(color = if (played) PlayedDetail else SecondaryText, fontSize = 46.usp, shadow = TextShadow),
                 )
             }
             trailing?.invoke()
@@ -400,7 +400,7 @@ private fun AlbumResultRow(album: Album, index: Int, onClick: () -> Unit) {
                     ).joinToString("  ·  "),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = TextStyle(Secondary, fontSize = 46.usp, shadow = TextShadow),
+                    style = TextStyle(SecondaryText, fontSize = 46.usp, shadow = TextShadow),
                 )
             }
         }
@@ -497,7 +497,7 @@ internal fun Message(
             Text(
                 detail,
                 textAlign = TextAlign.Center,
-                style = TextStyle(Secondary, fontSize = 42.usp, shadow = TextShadow),
+                style = TextStyle(SecondaryText, fontSize = 42.usp, shadow = TextShadow),
             )
             if (action != null) {
                 Spacer(Modifier.size(8.u))

@@ -1,5 +1,9 @@
 package com.headunit.music.ui.library
 
+import com.headunit.music.ui.components.FrostedCard
+import com.headunit.music.ui.components.Glass
+import com.headunit.music.ui.theme.SecondaryText
+import com.headunit.music.ui.theme.TextShadow
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -101,13 +105,13 @@ fun DeleteLibraryDialog(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center,
-                        style = TextStyle(Color.White, fontSize = 68.usp, fontWeight = FontWeight.SemiBold, shadow = LibraryTextShadow),
+                        style = TextStyle(Color.White, fontSize = 68.usp, fontWeight = FontWeight.SemiBold, shadow = TextShadow),
                     )
                     Spacer(Modifier.height(20.u))
                     Text(
                         "This is not reversible, but songs in the library are still liked.",
                         textAlign = TextAlign.Center,
-                        style = TextStyle(LibrarySecondary, fontSize = 44.usp),
+                        style = TextStyle(SecondaryText, fontSize = 44.usp),
                     )
                     Spacer(Modifier.height(56.u))
                     Row(
@@ -137,7 +141,7 @@ private fun DialogButton(text: String, danger: Boolean, onClick: () -> Unit, mod
                     if (danger) Modifier.background(Brand.Red)
                     else Modifier
                         .background(Brush.verticalGradient(listOf(Color(0x2EFFFFFF), Color(0x14FFFFFF))))
-                        .border(1.5f.u, LibraryGlass.Edge, shape)
+                        .border(1.5f.u, Glass.Edge, shape)
                 )
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },

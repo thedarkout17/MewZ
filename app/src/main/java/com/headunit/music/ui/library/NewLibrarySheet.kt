@@ -1,5 +1,6 @@
 package com.headunit.music.ui.library
 
+import com.headunit.music.ui.theme.TextShadow
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -106,7 +107,7 @@ fun NewLibrarySheet(
             with(LocalDesignScale.current) {
                 Text(
                     title ?: stringResource(R.string.new_library),
-                    style = TextStyle(Color.White, fontSize = 80.usp, fontWeight = FontWeight.SemiBold, shadow = LibraryTextShadow),
+                    style = TextStyle(Color.White, fontSize = 80.usp, fontWeight = FontWeight.SemiBold, shadow = TextShadow),
                     modifier = Modifier.align(Alignment.TopCenter).padding(top = 64.u),
                 )
 

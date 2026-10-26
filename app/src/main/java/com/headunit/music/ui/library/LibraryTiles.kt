@@ -1,5 +1,9 @@
 package com.headunit.music.ui.library
 
+import com.headunit.music.ui.components.GlassPane
+import com.headunit.music.ui.components.Glass
+import com.headunit.music.ui.theme.SecondaryText
+import com.headunit.music.ui.theme.TextShadow
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -67,22 +71,6 @@ private const val TILE_SQUISH_X = 0.06f
 private const val TILE_SQUISH_Y = 0.05f
 /** Tile plus the name and song count under it. */
 const val LIBRARY_ROW_HEIGHT = LIBRARY_TILE + 190f
-
-internal val LibraryTextShadow = Shadow(Color(0x55000000), Offset(0f, 2f), blurRadius = 8f)
-internal val LibrarySecondary = Color.White.copy(alpha = 0.72f)
-
-internal object LibraryGlass {
-    /** Light catching the top of the glass, falling off quickly so the middle stays clear. */
-    val Sheen = Brush.verticalGradient(
-        0f to Color(0x52FFFFFF), 0.4f to Color(0x0AFFFFFF), 0.8f to Color(0x00FFFFFF), 1f to Color(0x1AFFFFFF),
-    )
-    /** Diagonal glint across the pane. */
-    val Glint = Brush.linearGradient(
-        0f to Color(0x00FFFFFF), 0.42f to Color(0x00FFFFFF), 0.5f to Color(0x30FFFFFF), 0.58f to Color(0x00FFFFFF),
-    )
-    val Edge = Brush.verticalGradient(listOf(Color(0xE6FFFFFF), Color(0x4DFFFFFF)))
-    val Panel = Color(0xF21E070B)
-}
 
 /** What a tile on the home grid stands for. */
 sealed interface LibraryTileItem {
@@ -210,7 +198,7 @@ private fun LibraryTile(
                     ),
             ) {
                 GlassPane(Modifier.fillMaxSize())
-                Box(Modifier.fillMaxSize().border(3.u, LibraryGlass.Edge, shape))
+                Box(Modifier.fillMaxSize().border(3.u, Glass.Edge, shape))
                 if (covers.isNotEmpty()) {
                     CoverCollage(covers, Modifier.fillMaxSize())
                 } else {
@@ -235,14 +223,14 @@ private fun LibraryTile(
                 title,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                style = TextStyle(Color.White, fontSize = 66.usp, fontWeight = FontWeight.Medium, shadow = LibraryTextShadow),
+                style = TextStyle(Color.White, fontSize = 66.usp, fontWeight = FontWeight.Medium, shadow = TextShadow),
                 modifier = Modifier.padding(start = 12.u),
             )
             if (subtitle != null) {
                 Text(
                     subtitle,
                     maxLines = 1,
-                    style = TextStyle(LibrarySecondary, fontSize = 46.usp, shadow = LibraryTextShadow),
+                    style = TextStyle(SecondaryText, fontSize = 46.usp, shadow = TextShadow),
                     modifier = Modifier.padding(start = 12.u, top = 4.u),
                 )
             }
@@ -317,54 +305,5 @@ internal fun CoverCollage(
                     ),
             )
         }
-    }
-}
-
-/**
- * A card of the same frosted glass as the library tiles (the blurred, lifted
- * home background, sheen, glint and bright edge), with a light dark wash so
- * white text reads on it. Used for the hold menu and its confirmations.
- */
-@Composable
-internal fun FrostedCard(
-    modifier: Modifier,
-    shape: androidx.compose.ui.graphics.Shape,
-    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
-) {
-    with(LocalDesignScale.current) {
-        Box(modifier.clip(shape)) {
-            GlassPane(Modifier.matchParentSize())
-            Box(Modifier.matchParentSize().background(Color(0x38140306)))
-            Box(Modifier.matchParentSize().border(3.u, LibraryGlass.Edge, shape))
-            Column(content = content)
-        }
-    }
-}
-
-/** Glass pill for options in a [FrostedCard], like Now Playing's tiles. */
-internal val GlassOption = Brush.verticalGradient(listOf(Color(0x33FFFFFF), Color(0x14FFFFFF)))
-/** The same pill with a soft pink hue, for Delete. */
-internal val GlassOptionDanger = Brush.verticalGradient(listOf(Color(0x66FF7FA0), Color(0x38FF5C8A)))
-internal val GlassOptionDangerEdge = Brush.verticalGradient(listOf(Color(0xCCFFC2D4), Color(0x40FFC2D4)))
-
-/**
- * Static frosted glass: the home background, heavily blurred and lifted toward
- * white (baked into library_glass.jpg so it looks the same on every Android
- * version), half see-through, with a sheen and a diagonal glint on top.
- */
-@Composable
-internal fun GlassPane(modifier: Modifier) {
-    Box(modifier) {
-        Image(
-            painter = painterResource(R.drawable.library_glass),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            // Mostly see-through so the background's colour comes through clear
-            // rather than milky.
-            alpha = 0.5f,
-            modifier = Modifier.fillMaxSize(),
-        )
-        Box(Modifier.fillMaxSize().background(LibraryGlass.Sheen))
-        Box(Modifier.fillMaxSize().background(LibraryGlass.Glint))
     }
 }

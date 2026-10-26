@@ -3,6 +3,7 @@ package com.headunit.music.ui.player
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -17,46 +18,42 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.headunit.music.core.model.Track
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.zIndex
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.zIndex
 import com.headunit.music.R
+import com.headunit.music.core.model.Track
 import com.headunit.music.player.PlayerController
+import com.headunit.music.ui.components.Glass
+import com.headunit.music.ui.components.fadeUnderHeader
+import com.headunit.music.ui.components.rememberHeaderCollapse
 import com.headunit.music.ui.home.TrackRow
-import com.headunit.music.ui.library.LibraryGlass
-import com.headunit.music.ui.library.LibrarySecondary
-import com.headunit.music.ui.library.LibraryTextShadow
 import com.headunit.music.ui.theme.LocalDesignScale
+import com.headunit.music.ui.theme.SecondaryText
+import com.headunit.music.ui.theme.TextShadow
 
 // Header (design px), the same as an open library: big "Up Next", shrinking as you scroll.
 // Taller than a library's, with room for the hint line, so the header is an easy target to tap out on.
@@ -118,13 +115,7 @@ fun QueuePage(player: PlayerController, onClose: () -> Unit, modifier: Modifier 
             }
         }
 
-        val collapseDistance = (HEADER_TALL - HEADER_SHORT).u
-        val c by remember {
-            derivedStateOf {
-                if (list.firstVisibleItemIndex > 0) 1f
-                else (list.firstVisibleItemScrollOffset / with(density) { collapseDistance.toPx() }).coerceIn(0f, 1f)
-            }
-        }
+        val c by rememberHeaderCollapse(list, HEADER_TALL, HEADER_SHORT)
         val headerH = HEADER_TALL + (HEADER_SHORT - HEADER_TALL) * c
         // Taps this close to the top count as "tap out", even on a song sliding under the
         // header: the header plus a quarter of its height again, so a stab at the top to
@@ -146,20 +137,7 @@ fun QueuePage(player: PlayerController, onClose: () -> Unit, modifier: Modifier 
                 modifier = Modifier
                     .fillMaxSize()
                     // Rows dissolve as they slide up under the title.
-                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                    .drawWithContent {
-                        drawContent()
-                        val top = headerH.u.toPx() - 30.u.toPx()
-                        val solid = top + 60.u.toPx()
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                0f to Color.Transparent,
-                                (top / size.height) to Color.Transparent,
-                                (solid / size.height) to Color.Black,
-                            ),
-                            blendMode = BlendMode.DstIn,
-                        )
-                    },
+                    .fadeUnderHeader(headerH.u, 30.u),
             ) {
                 val keys = keysOf(queue)
                 items(queue.indices.toList(), key = { i -> keys[i] }) { i ->
@@ -244,7 +222,7 @@ fun QueuePage(player: PlayerController, onClose: () -> Unit, modifier: Modifier 
                     item(key = "mix") {
                         Text(
                             "More from the mix keeps coming…",
-                            style = TextStyle(LibrarySecondary, fontSize = 44.usp, shadow = LibraryTextShadow),
+                            style = TextStyle(SecondaryText, fontSize = 44.usp, shadow = TextShadow),
                             modifier = Modifier.padding(start = 16.u, top = 24.u),
                         )
                     }
@@ -261,13 +239,13 @@ fun QueuePage(player: PlayerController, onClose: () -> Unit, modifier: Modifier 
                         Color.White,
                         fontSize = (TITLE_BIG + (TITLE_SMALL - TITLE_BIG) * c).usp,
                         fontWeight = FontWeight.SemiBold,
-                        shadow = LibraryTextShadow,
+                        shadow = TextShadow,
                     ),
                 )
                 Text(
                     "Double Tap To Queue  ·  Hold To Move",
                     maxLines = 1,
-                    style = TextStyle(LibrarySecondary, fontSize = 40.usp, shadow = LibraryTextShadow),
+                    style = TextStyle(SecondaryText, fontSize = 40.usp, shadow = TextShadow),
                     modifier = Modifier.padding(top = 2.u, bottom = 6.u),
                 )
                 // In a mix only the songs you added count (the mix itself is endless);
@@ -277,7 +255,7 @@ fun QueuePage(player: PlayerController, onClose: () -> Unit, modifier: Modifier 
                 if (count > 0) {
                     Text(
                         if (count == 1) "1 song" else "$count songs",
-                        style = TextStyle(LibrarySecondary, fontSize = 46.usp, shadow = LibraryTextShadow),
+                        style = TextStyle(SecondaryText, fontSize = 46.usp, shadow = TextShadow),
                         modifier = Modifier.graphicsLayer { alpha = 1f - c },
                     )
                 }
@@ -292,7 +270,7 @@ fun QueuePage(player: PlayerController, onClose: () -> Unit, modifier: Modifier 
                     .size(130.u)
                     .clip(CircleShape)
                     .background(Color(0x47FFFFFF))
-                    .border(1.5f.u, LibraryGlass.Edge, CircleShape)
+                    .border(1.5f.u, Glass.Edge, CircleShape)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = ripple(color = Color.White),
@@ -335,7 +313,7 @@ private fun RemoveButton(onClick: () -> Unit) {
             Icon(
                 painterResource(R.drawable.ic_close),
                 stringResource(R.string.remove_from_queue),
-                tint = LibrarySecondary,
+                tint = SecondaryText,
                 modifier = Modifier.size(52.u),
             )
         }

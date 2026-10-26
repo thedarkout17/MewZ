@@ -59,7 +59,7 @@ import kotlinx.coroutines.launch
 /** Keyboard sheet height on the 2000x1200 canvas. HomeScreen uses it to place the sheet. */
 const val KEYBOARD_HEIGHT = 540f
 
-private object Glass {
+private object KeyboardGlass {
     /** Sheet: dark-red tint for contrast, then a soft white sheen from the top. */
     val SheetTint = Color(0x47300008)
     val SheetSheen = Brush.verticalGradient(listOf(Color(0x30FFFFFF), Color(0x10FFFFFF)))
@@ -126,11 +126,11 @@ fun GlassKeyboard(
                 .fillMaxWidth()
                 .height(KEYBOARD_HEIGHT.u)
                 .clip(RoundedCornerShape(topStart = 56.u, topEnd = 56.u))
-                .background(Glass.SheetTint)
-                .background(Glass.SheetSheen)
+                .background(KeyboardGlass.SheetTint)
+                .background(KeyboardGlass.SheetSheen)
                 .border(
                     width = 2.u,
-                    color = Glass.SheetEdge,
+                    color = KeyboardGlass.SheetEdge,
                     shape = RoundedCornerShape(topStart = 56.u, topEnd = 56.u),
                 )
                 // Swallow taps on the gaps so they don't fall through to the screen behind.
@@ -251,9 +251,9 @@ private fun RowScope.GlassKey(
                 .clip(shape)
                 .then(
                     if (accent) Modifier.background(if (pressed) Brand.Red.copy(alpha = 0.75f) else Brand.Red)
-                    else Modifier.background(if (pressed || lit) Glass.KeyPressed else Glass.Key)
+                    else Modifier.background(if (pressed || lit) KeyboardGlass.KeyPressed else KeyboardGlass.Key)
                 )
-                .border(1.5f.u, if (accent) SolidColor(Color(0x40FFFFFF)) else Glass.KeyEdge, shape)
+                .border(1.5f.u, if (accent) SolidColor(Color(0x40FFFFFF)) else KeyboardGlass.KeyEdge, shape)
                 .semantics {
                     role = Role.Button
                     contentDescription = label
@@ -286,7 +286,7 @@ private fun KeyLabel(text: String, small: Boolean = false, faded: Boolean = fals
         Text(
             text = text,
             style = TextStyle(
-                color = Glass.Label.copy(alpha = if (faded) 0.7f else 1f),
+                color = KeyboardGlass.Label.copy(alpha = if (faded) 0.7f else 1f),
                 fontSize = (if (small) 44 else 56).usp,
                 fontWeight = if (small) FontWeight.Medium else FontWeight.Normal,
                 shadow = Shadow(Color(0x40000000), Offset(0f, 1.5f), blurRadius = 6f),
@@ -297,5 +297,5 @@ private fun KeyLabel(text: String, small: Boolean = false, faded: Boolean = fals
 
 @Composable
 private fun KeyIcon(res: Int, size: Dp) {
-    Icon(painterResource(res), contentDescription = null, tint = Glass.Label, modifier = Modifier.size(size))
+    Icon(painterResource(res), contentDescription = null, tint = KeyboardGlass.Label, modifier = Modifier.size(size))
 }

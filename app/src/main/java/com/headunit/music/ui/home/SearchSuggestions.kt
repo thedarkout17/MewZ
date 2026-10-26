@@ -1,5 +1,6 @@
 package com.headunit.music.ui.home
 
+import com.headunit.music.ui.theme.TextShadow
 import android.os.Build
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -140,7 +141,6 @@ fun SearchSuggestions(
     }
 }
 
-private val TextShadow = Shadow(Color(0x55000000), Offset(0f, 2f), blurRadius = 8f)
 
 @Composable
 private fun SuggestionRow(

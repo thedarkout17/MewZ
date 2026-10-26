@@ -26,20 +26,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -48,16 +42,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.headunit.music.R
 import com.headunit.music.core.model.LIKED_ID
 import com.headunit.music.core.model.Library
-import com.headunit.music.data.LibraryStore
 import com.headunit.music.core.model.Track
+import com.headunit.music.data.LibraryStore
+import com.headunit.music.ui.components.Glass
+import com.headunit.music.ui.components.GlassPane
+import com.headunit.music.ui.components.fadeUnderHeader
+import com.headunit.music.ui.components.rememberHeaderCollapse
 import com.headunit.music.ui.library.CoverCollage
-import com.headunit.music.ui.library.GlassPane
-import com.headunit.music.ui.library.LibraryGlass
-import com.headunit.music.ui.library.LibrarySecondary
-import com.headunit.music.ui.library.LibraryTextShadow
 import com.headunit.music.ui.library.iconFor
 import com.headunit.music.ui.library.songCount
 import com.headunit.music.ui.theme.LocalDesignScale
+import com.headunit.music.ui.theme.SecondaryText
+import com.headunit.music.ui.theme.TextShadow
 
 // Header (design px), the same as the queue's: big title shrinking as you scroll.
 private const val HEADER_TALL = 470f
@@ -83,15 +79,8 @@ fun AddToLibraryPage(
     modifier: Modifier = Modifier,
 ) {
     val list = rememberLazyListState()
-    val density = LocalDensity.current
     with(LocalDesignScale.current) {
-        val collapseDistance = (HEADER_TALL - HEADER_SHORT).u
-        val c by remember {
-            derivedStateOf {
-                if (list.firstVisibleItemIndex > 0) 1f
-                else (list.firstVisibleItemScrollOffset / with(density) { collapseDistance.toPx() }).coerceIn(0f, 1f)
-            }
-        }
+        val c by rememberHeaderCollapse(list, HEADER_TALL, HEADER_SHORT)
         val headerH = HEADER_TALL + (HEADER_SHORT - HEADER_TALL) * c
         // Liked first (adding anywhere likes the song anyway), then the ones you made.
         val choices: List<Library> = listOfNotNull(libraries.byId(LIKED_ID)) + libraries.custom
@@ -105,20 +94,7 @@ fun AddToLibraryPage(
                 modifier = Modifier
                     .fillMaxSize()
                     // Rows dissolve as they slide up under the title.
-                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                    .drawWithContent {
-                        drawContent()
-                        val top = headerH.u.toPx() - 30.u.toPx()
-                        val solid = top + 60.u.toPx()
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                0f to Color.Transparent,
-                                (top / size.height) to Color.Transparent,
-                                (solid / size.height) to Color.Black,
-                            ),
-                            blendMode = BlendMode.DstIn,
-                        )
-                    },
+                    .fadeUnderHeader(headerH.u, 30.u),
             ) {
                 item(key = "new") {
                     LibraryChoiceRow(
@@ -159,14 +135,14 @@ fun AddToLibraryPage(
                         Color.White,
                         fontSize = (TITLE_BIG + (TITLE_SMALL - TITLE_BIG) * c).usp,
                         fontWeight = FontWeight.SemiBold,
-                        shadow = LibraryTextShadow,
+                        shadow = TextShadow,
                     ),
                 )
                 Text(
                     "${track.title}  ·  ${track.artist}",
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = TextStyle(LibrarySecondary, fontSize = 46.usp, shadow = LibraryTextShadow),
+                    style = TextStyle(SecondaryText, fontSize = 46.usp, shadow = TextShadow),
                     modifier = Modifier.graphicsLayer { alpha = 1f - c },
                 )
             }
@@ -202,7 +178,7 @@ private fun LibraryChoiceRow(library: Library?, title: String, subtitle: String,
                 modifier = Modifier.size(TILE.u).clip(shape),
             ) {
                 GlassPane(Modifier.fillMaxSize())
-                Box(Modifier.fillMaxSize().border(2.u, LibraryGlass.Edge, shape))
+                Box(Modifier.fillMaxSize().border(2.u, Glass.Edge, shape))
                 val covers = library?.takeIf { it.id != LIKED_ID }?.coverTracks.orEmpty()
                 if (covers.isNotEmpty()) {
                     CoverCollage(covers, Modifier.fillMaxSize())
@@ -221,13 +197,13 @@ private fun LibraryChoiceRow(library: Library?, title: String, subtitle: String,
                     title,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = TextStyle(Color.White, fontSize = 66.usp, fontWeight = FontWeight.Medium, shadow = LibraryTextShadow),
+                    style = TextStyle(Color.White, fontSize = 66.usp, fontWeight = FontWeight.Medium, shadow = TextShadow),
                 )
                 Text(
                     subtitle,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = TextStyle(LibrarySecondary, fontSize = 46.usp, shadow = LibraryTextShadow),
+                    style = TextStyle(SecondaryText, fontSize = 46.usp, shadow = TextShadow),
                 )
             }
             if (checked) {

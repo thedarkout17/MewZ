@@ -17,29 +17,24 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import coil.compose.AsyncImage
 import com.headunit.music.core.model.Track
 import com.headunit.music.core.search.Album
+import com.headunit.music.ui.components.fadeUnderHeader
+import com.headunit.music.ui.components.rememberHeaderCollapse
 import com.headunit.music.ui.theme.LocalDesignScale
+import com.headunit.music.ui.theme.SecondaryText
+import com.headunit.music.ui.theme.TextShadow
 
 /** An album's songs: loading, loaded, or why not. */
 sealed interface AlbumTracks {
@@ -56,8 +51,6 @@ private const val TITLE_SMALL = 72f
 private const val COVER_BIG = 300f
 private const val COVER_SMALL = 120f
 
-private val AlbumTextShadow = Shadow(Color(0x55000000), Offset(0f, 2f), blurRadius = 8f)
-private val AlbumSecondary = Color.White.copy(alpha = 0.72f)
 
 /**
  * An album opened from search, laid out like a library: cover and title at the
@@ -77,15 +70,8 @@ fun AlbumPage(
     modifier: Modifier = Modifier,
 ) {
     val list = rememberLazyListState()
-    val density = LocalDensity.current
     with(LocalDesignScale.current) {
-        val collapseDistance = (HEADER_TALL - HEADER_SHORT).u
-        val c by remember {
-            derivedStateOf {
-                if (list.firstVisibleItemIndex > 0) 1f
-                else (list.firstVisibleItemScrollOffset / with(density) { collapseDistance.toPx() }).coerceIn(0f, 1f)
-            }
-        }
+        val c by rememberHeaderCollapse(list, HEADER_TALL, HEADER_SHORT)
         val headerH = HEADER_TALL + (HEADER_SHORT - HEADER_TALL) * c
 
         Box(modifier.fillMaxSize().pointerInput(onBack) { detectTapGestures(onTap = { onBack() }) }) {
@@ -109,20 +95,7 @@ fun AlbumPage(
                     modifier = Modifier
                         .fillMaxSize()
                         // Rows dissolve as they slide up under the title.
-                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                        .drawWithContent {
-                            drawContent()
-                            val top = headerH.u.toPx() - 30.u.toPx()
-                            val solid = top + 60.u.toPx()
-                            drawRect(
-                                brush = Brush.verticalGradient(
-                                    0f to Color.Transparent,
-                                    (top / size.height) to Color.Transparent,
-                                    (solid / size.height) to Color.Black,
-                                ),
-                                blendMode = BlendMode.DstIn,
-                            )
-                        },
+                        .fadeUnderHeader(headerH.u, 30.u),
                 ) {
                     itemsIndexed(state.tracks, key = { _, t -> t.videoId }) { i, track ->
                         TrackRow(
@@ -161,7 +134,7 @@ fun AlbumPage(
                         Color.White,
                         fontSize = (TITLE_BIG + (TITLE_SMALL - TITLE_BIG) * c).usp,
                         fontWeight = FontWeight.SemiBold,
-                        shadow = AlbumTextShadow,
+                        shadow = TextShadow,
                     ),
                 )
                 val count = (state as? AlbumTracks.Done)?.tracks?.size
@@ -170,7 +143,7 @@ fun AlbumPage(
                         .joinToString("  ·  "),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = TextStyle(AlbumSecondary, fontSize = 46.usp, shadow = AlbumTextShadow),
+                    style = TextStyle(SecondaryText, fontSize = 46.usp, shadow = TextShadow),
                     modifier = Modifier.graphicsLayer { alpha = 1f - c },
                 )
             }

@@ -1,5 +1,6 @@
 package com.headunit.music.ui.player
 
+import com.headunit.music.ui.theme.TextShadow
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -193,7 +194,7 @@ private fun LyricsList(player: PlayerController, lyrics: Lyrics, height: android
                         fontSize = (if (lyrics.synced) 68 else 58).usp,
                         lineHeight = (if (lyrics.synced) 82 else 72).usp,
                         fontWeight = if (now) FontWeight.Bold else FontWeight.SemiBold,
-                        shadow = LibraryTextShadow,
+                        shadow = TextShadow,
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -220,7 +221,7 @@ private fun Note(text: String, modifier: Modifier) {
     with(LocalDesignScale.current) {
         Text(
             text,
-            style = TextStyle(Color.White, fontSize = 50.usp, fontWeight = FontWeight.Medium, shadow = LibraryTextShadow),
+            style = TextStyle(Color.White, fontSize = 50.usp, fontWeight = FontWeight.Medium, shadow = TextShadow),
             modifier = modifier.padding(horizontal = 48.u),
         )
     }
