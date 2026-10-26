@@ -856,8 +856,9 @@ private fun DrawScope.drawNote(x: Float, y: Float, unit: Float, tiltDeg: Float, 
 }
 
 /**
- * The heart, beating once for its animation: a strong "lub" then a softer "dub"
- * (with a little dip between them), then it settles. It stays an outline until
+ * The heart, beating for its animation: a strong "lub" then a softer "dub"
+ * (with a little dip between them), then one more beat that settles just as
+ * the animation ends, so the glass and filled heart follow straight on. It stays an outline until
  * the beat is done, then fills in.
  */
 @Composable
@@ -871,7 +872,10 @@ private fun HeartGlyph(t: Float) {
         0.10f * bump(0.04f, 0.035f) +
         0.34f * bump(0.17f, 0.055f) -
         0.08f * bump(0.29f, 0.04f) +
-        0.22f * bump(0.42f, 0.06f)
+        0.22f * bump(0.42f, 0.06f) -
+        // ...and one more beat, ending right as the glass and filled heart come in.
+        0.07f * bump(0.60f, 0.05f) +
+        0.30f * bump(0.80f, 0.065f)
     Icon(
         // Outline while it beats; it fills in (with the glass) once the beat is done.
         painterResource(R.drawable.ic_heart),
