@@ -36,6 +36,7 @@ class LocalSuggestionProvider(
         private val COMPLETION_SUFFIXES = listOf(
             "songs", "live", "remix", "playlist", "acoustic",
             "lyrics", "slowed", "sped up", "instrumental", "mix",
+            "cover", "karaoke", "audio", "official video",
         )
 
         val DEFAULT_CATALOGUE = listOf(

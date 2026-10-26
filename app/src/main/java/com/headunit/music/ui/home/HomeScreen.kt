@@ -45,7 +45,7 @@ import com.headunit.music.ui.theme.HeadunitMusicTheme
 import com.headunit.music.ui.theme.LocalDesignScale
 import kotlinx.coroutines.delay
 
-private const val MAX_SUGGESTIONS = 10 // the list scrolls, so show plenty
+private const val MAX_SUGGESTIONS = 14 // same as YouTube's suggestion list
 /** While typing, at most this many past searches lead the list; the rest are suggestions. */
 private const val MAX_HISTORY_WHILE_TYPING = 2
 private const val SUGGEST_DEBOUNCE_MS = 120L
