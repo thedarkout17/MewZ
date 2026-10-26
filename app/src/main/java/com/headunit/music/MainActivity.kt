@@ -26,6 +26,8 @@ import com.headunit.music.data.LibraryStore
 import com.headunit.music.data.SearchHistory
 import com.headunit.music.data.Track
 import com.headunit.music.ui.library.NewLibrarySheet
+import com.headunit.music.ui.library.DeleteLibraryDialog
+import com.headunit.music.data.Library
 import com.headunit.music.player.PlayerController
 import com.headunit.music.ui.player.DOCK_HEIGHT
 import com.headunit.music.ui.player.PlayerOverlay
@@ -68,6 +70,8 @@ class MainActivity : ComponentActivity() {
                 // "New library" sheet; the song to put in it when opened from Now Playing's + list.
                 var naming by remember { mutableStateOf(false) }
                 var namingFor by remember { mutableStateOf<Track?>(null) }
+                // Library being asked about after a hold on its tile ("Delete “Road trip”?").
+                var deleting by remember { mutableStateOf<Library?>(null) }
 
                 // Keep the screen on while music plays (headunits shouldn't dim mid-song).
                 LaunchedEffect(player.isPlaying) {
@@ -87,6 +91,7 @@ class MainActivity : ComponentActivity() {
                             else player.playQueue(tracks, index, name = collection, wrap = true)
                         },
                         onCreateLibrary = { namingFor = null; naming = true },
+                        onHoldLibrary = { deleting = it },
                         onQueue = { track ->
                             val msg = if (player.addToQueue(track)) "Added to queue: ${track.title}" else "Playing ${track.title}"
                             Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
@@ -133,6 +138,14 @@ class MainActivity : ComponentActivity() {
                             naming = false
                         },
                         onCancel = { naming = false },
+                    )
+                    DeleteLibraryDialog(
+                        library = deleting,
+                        onDelete = { lib ->
+                            libraries.delete(lib.id)
+                            deleting = null
+                        },
+                        onCancel = { deleting = null },
                     )
                 }
             }

@@ -78,6 +78,13 @@ class LibraryStore(context: Context) {
         return lib
     }
 
+    /** Removes a library you made. Liked and History can't be deleted; its songs stay liked. */
+    fun delete(libraryId: String) {
+        if (libraryId == LIKED_ID || libraryId == HISTORY_ID) return
+        custom = custom.filterNot { it.id == libraryId }
+        writeCustom()
+    }
+
     fun contains(libraryId: String, track: Track): Boolean =
         byId(libraryId)?.tracks?.any { it.videoId == track.videoId } == true
 

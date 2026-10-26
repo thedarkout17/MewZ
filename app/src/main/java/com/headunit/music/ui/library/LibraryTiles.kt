@@ -3,7 +3,8 @@ package com.headunit.music.ui.library
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +34,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -85,6 +88,8 @@ fun LibraryGrid(
     custom: List<Library>,
     onOpen: (Library) -> Unit,
     onCreate: () -> Unit,
+    /** A library you made was held: ask to delete it. (Liked and History can't be.) */
+    onHoldLibrary: (Library) -> Unit = {},
     modifier: Modifier = Modifier,
     /**
      * Over-scroll squish, 0 at rest and 1 at full pull (briefly negative as it
@@ -109,6 +114,8 @@ fun LibraryGrid(
                                 title = item.library.name,
                                 subtitle = songCount(item.library.tracks.size),
                                 onClick = { onOpen(item.library) },
+                                onLongClick = if (item.library.id == LIKED_ID || item.library.id == HISTORY_ID) null
+                                    else ({ onHoldLibrary(item.library) }),
                                 squish = squish,
                             )
                             LibraryTileItem.Create -> LibraryTile(
@@ -140,7 +147,16 @@ fun songCount(n: Int): String = if (n == 1) "1 song" else "$n songs"
  * middle; the name and song count sit underneath.
  */
 @Composable
-private fun LibraryTile(icon: Int, title: String, subtitle: String?, onClick: () -> Unit, squish: () -> Float) {
+@OptIn(ExperimentalFoundationApi::class)
+private fun LibraryTile(
+    icon: Int,
+    title: String,
+    subtitle: String?,
+    onClick: () -> Unit,
+    squish: () -> Float,
+    onLongClick: (() -> Unit)? = null,
+) {
+    val haptics = LocalHapticFeedback.current
     with(LocalDesignScale.current) {
         val shape = RoundedCornerShape(72.u)
         Column(Modifier.width(LIBRARY_TILE.u)) {
@@ -155,10 +171,16 @@ private fun LibraryTile(icon: Int, title: String, subtitle: String?, onClick: ()
                         scaleY = 1f + TILE_SQUISH_Y * k
                     }
                     .clip(shape)
-                    .clickable(
+                    .combinedClickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = ripple(color = Color.White),
                         onClick = onClick,
+                        onLongClick = onLongClick?.let { hold ->
+                            {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                hold()
+                            }
+                        },
                     ),
             ) {
                 GlassPane(Modifier.fillMaxSize())

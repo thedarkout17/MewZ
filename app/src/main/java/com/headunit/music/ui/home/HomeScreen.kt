@@ -120,6 +120,8 @@ fun HomeScreen(
     onPlay: (tracks: List<Track>, index: Int, collection: String?) -> Unit,
     /** The + tile: name a new library. */
     onCreateLibrary: () -> Unit,
+    /** A library you made was held: confirm deleting it. */
+    onHoldLibrary: (Library) -> Unit = {},
     /** A song (in search results or a library) was held: add it to the queue. */
     onQueue: (Track) -> Unit = {},
     onVoiceSearch: () -> Unit,
@@ -403,6 +405,7 @@ fun HomeScreen(
                             custom = libraries.custom,
                             onOpen = { openLibraryId = it.id },
                             onCreate = onCreateLibrary,
+                            onHoldLibrary = onHoldLibrary,
                             squish = { squish.pull / squishMaxPx },
                         )
                         Spacer(Modifier.height((dockInset + 40f).u))
