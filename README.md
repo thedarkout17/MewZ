@@ -21,7 +21,7 @@ Search uses the official **YouTube Data API v3**, which needs a free API key.
    ```
 6. Rebuild and run.
 
-**Free quota:** 10,000 units per day. Each search costs about 101 units, so roughly **99 searches a day**. It resets at midnight Pacific time. If you hit it, the app says so.
+**Free quota:** 10,000 units per day. Each search costs about 101 units, and so does each extra page of 50 results loaded by scrolling to the bottom, so roughly **99 searches or pages a day**. It resets at midnight Pacific time. If you hit it, the app says so. (Up-next mixes and audio don't use quota.)
 
 ## Layout system
 Everything is measured in *design pixels* on a 2000×1200 canvas (`ui/theme/DesignScale.kt`)

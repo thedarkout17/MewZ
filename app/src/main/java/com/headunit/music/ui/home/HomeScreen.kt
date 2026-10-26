@@ -227,8 +227,36 @@ fun HomeScreen(
         val q = submitted ?: return@LaunchedEffect
         results = ResultsState.Loading
         results = when (val r = youtube.search(q)) {
-            is SearchResult.Success -> ResultsState.Done(q, r.tracks)
+            is SearchResult.Success -> ResultsState.Done(q, r.tracks, nextPage = r.nextPageToken)
             is SearchResult.Failure -> ResultsState.Failed(r.reason)
+        }
+    }
+
+    /** Scrolled near the end of the results: fetch the next page and add it on. */
+    fun loadMore() {
+        val done = results as? ResultsState.Done ?: return
+        val token = done.nextPage ?: return
+        if (done.loadingMore) return
+        results = done.copy(loadingMore = true, moreFailed = null)
+        scope.launch {
+            val r = youtube.search(done.query, pageToken = token)
+            // A new search may have started meanwhile; leave its results alone.
+            val now = results as? ResultsState.Done ?: return@launch
+            if (now.query != done.query || !now.loadingMore) return@launch
+            results = when (r) {
+                is SearchResult.Success -> {
+                    val seen = now.tracks.mapTo(HashSet()) { it.videoId }
+                    val added = r.tracks.filter { seen.add(it.videoId) }
+                    now.copy(
+                        tracks = now.tracks + added,
+                        // A page with nothing new means YouTube is out of results; stop
+                        // there rather than spend quota paging through repeats.
+                        nextPage = r.nextPageToken.takeIf { added.isNotEmpty() },
+                        loadingMore = false,
+                    )
+                }
+                is SearchResult.Failure -> now.copy(loadingMore = false, moreFailed = r.reason)
+            }
         }
     }
 
@@ -402,6 +430,7 @@ fun HomeScreen(
                         },
                         onRetry = { attempt++ },
                         onQueue = onQueue,
+                        onLoadMore = ::loadMore,
                         modifier = Modifier
                             .align(Alignment.TopStart)
                             .fillMaxSize()

@@ -28,13 +28,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -62,9 +65,20 @@ import kotlinx.coroutines.delay
 /** What the results area is showing. */
 sealed interface ResultsState {
     data object Loading : ResultsState
-    data class Done(val query: String, val tracks: List<Track>) : ResultsState
+    data class Done(
+        val query: String,
+        val tracks: List<Track>,
+        /** For the next page of results; null when YouTube has no more. */
+        val nextPage: String? = null,
+        val loadingMore: Boolean = false,
+        /** Why the last "load more" failed (scrolling stops asking until Try again). */
+        val moreFailed: Reason? = null,
+    ) : ResultsState
     data class Failed(val reason: Reason) : ResultsState
 }
+
+/** Start fetching the next page when this many rows are left below the screen. */
+private const val LOAD_MORE_AHEAD = 4
 
 private val TextShadow = Shadow(Color(0x55000000), Offset(0f, 2f), blurRadius = 8f)
 private val Secondary = Color.White.copy(alpha = 0.72f)
@@ -81,9 +95,18 @@ fun SearchResults(
     onRetry: () -> Unit,
     /** A song was held: add it to the queue. */
     onQueue: (Track) -> Unit = {},
+    /** Scrolled near the end of the results: fetch the next page. */
+    onLoadMore: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    Crossfade(targetState = state, animationSpec = tween(220), label = "results", modifier = modifier) { s ->
+    // Keyed by kind, so more results arriving just extend the list (no crossfade, no jump to the top).
+    Crossfade(
+        targetState = state,
+        animationSpec = tween(220),
+        label = "results",
+        contentKey = { it::class },
+        modifier = modifier,
+    ) { s ->
         when (s) {
             ResultsState.Loading -> LoadingRows()
             is ResultsState.Done ->
@@ -93,7 +116,7 @@ fun SearchResults(
                         detail = "Try a different spelling or the artist's name.",
                     )
                 } else {
-                    TrackList(s.tracks, onPlay, onQueue)
+                    TrackList(s, onPlay, onQueue, onLoadMore)
                 }
             is ResultsState.Failed -> FailureMessage(s.reason, onRetry)
         }
@@ -101,10 +124,30 @@ fun SearchResults(
 }
 
 @Composable
-private fun TrackList(tracks: List<Track>, onPlay: (Track) -> Unit, onQueue: (Track) -> Unit) {
+private fun TrackList(
+    state: ResultsState.Done,
+    onPlay: (Track) -> Unit,
+    onQueue: (Track) -> Unit,
+    onLoadMore: () -> Unit,
+) {
+    val tracks = state.tracks
+    val list = rememberLazyListState()
+    // Within a few rows of the end: ask for more (once per page; not after a failure).
+    val nearEnd by remember {
+        derivedStateOf {
+            val last = list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            last >= list.layoutInfo.totalItemsCount - 1 - LOAD_MORE_AHEAD
+        }
+    }
+    val canLoadMore = state.nextPage != null && !state.loadingMore && state.moreFailed == null
+    LaunchedEffect(nearEnd, canLoadMore, tracks.size) {
+        if (nearEnd && canLoadMore) onLoadMore()
+    }
+
     with(LocalDesignScale.current) {
         val fade = 48.u
         LazyColumn(
+            state = list,
             // Rows are 220px plus 20px gaps: four fit, the fifth peeks in to hint at scrolling.
             verticalArrangement = Arrangement.spacedBy(20.u),
             contentPadding = PaddingValues(top = 12.u, bottom = 48.u),
@@ -125,6 +168,33 @@ private fun TrackList(tracks: List<Track>, onPlay: (Track) -> Unit, onQueue: (Tr
         ) {
             itemsIndexed(tracks, key = { _, t -> t.videoId }) { index, track ->
                 TrackRow(track, index, onClick = { onPlay(track) }, onLongClick = { onQueue(track) })
+            }
+            // Footer: spinner while the next page loads, or why it couldn't.
+            if (state.loadingMore || state.moreFailed != null) {
+                item(key = "more") {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(160.u)
+                            .then(
+                                if (state.moreFailed != null) Modifier.clickable(onClick = onLoadMore) else Modifier
+                            ),
+                    ) {
+                        if (state.loadingMore) {
+                            CircularProgressIndicator(color = Color.White, strokeWidth = 5.u, modifier = Modifier.size(64.u))
+                        } else {
+                            Text(
+                                when (state.moreFailed) {
+                                    Reason.QuotaExceeded -> "Daily search limit reached; more results tomorrow"
+                                    Reason.Offline -> "No connection · Tap to try again"
+                                    else -> "Couldn't load more · Tap to try again"
+                                },
+                                style = TextStyle(Secondary, fontSize = 44.usp, shadow = TextShadow),
+                            )
+                        }
+                    }
+                }
             }
         }
     }

@@ -12,7 +12,8 @@ import java.net.URLEncoder
 
 /** What a search can come back with. */
 sealed interface SearchResult {
-    data class Success(val tracks: List<Track>) : SearchResult
+    /** [nextPageToken]: pass back to [YouTubeSearch.search] for more results; null when there are no more. */
+    data class Success(val tracks: List<Track>, val nextPageToken: String? = null) : SearchResult
     data class Failure(val reason: Reason, val detail: String? = null) : SearchResult
 
     enum class Reason {
@@ -43,7 +44,13 @@ class YouTubeSearch(
     private val apiKey: String,
     private val maxResults: Int = 20,
 ) {
-    suspend fun search(query: String): SearchResult = withContext(Dispatchers.IO) {
+    /**
+     * One page of results. For more, call again with the previous page's
+     * [SearchResult.Success.nextPageToken]. Every page costs the same quota as a
+     * new search (~101 units) whatever its size, so later pages ask for
+     * [MORE_PAGE_SIZE] songs, the most YouTube allows.
+     */
+    suspend fun search(query: String, pageToken: String? = null): SearchResult = withContext(Dispatchers.IO) {
         if (apiKey.isBlank()) return@withContext SearchResult.Failure(SearchResult.Reason.MissingKey)
 
         try {
@@ -53,9 +60,11 @@ class YouTubeSearch(
                 "type" to "video",
                 "videoCategoryId" to MUSIC_CATEGORY,
                 "videoEmbeddable" to "true",
-                "maxResults" to maxResults.toString(),
+                "maxResults" to (if (pageToken == null) maxResults else MORE_PAGE_SIZE).toString(),
                 "q" to query,
+                *(if (pageToken != null) arrayOf("pageToken" to pageToken) else emptyArray()),
             )
+            val next = searchJson.optString("nextPageToken").takeIf { it.isNotEmpty() }
             val items = searchJson.optJSONArray("items") ?: return@withContext SearchResult.Success(emptyList())
 
             val tracks = buildList {
@@ -84,7 +93,7 @@ class YouTubeSearch(
                 }
             }
 
-            SearchResult.Success(withDurations(tracks))
+            SearchResult.Success(withDurations(tracks), next)
         } catch (e: ApiException) {
             SearchResult.Failure(e.reason, e.message)
         } catch (e: IOException) {
@@ -157,6 +166,8 @@ class YouTubeSearch(
     companion object {
         private const val BASE = "https://www.googleapis.com/youtube/v3"
         private const val MUSIC_CATEGORY = "10"
+        /** Songs per page after the first (YouTube's maximum; costs the same as 20). */
+        const val MORE_PAGE_SIZE = 50
 
         private fun unescape(s: String): String =
             Html.fromHtml(s, Html.FROM_HTML_MODE_LEGACY).toString()
