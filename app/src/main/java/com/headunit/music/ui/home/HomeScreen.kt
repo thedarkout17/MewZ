@@ -284,6 +284,8 @@ fun HomeScreen(
                     query = query,
                     items = listItems,
                     onTapEmptySpace = ::tapOutside,
+                    // Scrolling the list puts the keyboard away so more of it shows.
+                    onUserScroll = { keyboard = false },
                     onPick = ::submit,
                     onRemove = { recent = history.remove(it) },
                     // Rows blur as they pass behind the keyboard glass.

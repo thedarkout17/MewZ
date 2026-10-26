@@ -551,7 +551,7 @@ body {
       <span class="chip">Canvas <b>2000×1200</b></span>
       <span class="chip">Scale <b id="scale">–</b></span>
       <span class="chip">Back <b>Esc</b></span>
-      <span class="chip">Build <b>v0.18 · player</b></span>
+      <span class="chip">Build <b>v0.19 · player</b></span>
       <label class="chip" for="mode">Results
         <select class="sel" id="mode">
           <option value="ok">Sample songs</option>
@@ -1098,6 +1098,13 @@ clearBtn.addEventListener('click', () => { setQuery(''); activate(); logEvent('c
 catcher.addEventListener('click', tapOutside);
 // The scrolling list covers the screen; taps between/below rows count as empty space.
 sugEl.addEventListener('click', (e) => { if (e.target === sugEl) tapOutside(); });
+// Scrolling the list (wheel or finger) puts the keyboard away, like onUserScroll in the app.
+function scrollHidesKeyboard() {
+  if (!keyboardShown()) return;
+  keyboard = false; logEvent('keyboard', 'hidden by scrolling the list'); render();
+}
+sugEl.addEventListener('wheel', scrollHidesKeyboard, { passive: true });
+sugEl.addEventListener('touchmove', scrollHidesKeyboard, { passive: true });
 
 $('mic').addEventListener('click', () => {
   logEvent('onVoiceSearch', 'RecognizerIntent.ACTION_RECOGNIZE_SPEECH');

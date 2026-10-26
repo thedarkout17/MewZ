@@ -6,6 +6,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -29,6 +30,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,10 +90,19 @@ fun SearchSuggestions(
     glassTopPx: () -> Float = { Float.MAX_VALUE },
     bottomPadding: Dp = 0.dp,
     onTapEmptySpace: () -> Unit = {},
+    /** The user started dragging the list (used to put the keyboard away). */
+    onUserScroll: () -> Unit = {},
 ) {
     val listState = rememberLazyListState()
     // New search text → start from the top again.
     LaunchedEffect(query.isBlank()) { listState.scrollToItem(0) }
+    // Only a finger drag counts; our own scrollToItem doesn't.
+    val onScroll by rememberUpdatedState(onUserScroll)
+    LaunchedEffect(listState) {
+        listState.interactionSource.interactions.collect {
+            if (it is DragInteraction.Start) onScroll()
+        }
+    }
 
     with(LocalDesignScale.current) {
         val fade = 40.u
