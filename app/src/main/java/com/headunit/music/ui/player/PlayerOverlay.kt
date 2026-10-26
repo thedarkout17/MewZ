@@ -303,6 +303,14 @@ private fun NowPlaying(
 ) {
     val track = player.current ?: return
     var picking by remember { mutableStateOf(false) }
+    var showingQueue by remember { mutableStateOf(false) }
+    // Back closes the queue first (registered after the player's own Back, so it wins).
+    BackHandler(enabled = showingQueue) { showingQueue = false }
+    val queueIn by animateFloatAsState(
+        targetValue = if (showingQueue) 1f else 0f,
+        animationSpec = tween(320, easing = FastOutSlowInEasing),
+        label = "queue",
+    )
     with(LocalDesignScale.current) {
         val colX = ART_FULL_X + ART_FULL + COLUMN_GAP
         val colW = width - colX - SIDE
@@ -317,7 +325,18 @@ private fun NowPlaying(
             modifier = Modifier.offset(x = ART_FULL_X.u, y = (48f + shiftY).u).graphicsLayer { this.alpha = alpha },
         )
 
-        // Where we are in a library / playlist (top-right): "Road trip — 3 of 20".
+        // Queue (top-right), mirroring minimize on the left.
+        GlassCircleButton(
+            icon = R.drawable.ic_queue,
+            contentDescription = stringResource(R.string.queue),
+            size = 130f, glyph = 64f,
+            onClick = { picking = false; showingQueue = !showingQueue },
+            modifier = Modifier
+                .offset(x = (width - SIDE - 130f).u, y = (48f + shiftY).u)
+                .graphicsLayer { this.alpha = alpha },
+        )
+
+        // Where we are in a library / playlist, left of the queue button: "Road trip — 3 of 20".
         // Nothing for search results, which aren't a collection.
         player.queueName?.let { name ->
             Text(
@@ -328,7 +347,7 @@ private fun NowPlaying(
                 style = TextStyle(Tertiary, fontSize = 44.usp, shadow = TextShadow),
                 modifier = Modifier
                     .offset(x = (width / 2f).u, y = (82f + shiftY).u)
-                    .width((width / 2f - 64f).u)
+                    .width((width / 2f - SIDE - 130f - 40f).u)
                     .graphicsLayer { this.alpha = alpha },
             )
         }
@@ -472,6 +491,35 @@ private fun NowPlaying(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                     ) { },
+                )
+            }
+        }
+
+        // Queue sheet, sliding in from the right. A tap anywhere else closes it.
+        if (queueIn > 0f) {
+            Box(
+                contentAlignment = Alignment.CenterEnd,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { this.alpha = alpha }
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { showingQueue = false }
+                    .padding(top = 40.u, bottom = 40.u, end = 40.u),
+            ) {
+                QueuePanel(
+                    player = player,
+                    modifier = Modifier
+                        .graphicsLayer {
+                            this.alpha = queueIn
+                            translationX = (1f - queueIn) * (QUEUE_PANEL_WIDTH + 40f).u.toPx()
+                        }
+                        // Taps on the sheet itself shouldn't close it.
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { },
                 )
             }
         }

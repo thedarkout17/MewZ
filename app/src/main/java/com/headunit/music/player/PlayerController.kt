@@ -251,6 +251,27 @@ class PlayerController(context: Context) {
         return true
     }
 
+    /** True if [track] was added with a hold and hasn't played yet. */
+    fun isHeldQueued(track: Track): Boolean = track.videoId in heldQueued
+
+    /** Queue list: jump straight to the song at [i]. Held songs passed over stay where they are. */
+    fun skipTo(i: Int) {
+        if (i !in queue.indices || i == index) return
+        playAt(i)
+    }
+
+    /** Queue list: take the upcoming song at [i] out. */
+    fun removeFromQueue(i: Int) {
+        if (i <= index || i !in queue.indices) return
+        val track = queue[i]
+        queue = queue.toMutableList().apply { removeAt(i) }
+        val o = originalOrder.indexOfLast { it.videoId == track.videoId }
+        if (o >= 0) originalOrder = originalOrder.toMutableList().apply { removeAt(o) }
+        heldQueued -= track.videoId
+        if (i == index + 1) preloadNext()
+        current?.let { if (autoMix && index >= queue.size - 3) extendMix(it) }
+    }
+
     private fun stopMix() {
         mixJob?.cancel()
         mixJob = null

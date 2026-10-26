@@ -10,6 +10,9 @@
     <string name="key_shift">Shift</string>
     <string name="key_hide">Hide keyboard</string>
     <string name="minimize_player">Minimize player</string>
+    <string name="queue">Queue</string>
+    <string name="up_next">Up next</string>
+    <string name="remove_from_queue">Remove from queue</string>
     <string name="play">Play</string>
     <string name="pause">Pause</string>
     <string name="next_song">Next song</string>
