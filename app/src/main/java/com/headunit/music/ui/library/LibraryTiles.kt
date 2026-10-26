@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -45,6 +46,9 @@ import com.headunit.music.ui.theme.LocalDesignScale
 /** Library squares on the home screen (design px). Two side by side, 80 from the screen edges. */
 const val LIBRARY_TILE = 760f
 const val LIBRARY_TILE_GAP = 320f
+/** At full over-scroll pull, tiles are this much skinnier / taller. */
+private const val TILE_SQUISH_X = 0.06f
+private const val TILE_SQUISH_Y = 0.05f
 /** Tile plus the name and song count under it. */
 const val LIBRARY_ROW_HEIGHT = LIBRARY_TILE + 190f
 
@@ -82,6 +86,11 @@ fun LibraryGrid(
     onOpen: (Library) -> Unit,
     onCreate: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Over-scroll squish, 0 at rest and 1 at full pull (briefly negative as it
+     * bounces back). Read while drawing, so it doesn't recompose the grid.
+     */
+    squish: () -> Float = { 0f },
 ) {
     val items = listOf(LibraryTileItem.Open(liked), LibraryTileItem.Open(history)) +
         custom.map { LibraryTileItem.Open(it) } + LibraryTileItem.Create
@@ -100,12 +109,14 @@ fun LibraryGrid(
                                 title = item.library.name,
                                 subtitle = songCount(item.library.tracks.size),
                                 onClick = { onOpen(item.library) },
+                                squish = squish,
                             )
                             LibraryTileItem.Create -> LibraryTile(
                                 icon = R.drawable.ic_add,
                                 title = stringResource(R.string.new_library),
                                 subtitle = null,
                                 onClick = onCreate,
+                                squish = squish,
                             )
                         }
                     }
@@ -129,7 +140,7 @@ fun songCount(n: Int): String = if (n == 1) "1 song" else "$n songs"
  * middle; the name and song count sit underneath.
  */
 @Composable
-private fun LibraryTile(icon: Int, title: String, subtitle: String?, onClick: () -> Unit) {
+private fun LibraryTile(icon: Int, title: String, subtitle: String?, onClick: () -> Unit, squish: () -> Float) {
     with(LocalDesignScale.current) {
         val shape = RoundedCornerShape(72.u)
         Column(Modifier.width(LIBRARY_TILE.u)) {
@@ -137,6 +148,12 @@ private fun LibraryTile(icon: Int, title: String, subtitle: String?, onClick: ()
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .size(LIBRARY_TILE.u)
+                    // Over-scroll: squeezed in, a little taller and skinnier.
+                    .graphicsLayer {
+                        val k = squish()
+                        scaleX = 1f - TILE_SQUISH_X * k
+                        scaleY = 1f + TILE_SQUISH_Y * k
+                    }
                     .clip(shape)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },

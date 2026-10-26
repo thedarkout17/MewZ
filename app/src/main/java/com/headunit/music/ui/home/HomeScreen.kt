@@ -364,6 +364,7 @@ fun HomeScreen(
                             custom = libraries.custom,
                             onOpen = { openLibraryId = it.id },
                             onCreate = onCreateLibrary,
+                            squish = { squish.pull / squishMaxPx },
                         )
                         Spacer(Modifier.height((dockInset + 40f).u))
                     }
