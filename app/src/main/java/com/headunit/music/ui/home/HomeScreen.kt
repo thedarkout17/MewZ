@@ -48,8 +48,12 @@ import com.headunit.music.R
 import com.headunit.music.data.SearchHistory
 import com.headunit.music.data.SuggestionProvider
 import com.headunit.music.data.Track
+import com.headunit.music.data.youtube.Album
 import com.headunit.music.data.youtube.SearchResult
+import com.headunit.music.data.youtube.YouTubeAlbums
 import com.headunit.music.data.youtube.YouTubeSuggestions
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import com.headunit.music.data.youtube.YouTubeSearch
 import com.headunit.music.ui.components.BAR_HEIGHT_COMPACT
 import com.headunit.music.ui.components.BAR_HEIGHT_IDLE
@@ -160,6 +164,12 @@ fun HomeScreen(
 
     // Library page open (by id, so it updates as songs are added).
     var openLibraryId by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // Album opened from the search results, and its songs (fetched when it opens).
+    var openAlbum by remember { mutableStateOf<Album?>(null) }
+    var lastAlbum by remember { mutableStateOf<Album?>(null) }
+    var albumTracks by remember { mutableStateOf<AlbumTracks>(AlbumTracks.Loading) }
+    var albumAttempt by remember { mutableStateOf(0) }
     val openLibrary: Library? = openLibraryId?.let { libraries.byId(it) }
     // Kept for the closing animation after the page is dismissed.
     var lastLibrary by remember { mutableStateOf<Library?>(null) }
@@ -183,6 +193,11 @@ fun HomeScreen(
         label = "library",
     )
     // Frosted background: searching or in a library.
+    val albumP by animateFloatAsState(
+        targetValue = if (openAlbum != null) 1f else 0f,
+        animationSpec = tween(380, easing = FastOutSlowInEasing),
+        label = "album",
+    )
     val frost = maxOf(progress, libP)
     val kb by animateFloatAsState(
         targetValue = if (keyboardShown) 1f else 0f,
@@ -206,6 +221,7 @@ fun HomeScreen(
     }
     fun goHome() {
         openLibraryId = null
+        openAlbum = null
         query = ""
         submitted = null
         open = false
@@ -237,10 +253,28 @@ fun HomeScreen(
     LaunchedEffect(submitted, attempt) {
         val q = submitted ?: return@LaunchedEffect
         results = ResultsState.Loading
-        results = when (val r = youtube.search(q)) {
-            is SearchResult.Success -> ResultsState.Done(q, r.tracks, nextPage = r.nextPageToken)
-            is SearchResult.Failure -> ResultsState.Failed(r.reason)
+        coroutineScope {
+            // Albums come from YouTube Music at the same time (free; failures just mean no row).
+            val albums = async { runCatching { YouTubeAlbums.search(q) }.getOrDefault(emptyList()) }
+            results = when (val r = youtube.search(q)) {
+                is SearchResult.Success -> ResultsState.Done(q, r.tracks, nextPage = r.nextPageToken)
+                is SearchResult.Failure -> ResultsState.Failed(r.reason)
+            }
+            val now = results
+            // Only albums that really fit this search (see YouTubeAlbums.relevant).
+            val found = YouTubeAlbums.relevant(albums.await(), q, (now as? ResultsState.Done)?.tracks.orEmpty())
+            val latest = results
+            if (found.isNotEmpty() && latest is ResultsState.Done && latest.query == q) results = latest.copy(albums = found)
         }
+    }
+
+    // Fetch an album's songs when it's opened (or Try again is tapped).
+    LaunchedEffect(openAlbum, albumAttempt) {
+        val album = openAlbum ?: return@LaunchedEffect
+        lastAlbum = album
+        albumTracks = AlbumTracks.Loading
+        albumTracks = runCatching { YouTubeAlbums.tracks(album) }
+            .fold({ if (it.isEmpty()) AlbumTracks.Failed else AlbumTracks.Done(it) }, { AlbumTracks.Failed })
     }
 
     /** Scrolled near the end of the results: fetch the next page and add it on. */
@@ -289,6 +323,7 @@ fun HomeScreen(
     BackHandler(enabled = searching || openLibraryId != null) {
         when {
             openLibraryId != null -> openLibraryId = null
+            openAlbum != null -> openAlbum = null // album → back to the results
             open && submitted != null -> closePanel()
             else -> goHome()
         }
@@ -455,15 +490,36 @@ fun HomeScreen(
                         onQueue = onQueue,
                         onLoadMore = ::loadMore,
                         onTapEmptySpace = ::goHome,
+                        onOpenAlbum = { openAlbum = it },
                         modifier = Modifier
                             .align(Alignment.TopStart)
                             .fillMaxSize()
+                            .graphicsLayer { alpha = 1f - albumP }
                             .padding(
                                 top = (barTop + barHeight + 12f).u,
                                 start = 80.u,
                                 end = 80.u,
                                 bottom = dockInset.u, // stop above the mini player
                             ),
+                    )
+                }
+
+                // An album from the results, over them.
+                val pageAlbum = openAlbum ?: lastAlbum
+                if (albumP > 0f && pageAlbum != null) {
+                    AlbumPage(
+                        album = pageAlbum,
+                        state = albumTracks,
+                        onBack = { openAlbum = null },
+                        // Albums play like libraries: in order, looping, "Album — 3 of 12".
+                        onPlay = { tracks, i -> onPlay(tracks, i, pageAlbum.title) },
+                        onQueue = onQueue,
+                        onRetry = { albumAttempt++ },
+                        dockInset = dockInset,
+                        modifier = Modifier.graphicsLayer {
+                            alpha = albumP
+                            translationY = (1f - albumP) * 48.u.toPx()
+                        },
                     )
                 }
 
@@ -492,7 +548,7 @@ fun HomeScreen(
                         ),
                 )
 
-                if (libP < 1f) SearchBar(
+                if (libP < 1f && albumP < 1f) SearchBar(
                     query = query,
                     // Blinking cursor while typing, and on the idle screen like the mockup.
                     active = keyboardShown || !searching,
@@ -504,7 +560,7 @@ fun HomeScreen(
                         .align(Alignment.TopCenter)
                         .padding(top = barTop.u, start = 96.u, end = 96.u)
                         .graphicsLayer {
-                            alpha = 1f - libP
+                            alpha = (1f - libP) * (1f - albumP)
                             // Over-scroll squish: flatter and a touch wider; negative while
                             // springing back, which briefly stretches it (the bounce).
                             val k = squish.pull / squishMaxPx
