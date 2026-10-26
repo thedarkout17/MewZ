@@ -777,8 +777,9 @@ private fun HeartGlyph(t: Float) {
 
 /**
  * The loop icon drawn live, for its animation: its two arrows sit on one rounded
- * loop (the icon's outline), and they chase each other once around it, stretching
- * a little as they speed up, back to where they started. At [p] = 0 and 1 it's
+ * loop (the icon's outline), and they chase each other once around it, back to
+ * where they started. They keep their length, so the gap between each head and
+ * the next tail stays the same all the way round. At [p] = 0 and 1 it's
  * the normal (bold) icon.
  */
 @Composable
@@ -788,11 +789,10 @@ private fun LoopGlyph(p: Float) {
         val stroke = Stroke(width = 2.8f * k, cap = StrokeCap.Round, join = StrokeJoin.Round)
         val eased = if (p < 0.5f) 4f * p * p * p else 1f - (-2f * p + 2f).let { it * it * it } / 2f
         val shift = LOOP_PERIMETER * eased
-        val stretch = 1f + 0.3f * sin(PI.toFloat() * p)
         // Each arrow at rest: tail 3 units up the left side, 17.7 long (the other is half a lap on).
         for (tail0 in floatArrayOf(3f, 3f + LOOP_PERIMETER / 2f)) {
             val head = tail0 + LOOP_ARROW + shift
-            val tail = head - LOOP_ARROW * stretch
+            val tail = head - LOOP_ARROW
             val n = 60
             val pts = Array(n + 1) { i -> loopPoint(tail + (head - tail) * i / n) }
             val body = Path().apply {
