@@ -623,37 +623,60 @@ class PlayerController private constructor(context: Context) {
      * While this song plays, get the next one ready: once this one has finished
      * loading, download the next song's first 5 minutes (the whole song for
      * most) into the disk cache, so it starts instantly and plays through dead
-     * zones too. (Skipping it wastes that
+     * zones too; then the first ~5 seconds of the song after that, so even a
+     * double skip starts straight away. (Skipping it wastes that
      * download; a cached song costs nothing to play again.)
      */
     private fun preloadNext() {
         preloadJob?.cancel()
         preloadWriter?.cancel()
-        val next = queue.getOrNull(index + 1) ?: if (wrapQueue) queue.firstOrNull() else null
-        next ?: return
+        val next = queuedAhead(1) ?: return
+        val after = queuedAhead(2)?.takeIf { it.videoId != next.videoId }
         preloadJob = scope.launch {
-            val url = runCatching { AudioStreams.urlFor(next.videoId) }.getOrNull() ?: return@launch
-            // Let the song that's playing finish loading first (it buffers to the end), so the
-            // two downloads don't fight over a weak signal.
+            // Let the song that's playing finish loading first (it buffers 5 minutes ahead), so
+            // the downloads don't fight over a weak signal.
             delay(1_500)
             while (exo.isLoading) delay(500)
-            withContext(Dispatchers.IO) {
-                val writer = CacheWriter(
-                    dataSource.createDataSource(),
-                    DataSpec.Builder()
-                        .setUri(url)
-                        .setKey(cacheKey(next.videoId, url)) // same key playback uses
-                        .setPosition(0)
-                        .setLength(firstMinutesBytes(url)) // its first 5 minutes (the whole song for most)
-                        .build(),
-                    /* temporaryBuffer = */ null,
-                    /* progressListener = */ null,
-                )
-                preloadWriter = writer
-                // Already cached (e.g. played recently) costs nothing; failures just mean no head start.
-                runCatching { writer.cache() }
-                if (preloadWriter === writer) preloadWriter = null
-            }
+            // The next song: its first 5 minutes (the whole song for most).
+            cacheStart(next) { url -> firstMinutesBytes(url) }
+            // The one after: just its first ~5 seconds, so skipping twice starts instantly too.
+            if (after != null) cacheStart(after) { SONG_START_BYTES }
+        }
+    }
+
+    /** The song [steps] places after the current one (libraries wrap round), if any. */
+    private fun queuedAhead(steps: Int): Track? {
+        if (queue.isEmpty() || index < 0) return null
+        val i = index + steps
+        return when {
+            i < queue.size -> queue[i]
+            wrapQueue -> queue[i % queue.size].takeIf { it.videoId != current?.videoId }
+            else -> null
+        }
+    }
+
+    /**
+     * Downloads the start of [track] (the first [bytes] of its audio) into the disk
+     * cache, under the same key playback uses. Already cached (e.g. played recently)
+     * costs nothing; failures just mean no head start.
+     */
+    private suspend fun cacheStart(track: Track, bytes: (url: String) -> Long) {
+        val url = runCatching { AudioStreams.urlFor(track.videoId) }.getOrNull() ?: return
+        withContext(Dispatchers.IO) {
+            val writer = CacheWriter(
+                dataSource.createDataSource(),
+                DataSpec.Builder()
+                    .setUri(url)
+                    .setKey(cacheKey(track.videoId, url))
+                    .setPosition(0)
+                    .setLength(bytes(url))
+                    .build(),
+                /* temporaryBuffer = */ null,
+                /* progressListener = */ null,
+            )
+            preloadWriter = writer
+            runCatching { writer.cache() }
+            if (preloadWriter === writer) preloadWriter = null
         }
     }
 
@@ -767,6 +790,11 @@ private const val COUNTS_AS_PLAYED_MS = 3_000L
 private const val AHEAD_BUFFER_MS = 5 * 60_000
 /** Memory allowed for that (5 min at 128 kbps is ~5 MB; some streams run higher). */
 private const val TARGET_BUFFER_BYTES = 16 * 1024 * 1024
+/**
+ * The song after next: ~5 seconds of audio (~100 KB at 160 kbps) plus room for
+ * the file's header, enough to start straight away.
+ */
+private const val SONG_START_BYTES = 160L * 1024
 /** How much of the next song to download ahead of time. */
 private const val NEXT_SONG_MS = 5 * 60_000
 /** Room for the file's header / index at the start. */
