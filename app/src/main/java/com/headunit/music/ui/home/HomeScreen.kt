@@ -60,6 +60,20 @@ import com.headunit.music.ui.theme.DesignCanvas
 import com.headunit.music.ui.theme.HeadunitMusicTheme
 import com.headunit.music.ui.theme.LocalDesignScale
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.spring
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
+import kotlin.math.abs
+import kotlin.math.sign
 
 private const val MAX_SUGGESTIONS = 14 // same as YouTube's suggestion list
 /** While typing, at most this many past searches lead the list; the rest are suggestions. */
@@ -148,6 +162,8 @@ fun HomeScreen(
     var lastLibrary by remember { mutableStateOf<Library?>(null) }
     SideEffect { if (openLibrary != null) lastLibrary = openLibrary }
     val homeScroll = rememberScrollState()
+    val squish = remember { SquishState() }
+    val scope = rememberCoroutineScope()
 
     val searching = open || query.isNotEmpty() || submitted != null
     val showResults = submitted != null && !open
@@ -294,6 +310,7 @@ fun HomeScreen(
                 }
 
                 val home = (1f - progress) * (1f - libP) // idle home showing (1) or not (0)
+                val squishMaxPx = with(LocalDensity.current) { SQUISH_PULL.u.toPx() }
                 val scrollFadePx = with(LocalDensity.current) { 520.u.toPx() }
 
                 // "Listen..." zooms out and fades away; scrolls up and away to the libraries.
@@ -317,6 +334,7 @@ fun HomeScreen(
                     // Libraries, under "Listen...": the page scrolls, the search bar stays put.
                     val screenH = maxHeight / 1.u
                     val barBottom = 64f + BAR_HEIGHT_IDLE
+                    val squishScroll = remember(squishMaxPx) { squishConnection(squish, squishMaxPx, scope) }
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
@@ -335,6 +353,8 @@ fun HomeScreen(
                                     blendMode = BlendMode.DstIn,
                                 )
                             }
+                            // Dragging past either end squishes the search bar instead.
+                            .nestedScroll(squishScroll)
                             .verticalScroll(homeScroll, enabled = !searching && openLibraryId == null),
                     ) {
                         Spacer(Modifier.height((screenH - LIBRARY_PEEK).u))
@@ -426,7 +446,14 @@ fun HomeScreen(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .padding(top = barTop.u, start = 96.u, end = 96.u)
-                        .graphicsLayer { alpha = 1f - libP },
+                        .graphicsLayer {
+                            alpha = 1f - libP
+                            // Over-scroll squish: flatter and a touch wider; negative while
+                            // springing back, which briefly stretches it (the bounce).
+                            val k = squish.pull / squishMaxPx
+                            scaleY = 1f - SQUISH_Y * k
+                            scaleX = 1f + SQUISH_X * k
+                        },
                 )
 
                 // Glass keyboard slides up from the bottom edge.
@@ -465,5 +492,70 @@ private fun HomeScreenPreview() {
             onCreateLibrary = {},
             onVoiceSearch = {},
         )
+    }
+}
+
+/** How far (design px) you can drag past the end before the squish maxes out. */
+private const val SQUISH_PULL = 320f
+/** At full pull the bar is this much shorter / wider. */
+private const val SQUISH_Y = 0.16f
+private const val SQUISH_X = 0.035f
+
+/** How far the home page is being dragged past its end (px; 0 = at rest). */
+private class SquishState {
+    var pull by mutableFloatStateOf(0f)
+    var release: Job? = null
+}
+
+/**
+ * Feeds drags that run past the top or bottom of the home page into
+ * [SquishState] (with growing resistance, like a rubber band), and springs it
+ * back with a little bounce when the finger lifts. Flings aren't affected.
+ */
+private fun squishConnection(
+    state: SquishState,
+    maxPx: Float,
+    scope: kotlinx.coroutines.CoroutineScope,
+) = object : NestedScrollConnection {
+    /** +1 dragging down past the top, -1 dragging up past the bottom. */
+    private var dir = 0f
+
+    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+        if (source != NestedScrollSource.UserInput) return Offset.Zero
+        state.release?.cancel()
+        if (state.pull <= 0f) {
+            state.pull = 0f
+            return Offset.Zero
+        }
+        // Dragging back the other way un-squishes before the page scrolls again.
+        val towardRest = -available.y * dir
+        if (towardRest <= 0f) return Offset.Zero
+        val used = minOf(towardRest, state.pull)
+        state.pull -= used
+        return Offset(0f, -used * dir)
+    }
+
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+        if (source != NestedScrollSource.UserInput || available.y == 0f) return Offset.Zero
+        if (state.pull <= 0f) dir = sign(available.y)
+        if (sign(available.y) != dir) return Offset.Zero
+        val resistance = 0.5f * (1f - state.pull / maxPx).coerceAtLeast(0f)
+        state.pull = (state.pull + abs(available.y) * resistance).coerceAtMost(maxPx)
+        return available
+    }
+
+    override suspend fun onPreFling(available: Velocity): Velocity {
+        if (state.pull != 0f) {
+            val from = state.pull
+            state.release?.cancel()
+            state.release = scope.launch {
+                animate(
+                    initialValue = from,
+                    targetValue = 0f,
+                    animationSpec = spring(dampingRatio = 0.35f, stiffness = Spring.StiffnessMediumLow),
+                ) { v, _ -> state.pull = v }
+            }
+        }
+        return Velocity.Zero
     }
 }
