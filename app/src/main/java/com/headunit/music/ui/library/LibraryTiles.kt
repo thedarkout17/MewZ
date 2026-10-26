@@ -52,11 +52,13 @@ internal val LibraryTextShadow = Shadow(Color(0x55000000), Offset(0f, 2f), blurR
 internal val LibrarySecondary = Color.White.copy(alpha = 0.72f)
 
 internal object LibraryGlass {
-    /** Light catching the top of the glass, fading down. */
-    val Sheen = Brush.verticalGradient(listOf(Color(0x59FFFFFF), Color(0x14FFFFFF), Color(0x26FFFFFF)))
+    /** Light catching the top of the glass, falling off quickly so the middle stays clear. */
+    val Sheen = Brush.verticalGradient(
+        0f to Color(0x52FFFFFF), 0.4f to Color(0x0AFFFFFF), 0.8f to Color(0x00FFFFFF), 1f to Color(0x1AFFFFFF),
+    )
     /** Diagonal glint across the pane. */
     val Glint = Brush.linearGradient(
-        0f to Color(0x00FFFFFF), 0.42f to Color(0x00FFFFFF), 0.5f to Color(0x1FFFFFFF), 0.58f to Color(0x00FFFFFF),
+        0f to Color(0x00FFFFFF), 0.42f to Color(0x00FFFFFF), 0.5f to Color(0x30FFFFFF), 0.58f to Color(0x00FFFFFF),
     )
     val Edge = Brush.verticalGradient(listOf(Color(0xE6FFFFFF), Color(0x4DFFFFFF)))
     val Panel = Color(0xF21E070B)
@@ -182,7 +184,7 @@ private fun LibraryTile(icon: Int, title: String, subtitle: String?, onClick: ()
 /**
  * Static frosted glass: the home background, heavily blurred and lifted toward
  * white (baked into library_glass.jpg so it looks the same on every Android
- * version), slightly see-through, with a sheen and a diagonal glint on top.
+ * version), half see-through, with a sheen and a diagonal glint on top.
  */
 @Composable
 internal fun GlassPane(modifier: Modifier) {
@@ -191,7 +193,9 @@ internal fun GlassPane(modifier: Modifier) {
             painter = painterResource(R.drawable.library_glass),
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            alpha = 0.86f,
+            // Mostly see-through so the background's colour comes through clear
+            // rather than milky.
+            alpha = 0.5f,
             modifier = Modifier.fillMaxSize(),
         )
         Box(Modifier.fillMaxSize().background(LibraryGlass.Sheen))
