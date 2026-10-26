@@ -165,8 +165,9 @@ class PlayerController(context: Context) {
 
     private val exo: ExoPlayer = ExoPlayer.Builder(context.applicationContext)
         .setMediaSourceFactory(DefaultMediaSourceFactory(dataSource))
-        // Keep the last 30 s that played in memory too, so short rewinds are instant
-        // (older parts still come back from the disk cache, never re-downloaded).
+        // Keep what's already played in memory too (up to 5 minutes: a whole song for most),
+        // so rewinds are instant. Anything older comes back from the disk cache, never
+        // re-downloaded. (ExoPlayer fixes this when the player is made, so it can't vary per song.)
         .setLoadControl(
             DefaultLoadControl.Builder()
                 .setBackBuffer(BACK_BUFFER_MS, /* retainBackBufferFromKeyframe = */ true)
@@ -637,8 +638,8 @@ class PlayerController(context: Context) {
 private const val TAG = "MuZ"
 
 private const val POLL_MS = 250L
-/** Already-played audio kept in memory for instant rewinds. */
-private const val BACK_BUFFER_MS = 30_000
+/** Already-played audio kept in memory for instant rewinds: about 5 MB at 128 kbps. */
+private const val BACK_BUFFER_MS = 5 * 60_000
 /** While playing, save where we are this often (so a sudden power-off loses little). */
 private const val SAVE_EVERY_MS = 5_000L
 private const val KEY_STATE = "state"
