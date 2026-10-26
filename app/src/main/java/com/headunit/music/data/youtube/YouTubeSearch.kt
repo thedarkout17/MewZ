@@ -1,14 +1,16 @@
 package com.headunit.music.data.youtube
 
-import android.text.Html
 import com.headunit.music.data.Track
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
+import org.schabi.newpipe.extractor.ServiceList
+import org.schabi.newpipe.extractor.exceptions.ExtractionException
+import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
+import org.schabi.newpipe.extractor.search.SearchInfo
+import org.schabi.newpipe.extractor.services.youtube.linkHandler.YoutubeSearchQueryHandlerFactory
+import org.schabi.newpipe.extractor.stream.StreamInfoItem
+import org.schabi.newpipe.extractor.stream.StreamType
 import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
-import java.net.URLEncoder
 
 /** What a search can come back with. */
 sealed interface SearchResult {
@@ -16,175 +18,72 @@ sealed interface SearchResult {
     data class Failure(val reason: Reason, val detail: String? = null) : SearchResult
 
     enum class Reason {
-        /** No API key in local.properties. */
-        MissingKey,
-        /** Daily quota used up (YouTube gives 10,000 units/day; a search costs 100). */
-        QuotaExceeded,
-        /** Key rejected: wrong key, API not enabled, or app restrictions don't match. */
-        BadKey,
         /** No connection / timed out. */
         Offline,
-        /** Anything else YouTube returned. */
+        /** YouTube is rate-limiting this connection (wants a captcha). Usually clears up in a while. */
+        RateLimited,
+        /** YouTube changed its pages and NewPipeExtractor needs an update. */
+        ExtractorOutdated,
+        /** Anything else. */
         Other,
     }
 }
 
 /**
- * Searches YouTube for songs through the official YouTube Data API v3.
- *
- * Each search makes two calls:
- *  1. search.list: music-category videos that allow embedding (100 quota units)
- *  2. videos.list: their durations (1 unit)
- *
- * Only embeddable videos are returned, so everything found can be played
- * with YouTube's official embedded player later.
+ * Searches YouTube for songs with NewPipeExtractor, which reads YouTube's own
+ * search like a browser does. No API key and no daily limit; results and
+ * durations come back in one request.
  */
-class YouTubeSearch(
-    private val apiKey: String,
-    private val maxResults: Int = 20,
-) {
+class YouTubeSearch(private val maxResults: Int = 20) {
+
     suspend fun search(query: String): SearchResult = withContext(Dispatchers.IO) {
-        if (apiKey.isBlank()) return@withContext SearchResult.Failure(SearchResult.Reason.MissingKey)
-
         try {
-            val searchJson = get(
-                "search",
-                "part" to "snippet",
-                "type" to "video",
-                "videoCategoryId" to MUSIC_CATEGORY,
-                "videoEmbeddable" to "true",
-                "maxResults" to maxResults.toString(),
-                "q" to query,
+            NewPipeDownloader.init()
+            val service = ServiceList.YouTube
+            val handler = service.searchQHFactory.fromQuery(
+                query, listOf(YoutubeSearchQueryHandlerFactory.VIDEOS), "",
             )
-            val items = searchJson.optJSONArray("items") ?: return@withContext SearchResult.Success(emptyList())
+            val items = SearchInfo.getInfo(service, handler).relatedItems
+                .filterIsInstance<StreamInfoItem>()
+                // Songs only: skip live streams and anything without a length.
+                .filter { it.streamType == StreamType.VIDEO_STREAM && it.duration > 0 }
 
-            val tracks = buildList {
-                for (i in 0 until items.length()) {
-                    val item = items.getJSONObject(i)
-                    val id = item.optJSONObject("id")?.optString("videoId").orEmpty()
-                    val snippet = item.optJSONObject("snippet") ?: continue
-                    if (id.isEmpty()) continue
-                    val (splitTitle, splitArtistName) = splitArtist(
-                        cleanTitle(unescape(snippet.optString("title"))),
-                        cleanArtist(unescape(snippet.optString("channelTitle"))),
-                    )
-                    val (title, artist) = moveFeaturedArtists(splitTitle, splitArtistName)
-                    val thumbs = snippet.optJSONObject("thumbnails")
-                    val (artUrl, artLetterboxed) = bestArtwork(thumbs, id)
-                    add(
-                        Track(
-                            videoId = id,
-                            title = title,
-                            artist = artist,
-                            thumbnailUrl = bestThumbnail(thumbs, id),
-                            artworkUrl = artUrl,
-                            artworkLetterboxed = artLetterboxed,
-                        )
-                    )
-                }
-            }
+            val tracks = items.mapNotNull { item ->
+                val id = videoIdOf(item.url) ?: return@mapNotNull null
+                val (splitTitle, splitArtistName) = splitArtist(
+                    cleanTitle(item.name),
+                    cleanArtist(item.uploaderName.orEmpty()),
+                )
+                val (title, artist) = moveFeaturedArtists(splitTitle, splitArtistName)
+                Track(
+                    videoId = id,
+                    title = title,
+                    artist = artist,
+                    // 480x360 (4:3, bars baked in) for the results list; always exists.
+                    thumbnailUrl = "https://i.ytimg.com/vi/$id/hqdefault.jpg",
+                    // 1280x720 for the square artwork; only HD uploads have it, and
+                    // the artwork falls back to thumbnailUrl when it's missing.
+                    artworkUrl = "https://i.ytimg.com/vi/$id/maxresdefault.jpg",
+                    durationSeconds = item.duration.toInt(),
+                )
+            }.distinctBy { it.videoId }.take(maxResults)
 
-            SearchResult.Success(withDurations(tracks))
-        } catch (e: ApiException) {
-            SearchResult.Failure(e.reason, e.message)
+            SearchResult.Success(tracks)
+        } catch (e: ReCaptchaException) {
+            SearchResult.Failure(SearchResult.Reason.RateLimited, e.message)
         } catch (e: IOException) {
             SearchResult.Failure(SearchResult.Reason.Offline, e.message)
+        } catch (e: ExtractionException) {
+            SearchResult.Failure(SearchResult.Reason.ExtractorOutdated, e.message)
         } catch (e: Exception) {
             SearchResult.Failure(SearchResult.Reason.Other, e.message)
         }
     }
 
-    /** Fills in durations. If this call fails, results still show, just without times. */
-    private fun withDurations(tracks: List<Track>): List<Track> {
-        if (tracks.isEmpty()) return tracks
-        return try {
-            val json = get(
-                "videos",
-                "part" to "contentDetails",
-                "id" to tracks.joinToString(",") { it.videoId },
-            )
-            val items = json.optJSONArray("items") ?: return tracks
-            val seconds = HashMap<String, Int>()
-            for (i in 0 until items.length()) {
-                val item = items.getJSONObject(i)
-                val iso = item.optJSONObject("contentDetails")?.optString("duration").orEmpty()
-                parseIsoDuration(iso)?.let { seconds[item.optString("id")] = it }
-            }
-            tracks.map { it.copy(durationSeconds = seconds[it.videoId]) }
-                // Live streams and premieres report 0:00; they're not songs.
-                .filter { it.durationSeconds != 0 }
-        } catch (e: Exception) {
-            tracks
-        }
-    }
-
-    private fun get(endpoint: String, vararg params: Pair<String, String>): JSONObject {
-        val query = (params.toList() + ("key" to apiKey))
-            .joinToString("&") { (k, v) -> "$k=${URLEncoder.encode(v, "UTF-8")}" }
-        val conn = URL("$BASE/$endpoint?$query").openConnection() as HttpURLConnection
-        conn.connectTimeout = 10_000
-        conn.readTimeout = 10_000
-        conn.setRequestProperty("Accept", "application/json")
-        try {
-            val code = conn.responseCode
-            val body = (if (code in 200..299) conn.inputStream else conn.errorStream)
-                ?.bufferedReader()?.use { it.readText() }.orEmpty()
-            if (code !in 200..299) throw ApiException.from(code, body)
-            return JSONObject(body)
-        } finally {
-            conn.disconnect()
-        }
-    }
-
-    private class ApiException(val reason: SearchResult.Reason, message: String?) : Exception(message) {
-        companion object {
-            fun from(code: Int, body: String): ApiException {
-                val error = runCatching { JSONObject(body).getJSONObject("error") }.getOrNull()
-                val why = error?.optJSONArray("errors")?.optJSONObject(0)?.optString("reason").orEmpty()
-                val message = error?.optString("message")
-                val reason = when {
-                    why == "quotaExceeded" || why == "dailyLimitExceeded" -> SearchResult.Reason.QuotaExceeded
-                    why == "keyInvalid" || code == 400 && why == "badRequest" && message?.contains("API key") == true ->
-                        SearchResult.Reason.BadKey
-                    code == 403 -> SearchResult.Reason.BadKey // API not enabled, or key restricted to another app
-                    else -> SearchResult.Reason.Other
-                }
-                return ApiException(reason, message ?: "HTTP $code")
-            }
-        }
-    }
-
     companion object {
-        private const val BASE = "https://www.googleapis.com/youtube/v3"
-        private const val MUSIC_CATEGORY = "10"
+        private val VIDEO_ID = Regex("""(?:v=|youtu\.be/|/shorts/)([A-Za-z0-9_-]{11})""")
 
-        private fun unescape(s: String): String =
-            Html.fromHtml(s, Html.FROM_HTML_MODE_LEGACY).toString()
-
-        /** Prefer the 480x360 "high" image; fall back through smaller ones. */
-        /**
-         * Artwork for the big square. YouTube's sizes:
-         *   maxres 1280x720 and medium 320x180 are true 16:9 (no bars);
-         *   standard 640x480, high 480x360 and default 120x90 are 4:3 with black
-         *   bars above and below the picture.
-         * Prefer the big bar-free one; otherwise take a 4:3 one and flag it so the
-         * artwork zooms past the bars.
-         */
-        private fun bestArtwork(thumbs: JSONObject?, id: String): Pair<String, Boolean> {
-            for ((size, letterboxed) in listOf("maxres" to false, "standard" to true, "high" to true, "medium" to false)) {
-                val url = thumbs?.optJSONObject(size)?.optString("url")
-                if (!url.isNullOrEmpty()) return url to letterboxed
-            }
-            return "https://i.ytimg.com/vi/$id/hqdefault.jpg" to true
-        }
-
-        private fun bestThumbnail(thumbs: JSONObject?, id: String): String {
-            for (size in listOf("high", "medium", "default")) {
-                val url = thumbs?.optJSONObject(size)?.optString("url")
-                if (!url.isNullOrEmpty()) return url
-            }
-            return "https://i.ytimg.com/vi/$id/hqdefault.jpg"
-        }
+        fun videoIdOf(url: String): String? = VIDEO_ID.find(url)?.groupValues?.get(1)
 
         // "(Official Music Video)", "[Official Audio]", "(Lyrics)", "| Official Video" ...
         private val TITLE_NOISE = Regex(
@@ -238,12 +137,5 @@ class YouTubeSearch(
             else cleanTitle to "$artist ft. ${names.joinToString(", ")}"
         }
 
-        /** "PT1H2M3S" → 3723. Null if it can't be read. */
-        fun parseIsoDuration(iso: String): Int? {
-            val m = Regex("""P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?""").matchEntire(iso) ?: return null
-            val (d, h, min, s) = m.destructured
-            return (d.toIntOrNull() ?: 0) * 86400 + (h.toIntOrNull() ?: 0) * 3600 +
-                (min.toIntOrNull() ?: 0) * 60 + (s.toIntOrNull() ?: 0)
-        }
     }
 }

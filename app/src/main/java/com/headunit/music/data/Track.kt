@@ -5,15 +5,13 @@ data class Track(
     val videoId: String,
     val title: String,
     val artist: String,
-    /** For the results list (cropped to 16:9 there). */
+    /** 480x360 (4:3, black bars baked in) for the results list, cropped to 16:9 there. */
     val thumbnailUrl: String,
-    /** Biggest picture for the square artwork on Now Playing. */
-    val artworkUrl: String = thumbnailUrl,
     /**
-     * True when [artworkUrl] is one of YouTube's 4:3 images with black bars baked
-     * in above and below the picture; the square is cut from between them.
+     * 1280x720 (16:9, no bars) for the square artwork. Only HD uploads have it;
+     * when it's missing the artwork uses [thumbnailUrl] instead.
      */
-    val artworkLetterboxed: Boolean = false,
+    val artworkUrl: String = thumbnailUrl,
     /** Null until we know it (durations come from a second API call). */
     val durationSeconds: Int? = null,
 ) {
