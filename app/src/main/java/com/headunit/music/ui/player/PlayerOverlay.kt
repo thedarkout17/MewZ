@@ -74,7 +74,6 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.headunit.music.R
 import com.headunit.music.data.LibraryStore
-import com.headunit.music.ui.library.AddToLibraryPanel
 import com.headunit.music.data.Track
 import com.headunit.music.player.PlayerController
 import com.headunit.music.ui.components.CenterSquareCrop
@@ -170,16 +169,25 @@ fun PlayerOverlay(
     )
     BackHandler(enabled = player.expanded) { onMinimize() }
 
-    // Queue page over Now Playing (registered after the player's Back, so Back closes it first).
+    // Pages over Now Playing: the queue, or Add To Library (registered after the
+    // player's Back, so Back closes them first).
     var showingQueue by remember { mutableStateOf(false) }
-    // Minimizing closes it, so Now Playing opens normally next time.
-    LaunchedEffect(player.expanded) { if (!player.expanded) showingQueue = false }
-    BackHandler(enabled = showingQueue) { showingQueue = false }
-    val q by animateFloatAsState(
+    var showingAdd by remember { mutableStateOf(false) }
+    // Minimizing closes them, so Now Playing opens normally next time.
+    LaunchedEffect(player.expanded) { if (!player.expanded) { showingQueue = false; showingAdd = false } }
+    BackHandler(enabled = showingQueue || showingAdd) { showingQueue = false; showingAdd = false }
+    val queueP by animateFloatAsState(
         targetValue = if (showingQueue) 1f else 0f,
         animationSpec = tween(340, easing = FastOutSlowInEasing),
         label = "queue",
     )
+    val addP by animateFloatAsState(
+        targetValue = if (showingAdd) 1f else 0f,
+        animationSpec = tween(340, easing = FastOutSlowInEasing),
+        label = "addToLibrary",
+    )
+    // How much a page has taken over the screen (Now Playing fades out under it).
+    val q = maxOf(queueP, addP)
 
     Box(Modifier.fillMaxSize()) {
         if (e > 0f) {
@@ -224,6 +232,8 @@ fun PlayerOverlay(
                         player = player, libraries = libraries, width = w, screenHeight = h, shiftY = shiftY,
                         alpha = e * (1f - q), onNewLibrary = onNewLibrary,
                         onOpenQueue = { showingQueue = true },
+                        onOpenAdd = { showingAdd = true },
+                        adding = showingAdd,
                     )
                 }
 
@@ -271,14 +281,29 @@ fun PlayerOverlay(
                     ArtOverlay(player)
                 }
 
-                // ---- Queue page, over everything (Now Playing's backdrop stays behind it) ----
-                if (q > 0f) {
+                // ---- Pages, over everything (Now Playing's backdrop stays behind them) ----
+                if (queueP > 0f) {
                     QueuePage(
                         player = player,
                         onClose = { showingQueue = false },
                         modifier = Modifier.graphicsLayer {
-                            alpha = q * e
-                            translationY = (1f - q) * 48.u.toPx()
+                            alpha = queueP * e
+                            translationY = (1f - queueP) * 48.u.toPx()
+                        },
+                    )
+                }
+                if (addP > 0f) {
+                    AddToLibraryPage(
+                        track = track,
+                        libraries = libraries,
+                        onNewLibrary = {
+                            showingAdd = false
+                            onNewLibrary(track)
+                        },
+                        onClose = { showingAdd = false },
+                        modifier = Modifier.graphicsLayer {
+                            alpha = addP * e
+                            translationY = (1f - addP) * 48.u.toPx()
                         },
                     )
                 }
@@ -359,9 +384,12 @@ private fun NowPlaying(
     alpha: Float,
     onNewLibrary: (Track) -> Unit,
     onOpenQueue: () -> Unit,
+    /** The + tile: open the Add To Library page. */
+    onOpenAdd: () -> Unit,
+    /** That page is open (the + tile shows as on). */
+    adding: Boolean,
 ) {
     val track = player.current ?: return
-    var picking by remember { mutableStateOf(false) }
     with(LocalDesignScale.current) {
         val colX = ART_FULL_X + ART_FULL + COLUMN_GAP
         val colW = width - colX - SIDE
@@ -374,7 +402,7 @@ private fun NowPlaying(
             icon = R.drawable.ic_queue,
             contentDescription = stringResource(R.string.queue),
             size = 130f, glyph = 64f,
-            onClick = { picking = false; onOpenQueue() },
+            onClick = onOpenQueue,
             modifier = Modifier
                 .offset(x = (width - SIDE - 130f).u, y = (48f + shiftY).u)
                 .graphicsLayer { this.alpha = alpha },
@@ -495,53 +523,10 @@ private fun NowPlaying(
             GlassTile(
                 icon = R.drawable.ic_add,
                 contentDescription = stringResource(R.string.add_to_library),
-                active = picking,
-                onClick = { picking = !picking },
+                active = adding,
+                onClick = onOpenAdd,
             )
         }
-
-        // + list: your libraries, just above the tiles. A tap anywhere else closes it.
-        if (picking) {
-            Box(
-                contentAlignment = Alignment.BottomStart,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { picking = false }
-                    // Just above the tiles, starting right of the artwork so it isn't covered.
-                    .padding(
-                        start = (ART_FULL_X + ART_FULL + 64f).u,
-                        bottom = (screenHeight - (TILES_TOP - 28f + shiftY)).u,
-                    )
-                    .graphicsLayer { this.alpha = alpha },
-            ) {
-                AddToLibraryPanel(
-                    libraries = libraries.custom,
-                    contains = { libraries.contains(it.id, track) },
-                    onPick = { lib ->
-                        // Ticked ones come back out; otherwise in it goes (and it's liked too).
-                        if (libraries.contains(lib.id, track)) {
-                            libraries.removeFrom(lib.id, track)
-                        } else {
-                            libraries.addTo(lib.id, track)
-                            picking = false
-                        }
-                    },
-                    onNewLibrary = {
-                        picking = false
-                        onNewLibrary(track)
-                    },
-                    // Taps on the panel itself shouldn't close it.
-                    modifier = Modifier.clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { },
-                )
-            }
-        }
-
     }
 }
 
