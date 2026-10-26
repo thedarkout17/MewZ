@@ -44,14 +44,21 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Plays songs as audio only (no video is downloaded) and keeps a simple queue.
+ * Plays songs and keeps the queue.
  *
- * Each song's audio stream is found with NewPipeExtractor ([AudioStreams]) and
- * played with Media3 ExoPlayer. A song played from search is followed by its
- * YouTube Mix ([YouTubeMix]), like YouTube's autoplay. While a song plays, the next one is looked up
- * in the background, so skipping is near-instant.
+ * **YouTube first:** songs play in YouTube's own player ([HiddenYouTubePlayer]),
+ * kept tiny behind the artwork. Two take turns: while one plays, the other
+ * loads the next song muted and holds it at 0:00, so skipping is instant.
  *
- * All state is Compose state, so the screens update on their own.
+ * **Audio-only fallback:** if YouTube won't play a song (embedding turned off,
+ * age-restricted, a player error), its audio stream is found with
+ * NewPipeExtractor ([AudioStreams]) and played with Media3 ExoPlayer, carrying
+ * on from where it was. Songs that needed this go straight to it for the rest
+ * of the session.
+ *
+ * A song played from search is followed by its YouTube Mix ([YouTubeMix]),
+ * like YouTube's autoplay. All state is Compose state, so the screens update
+ * on their own.
  */
 class PlayerController(context: Context) {
 
@@ -130,6 +137,52 @@ class PlayerController(context: Context) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+    // ---- The two engines ----
+
+    private enum class Source { YouTube, Audio }
+    /** Which one is playing the current song. */
+    private var source = Source.YouTube
+    /** Songs YouTube's player refused this session: they play audio-only from now on. */
+    private val audioOnly = HashSet<String>()
+
+    private val events = object : HiddenYouTubePlayer.Events {
+        override fun onState(player: HiddenYouTubePlayer, state: Int) {
+            if (player === active && source == Source.YouTube) onYouTubeState(state)
+        }
+
+        override fun onTime(player: HiddenYouTubePlayer, position: Double, duration: Double) {
+            if (player !== active || source != Source.YouTube) return
+            positionSeconds = position.toFloat()
+            if (duration > 0) durationSeconds = duration.toFloat()
+        }
+
+        override fun onError(player: HiddenYouTubePlayer, code: Int) {
+            if (player === active && source == Source.YouTube) onYouTubeError(code)
+        }
+
+        override fun onPreloadFailed(player: HiddenYouTubePlayer, videoId: String, code: Int) {
+            if (code !in YOUTUBE_REFUSED) return
+            // The next song won't play in YouTube's player: get its audio ready instead.
+            audioOnly += videoId
+            if (nextTrack()?.videoId == videoId) preloadNext()
+        }
+    }
+
+    private val players = listOf(HiddenYouTubePlayer(context, events), HiddenYouTubePlayer(context, events))
+    private var active = players[0]
+    private val standby get() = if (active === players[0]) players[1] else players[0]
+
+    /** Both YouTube players' views; the overlay keeps them on screen, tiny, behind the artwork. */
+    val playerViews: List<android.webkit.WebView> get() = players.map { it.view }
+
+    /** Pausing for calls / nav prompts while YouTube plays (ExoPlayer handles its own). */
+    private val focus = YouTubeAudioFocus(
+        context,
+        onPause = { if (source == Source.YouTube) active.pause() },
+        onResume = { if (source == Source.YouTube) active.play() },
+        onVolume = { players.forEach { p -> p.setVolume(it) } },
+    )
+
     /** Where the last song and queue are kept, so they're still there after the app closes. */
     private val saved = context.applicationContext.getSharedPreferences("player", Context.MODE_PRIVATE)
     /**
@@ -181,8 +234,9 @@ class PlayerController(context: Context) {
         // Seek bar / timer: read the position a few times a second while playing.
         scope.launch {
             while (isActive) {
-                if (exo.isPlaying) {
-                    positionSeconds = exo.currentPosition / 1000f
+                if (isPlaying) {
+                    // (YouTube reports its own position; ExoPlayer is asked.)
+                    if (source == Source.Audio) positionSeconds = exo.currentPosition / 1000f
                     playedMs += POLL_MS
                     sinceSaveMs += POLL_MS
                     if (sinceSaveMs >= SAVE_EVERY_MS) saveState()
@@ -385,7 +439,10 @@ class PlayerController(context: Context) {
             playAt(index, resumeAtMs = at)
             return
         }
-        if (exo.isPlaying) exo.pause() else exo.play()
+        when (source) {
+            Source.Audio -> if (exo.isPlaying) exo.pause() else exo.play()
+            Source.YouTube -> if (isPlaying) active.pause() else active.play()
+        }
     }
 
     fun next() {
@@ -414,8 +471,11 @@ class PlayerController(context: Context) {
     fun seekTo(seconds: Float) {
         positionSeconds = seconds.coerceIn(0f, durationSeconds.coerceAtLeast(0f))
         // Not loaded yet (restored from last time): Play will start from here.
-        if (restoredAtMs != null) restoredAtMs = (positionSeconds * 1000).toLong()
-        else exo.seekTo((positionSeconds * 1000).toLong())
+        when {
+            restoredAtMs != null -> restoredAtMs = (positionSeconds * 1000).toLong()
+            source == Source.Audio -> exo.seekTo((positionSeconds * 1000).toLong())
+            else -> active.seek(positionSeconds)
+        }
     }
 
     // ---- Remembering the last song across app restarts ----
@@ -434,7 +494,8 @@ class PlayerController(context: Context) {
         val kept = queue.subList(from, to)
         val keptIds = kept.mapTo(HashSet()) { it.videoId }
         val positionMs = restoredAtMs
-            ?: if (exo.mediaItemCount > 0) exo.currentPosition else (positionSeconds * 1000).toLong()
+            ?: if (source == Source.Audio && exo.mediaItemCount > 0) exo.currentPosition
+            else (positionSeconds * 1000).toLong()
         val state = JSONObject()
             .put("queue", kept.toJson())
             .put("original", originalOrder.filter { it.videoId in keptIds }.toJson())
@@ -483,6 +544,8 @@ class PlayerController(context: Context) {
         saveState()
         preloadWriter?.cancel()
         scope.cancel()
+        focus.release()
+        players.forEach { it.destroy() }
         exo.release()
     }
 
@@ -506,9 +569,36 @@ class PlayerController(context: Context) {
         positionSeconds = resumeAtMs / 1000f
         durationSeconds = (track.durationSeconds ?: 0).toFloat()
         isBuffering = true
-        exo.stop()
+        isPlaying = false
         tapAt = SystemClock.elapsedRealtime()
+        if (track.videoId in audioOnly) playAudio(track, resumeAtMs) else playYouTube(track, resumeAtMs)
+    }
 
+    /** YouTube's player: swap in the preloaded one if it has this song, else load it. */
+    private fun playYouTube(track: Track, resumeAtMs: Long) {
+        exo.stop()
+        source = Source.YouTube
+        val ready = standby
+        if (resumeAtMs == 0L && ready.videoId == track.videoId && ready.preloaded) {
+            active.stop()
+            active = ready
+            active.activate()
+            startedFromPreload = true
+        } else {
+            if (standby.videoId != null) standby.stop() // whatever it held isn't next anymore
+            active.load(track.videoId, resumeAtMs / 1000f)
+            startedFromPreload = false
+        }
+    }
+
+    /** Audio-only (YouTube wouldn't play this one): find its stream, play it with ExoPlayer. */
+    private fun playAudio(track: Track, resumeAtMs: Long) {
+        active.stop()
+        focus.release() // ExoPlayer asks for audio focus itself
+        source = Source.Audio
+        isBuffering = true
+        exo.stop()
+        loadJob?.cancel()
         loadJob = scope.launch {
             try {
                 val url = AudioStreams.urlFor(track.videoId)
@@ -524,15 +614,22 @@ class PlayerController(context: Context) {
         }
     }
 
+    private fun nextTrack(): Track? = queue.getOrNull(index + 1) ?: if (wrapQueue) queue.firstOrNull() else null
+
     /**
-     * While this song plays, get the next one ready: look up its audio link and
-     * download its first ~5 seconds into the cache, so skipping starts instantly.
+     * While this song plays, get the next one ready so skipping starts instantly:
+     * in the standby YouTube player (muted, held at 0:00), or, for a song that
+     * needs audio-only, by downloading its first ~5 seconds into the cache.
      */
     private fun preloadNext() {
         preloadJob?.cancel()
         preloadWriter?.cancel()
-        val next = queue.getOrNull(index + 1) ?: if (wrapQueue) queue.firstOrNull() else null
-        next ?: return
+        val next = nextTrack() ?: return
+        if (next.videoId == current?.videoId) return
+        if (next.videoId !in audioOnly) {
+            if (standby.videoId != next.videoId) standby.preload(next.videoId)
+            return
+        }
         preloadJob = scope.launch {
             val url = runCatching { AudioStreams.urlFor(next.videoId) }.getOrNull() ?: return@launch
             withContext(Dispatchers.IO) {
@@ -579,8 +676,41 @@ class PlayerController(context: Context) {
         }
     }
 
+    private var startedFromPreload = false
+
+    private fun onYouTubeState(state: Int) {
+        isPlaying = state == HiddenYouTubePlayer.STATE_PLAYING
+        isBuffering = state == HiddenYouTubePlayer.STATE_BUFFERING || state == HiddenYouTubePlayer.STATE_UNSTARTED
+        when (state) {
+            HiddenYouTubePlayer.STATE_PLAYING -> {
+                focus.acquire()
+                if (tapAt > 0) {
+                    val ms = SystemClock.elapsedRealtime() - tapAt
+                    Log.d(TAG, "Load \"${current?.title}\" (YouTube): ${ms} ms" + if (startedFromPreload) " (preloaded)" else "")
+                    tapAt = 0
+                }
+                // Playing smoothly now, so the next song can use some bandwidth.
+                preloadNext()
+            }
+            HiddenYouTubePlayer.STATE_PAUSED -> saveState()
+            HiddenYouTubePlayer.STATE_ENDED -> {
+                positionSeconds = durationSeconds
+                if (loopSong) { active.seek(0f); active.play() } else next()
+            }
+        }
+    }
+
+    /** YouTube wouldn't play it: carry on from the same spot in audio-only. */
+    private fun onYouTubeError(code: Int) {
+        val track = current ?: return
+        Log.d(TAG, "YouTube refused \"${track.title}\" (error $code); playing audio-only")
+        audioOnly += track.videoId
+        playAudio(track, (positionSeconds * 1000).toLong())
+    }
+
     private inner class Listener : Player.Listener {
         override fun onIsPlayingChanged(playing: Boolean) {
+            if (source != Source.Audio) return
             isPlaying = playing
             // Paused: remember exactly where. (Not while switching songs, when the old one stops.)
             if (!playing && !isBuffering) saveState()
@@ -592,6 +722,7 @@ class PlayerController(context: Context) {
         }
 
         override fun onPlaybackStateChanged(state: Int) {
+            if (source != Source.Audio) return
             isBuffering = state == Player.STATE_BUFFERING
             if (state == Player.STATE_READY) {
                 val d = exo.duration
@@ -605,6 +736,7 @@ class PlayerController(context: Context) {
         }
 
         override fun onPlayerError(e: PlaybackException) {
+            if (source != Source.Audio) return
             val track = current ?: return
             if (retriedVideoId != track.videoId) {
                 // Most often an expired link: fetch a fresh one and carry on from here.
@@ -621,6 +753,12 @@ class PlayerController(context: Context) {
 private const val TAG = "MuZ"
 
 private const val POLL_MS = 250L
+/**
+ * YouTube player errors that mean "not here": embedding off (101, 150), the
+ * player setup refused (152, 153), HTML5 / bad request (5, 2). Worth trying
+ * audio-only for.
+ */
+private val YOUTUBE_REFUSED = setOf(2, 5, 101, 150, 152, 153)
 /** While playing, save where we are this often (so a sudden power-off loses little). */
 private const val SAVE_EVERY_MS = 5_000L
 private const val KEY_STATE = "state"

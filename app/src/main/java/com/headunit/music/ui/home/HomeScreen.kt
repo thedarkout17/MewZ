@@ -38,6 +38,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -234,12 +236,17 @@ fun HomeScreen(
     }
 
     // Run the search whenever a new query is sent (or Try again is tapped).
+    val context = LocalContext.current
     LaunchedEffect(submitted, attempt) {
         val q = submitted ?: return@LaunchedEffect
         results = ResultsState.Loading
         results = when (val r = youtube.search(q)) {
             is SearchResult.Success -> ResultsState.Done(q, r.tracks, nextPage = r.nextPageToken)
-            is SearchResult.Failure -> ResultsState.Failed(r.reason)
+            is SearchResult.Failure -> {
+                // A popup too, so it's noticed even with the results half-hidden behind the dock.
+                Toast.makeText(context, searchFailedText(r.reason), Toast.LENGTH_LONG).show()
+                ResultsState.Failed(r.reason)
+            }
         }
     }
 
@@ -617,4 +624,13 @@ private fun squishConnection(
         }
         return Velocity.Zero
     }
+}
+
+/** Popup text when a YouTube search fails. */
+private fun searchFailedText(reason: SearchResult.Reason): String = "Search failed: " + when (reason) {
+    SearchResult.Reason.MissingKey -> "no YouTube API key set"
+    SearchResult.Reason.BadKey -> "YouTube didn't accept the API key"
+    SearchResult.Reason.QuotaExceeded -> "today's YouTube search limit is used up"
+    SearchResult.Reason.Offline -> "no internet connection"
+    SearchResult.Reason.Other -> "YouTube had a problem, try again"
 }

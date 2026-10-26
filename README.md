@@ -37,18 +37,20 @@ Use `with(LocalDesignScale.current) { 232.u }` for sizes and `92.usp` for text.
 - YouTube song search: music videos that allow embedding, with durations; titles cleaned up
   ("Artist - Song (Official Video)" → song + artist); loading, empty and error states
 - Recent searches (saved on the device, scrollable, × to remove)
-- Player: **audio only**. Search uses the YouTube Data API; for each song the app finds
-  YouTube's audio-only stream (~128 kbps AAC, via NewPipeExtractor) and plays it with
-  Media3 ExoPlayer, so no video is downloaded: roughly 60 MB per hour.
-  When a song starts, the next one's first ~5 seconds are pre-buffered into an on-disk
-  cache (64 MB, also keeps recently played songs), so skipping starts instantly.
-  Pauses for navigation prompts / calls and when Bluetooth drops.
+- Player: **YouTube first, audio-only fallback**. Search uses the YouTube Data API.
+  Songs play in YouTube's own player (IFrame API), kept tiny behind the artwork so YouTube
+  picks its lowest video quality. Two players take turns: while one plays, the other loads
+  the next song muted and holds it at 0:00, so skipping starts instantly.
+  If YouTube won't play a song (embedding off, age-restricted, player error), its
+  audio-only stream is found with NewPipeExtractor and played with Media3 ExoPlayer from
+  the same spot (~60 MB per hour); that song stays audio-only for the rest of the session.
+  Pauses for calls, turns down for navigation prompts, pauses when Bluetooth drops.
   Now Playing laid out like CarPlay (720×720 artwork, full-width seek bar, shuffle /
-  loop-this-song / add); ⌄ minimizes to a glass dock and returns home.
+  loop-this-song / add); tap empty space to minimize to the glass dock.
   Tapping a result plays it followed by its YouTube Mix (like YouTube autoplay, refilled as it
-  runs low); songs auto-advance; songs that can't be
-  played are skipped. Personal project: pulling audio this way isn't allowed by YouTube's
-  terms, and Google could disable the API key if it notices.
+  runs low); songs auto-advance; songs that can't be played either way are skipped.
+  Personal project: the audio-only fallback isn't allowed by YouTube's terms, and Google
+  could disable the API key if it notices.
 - Libraries: scroll down from "Listen..." to big glass squares, two per row: **Liked**,
   **History** (last 50 songs that played for 3+ seconds), your own libraries, and **+** to
   make one (named on the glass keyboard). Opening one lists its songs under its name, which
