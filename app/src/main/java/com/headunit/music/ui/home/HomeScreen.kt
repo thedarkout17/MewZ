@@ -350,7 +350,7 @@ private fun HomeScreenPreview() {
     HeadunitMusicTheme {
         val context = androidx.compose.ui.platform.LocalContext.current
         HomeScreen(
-            youtube = YouTubeSearch(),
+            youtube = YouTubeSearch(apiKey = ""),
             history = remember { SearchHistory(context) },
             onPlay = { _, _, _ -> },
             onVoiceSearch = {},

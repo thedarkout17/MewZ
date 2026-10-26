@@ -234,15 +234,17 @@ private fun LoadingRows() {
 @Composable
 private fun FailureMessage(reason: Reason, onRetry: () -> Unit) {
     when (reason) {
-        Reason.RateLimited -> Message(
-            title = "YouTube is limiting searches right now",
-            detail = "Too many requests from this connection. Wait a few minutes, then try again.",
-            action = "Try again" to onRetry,
+        Reason.MissingKey -> Message(
+            title = "Add a YouTube API key to search",
+            detail = "Put youtube.apiKey=… in local.properties, then rebuild. See the README.",
         )
-        Reason.ExtractorOutdated -> Message(
-            title = "YouTube changed something",
-            detail = "Search needs an app update to catch up (NewPipeExtractor).",
-            action = "Try again" to onRetry,
+        Reason.BadKey -> Message(
+            title = "YouTube didn't accept the API key",
+            detail = "Check the key, and that YouTube Data API v3 is enabled for it.",
+        )
+        Reason.QuotaExceeded -> Message(
+            title = "Search limit reached for today",
+            detail = "YouTube's free search allowance resets at midnight Pacific time.",
         )
         Reason.Offline -> Message(
             title = "No internet connection",

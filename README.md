@@ -8,25 +8,20 @@ Kotlin + Jetpack Compose, landscape, designed on a 2000×1200 canvas.
 1. Open this folder in Android Studio (Ladybug or newer) and let Gradle sync.
 2. Plug in the headunit (USB debugging on) or use an emulator set to 2000×1200, then press Run.
 
-## How YouTube is used
-Search and playback go through **[NewPipeExtractor](https://github.com/TeamNewPipe/NewPipeExtractor)**
-(the library behind the NewPipe app). No API key, no daily search limit.
+## Set up YouTube search (one time, ~5 minutes)
+Search uses the official **YouTube Data API v3**, which needs a free API key.
 
-- **Search** reads YouTube's own search results; titles and durations come back in one request.
-- **Playback is audio only.** For each song the app finds YouTube's audio-only stream
-  (~128 kbps AAC) and plays it with Media3 ExoPlayer, so no video is downloaded:
-  roughly **60–100 MB per hour** instead of 300–550 MB. The next song's stream is looked
-  up in the background, so skipping is near-instant. Stream links expire after a few
-  hours; the player fetches a fresh one and carries on if that happens.
+1. Go to <https://console.cloud.google.com/>, create a project (any name).
+2. **APIs & Services → Library** → search "YouTube Data API v3" → **Enable**.
+3. **APIs & Services → Credentials → Create credentials → API key**. Copy it.
+4. Recommended: edit the key → **API restrictions → Restrict key → YouTube Data API v3**.
+5. Open `local.properties` in the project root (Android Studio creates it; it is git-ignored, so the key never reaches GitHub) and add:
+   ```
+   youtube.apiKey=AIza...your key...
+   ```
+6. Rebuild and run.
 
-**Things to know**
-- This is a personal project. Pulling audio this way isn't allowed by YouTube's terms,
-  whether or not the app is public or commercial.
-- When YouTube changes its pages, search or playback can stop working until
-  NewPipeExtractor is updated (usually within days). Bump the version in
-  `app/build.gradle.kts` to pick up fixes; the app shows "YouTube changed something" when this happens.
-- Heavy use from one connection can make YouTube ask for a captcha for a while;
-  the app shows "YouTube is limiting requests" and recovers on its own.
+**Free quota:** 10,000 units per day. Each search costs about 101 units, so roughly **99 searches a day**. It resets at midnight Pacific time. If you hit it, the app says so.
 
 ## Layout system
 Everything is measured in *design pixels* on a 2000×1200 canvas (`ui/theme/DesignScale.kt`)
@@ -39,15 +34,19 @@ Use `with(LocalDesignScale.current) { 232.u }` for sizes and `92.usp` for text.
 - Mic button opens the system voice recognizer and searches what you say
 - Full-screen immersive mode, landscape lock, shows up as a music app in headunit launchers
 - Glass in-app keyboard (no system keyboard), suggestions as you type
-- YouTube song search (NewPipeExtractor, no API key), with durations; titles cleaned up
-  ("Artist - Song (Official Video)" → song + artist, featured artists moved to the artist line);
-  loading, empty and error states
+- YouTube song search: music videos that allow embedding, with durations; titles cleaned up
+  ("Artist - Song (Official Video)" → song + artist); loading, empty and error states
 - Recent searches (saved on the device, scrollable, × to remove)
-- Player: audio-only playback (ExoPlayer). Now Playing laid out like CarPlay: 720×720
-  artwork cut from the centre of the HD thumbnail, artwork-blur backdrop, full-width seek bar,
-  shuffle / loop-this-song / add. ⌄ minimizes to a glass dock and returns to the home screen.
-  Tapping a result queues the rest of that list; songs auto-advance; songs that can't be
-  played are skipped. Pauses for navigation prompts and when Bluetooth drops.
+- Player: songs play through YouTube's official embedded player (IFrame API in a WebView).
+  Now Playing screen (big video, seek bar, previous / play-pause / next, "Up next"),
+  minimizes to a glass dock at the bottom so music keeps going while you browse.
+  Tapping a result queues the rest of that list; songs auto-advance; songs YouTube
+  won't play outside YouTube are skipped automatically.
+
+## Why the video is always visible
+YouTube's terms for embedded players say the player must stay visible while it plays,
+so the video is part of the Now Playing screen and the dock rather than hidden audio.
+The dock slides away while our keyboard is up and comes back when it closes.
 
 ## Repo layout
 - `app/` — the Android app
