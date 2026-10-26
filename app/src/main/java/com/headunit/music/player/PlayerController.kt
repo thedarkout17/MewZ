@@ -22,6 +22,7 @@ import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.CacheWriter
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.headunit.music.data.Track
@@ -164,6 +165,13 @@ class PlayerController(context: Context) {
 
     private val exo: ExoPlayer = ExoPlayer.Builder(context.applicationContext)
         .setMediaSourceFactory(DefaultMediaSourceFactory(dataSource))
+        // Keep the last 30 s that played in memory too, so short rewinds are instant
+        // (older parts still come back from the disk cache, never re-downloaded).
+        .setLoadControl(
+            DefaultLoadControl.Builder()
+                .setBackBuffer(BACK_BUFFER_MS, /* retainBackBufferFromKeyframe = */ true)
+                .build(),
+        )
         // Pause for navigation prompts / calls, and when headphones or Bluetooth drop.
         .setAudioAttributes(
             AudioAttributes.Builder()
@@ -629,6 +637,8 @@ class PlayerController(context: Context) {
 private const val TAG = "MuZ"
 
 private const val POLL_MS = 250L
+/** Already-played audio kept in memory for instant rewinds. */
+private const val BACK_BUFFER_MS = 30_000
 /** While playing, save where we are this often (so a sudden power-off loses little). */
 private const val SAVE_EVERY_MS = 5_000L
 private const val KEY_STATE = "state"
