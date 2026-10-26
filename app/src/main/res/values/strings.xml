@@ -11,6 +11,8 @@
     <string name="key_hide">Hide keyboard</string>
     <string name="minimize_player">Minimize player</string>
     <string name="queue">Queue</string>
+    <string name="rename_library">Rename library</string>
+    <string name="key_save">Save</string>
     <string name="lyrics">Lyrics</string>
     <string name="up_next">Up Next</string>
     <string name="remove_from_queue">Remove from queue</string>

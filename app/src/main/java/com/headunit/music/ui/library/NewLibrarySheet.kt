@@ -62,9 +62,13 @@ fun NewLibrarySheet(
     visible: Boolean,
     onCreate: (name: String) -> Unit,
     onCancel: () -> Unit,
+    /** The same sheet renames a library: its current name to start from, a title and a key label. */
+    initialName: String = "",
+    title: String? = null,
+    actionLabel: String? = null,
 ) {
     var name by remember { mutableStateOf("") }
-    LaunchedEffect(visible) { if (visible) name = "" }
+    LaunchedEffect(visible) { if (visible) name = initialName.take(MAX_NAME) }
 
     val p by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
@@ -101,7 +105,7 @@ fun NewLibrarySheet(
         DesignCanvas(Modifier.fillMaxSize()) {
             with(LocalDesignScale.current) {
                 Text(
-                    stringResource(R.string.new_library),
+                    title ?: stringResource(R.string.new_library),
                     style = TextStyle(Color.White, fontSize = 80.usp, fontWeight = FontWeight.SemiBold, shadow = LibraryTextShadow),
                     modifier = Modifier.align(Alignment.TopCenter).padding(top = 64.u),
                 )
@@ -137,7 +141,7 @@ fun NewLibrarySheet(
                     onBackspace = { if (name.isNotEmpty()) name = name.dropLast(1) },
                     onSearch = { create() },
                     onHide = onCancel,
-                    actionLabel = stringResource(R.string.key_create),
+                    actionLabel = actionLabel ?: stringResource(R.string.key_create),
                     actionIcon = null,
                     // Shift starts on, so the name begins with a capital.
                     startCapitalized = true,

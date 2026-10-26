@@ -79,7 +79,7 @@ private val DeleteText = Color(0xFFFFC2D4)
 
 /**
  * What holding one of your libraries brings up:
- * - **Menu**: Move To Front, Change Cover Songs, Delete Library (pink).
+ * - **Menu**: Move To Front, Rename Library, Change Cover Songs, Delete Library (pink).
  * - **Change Cover Songs**: the tile's cover grows out of the tile into the
  *   middle of the screen, "Select Song To Replace" above it. Tap one of its
  *   squares: the cover moves to the right and the library's songs fill the rest
@@ -91,6 +91,8 @@ fun LibraryOptions(
     held: HeldLibrary?,
     libraries: LibraryStore,
     onDelete: (Library) -> Unit,
+    /** Rename Library: the caller shows the naming sheet. */
+    onRename: (Library) -> Unit,
     onClose: () -> Unit,
 ) {
     // Keep the last one while everything fades / shrinks away.
@@ -151,6 +153,7 @@ fun LibraryOptions(
                     library = library,
                     alpha = menuP,
                     onMoveToFront = { libraries.touch(library.id); close() },
+                    onRename = { onRename(library) },
                     onChangeCover = { if (library.tracks.isNotEmpty()) stage = Stage.Cover },
                     onDelete = { onDelete(library) },
                     modifier = Modifier.align(Alignment.Center),
@@ -241,6 +244,7 @@ private fun MenuPanel(
     library: Library,
     alpha: Float,
     onMoveToFront: () -> Unit,
+    onRename: () -> Unit,
     onChangeCover: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier,
@@ -267,6 +271,7 @@ private fun MenuPanel(
                 modifier = Modifier.padding(start = 64.u, end = 64.u, top = 52.u, bottom = 24.u),
             )
             MenuRow(R.drawable.ic_arrow_up, "Move To Front", onClick = onMoveToFront)
+            MenuRow(R.drawable.ic_edit, "Rename Library", onClick = onRename)
             MenuRow(
                 R.drawable.ic_music_note, "Change Cover Songs",
                 enabled = library.tracks.isNotEmpty(),

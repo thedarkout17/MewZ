@@ -350,6 +350,14 @@ class PlayerController(context: Context) {
         }
     }
 
+    /** The library being played was renamed: show the new name ("Road trip — 3 of 20"). */
+    fun renameQueue(from: String, to: String) {
+        if (queueName == from) {
+            queueName = to
+            saveState()
+        }
+    }
+
     /** Shuffle the songs after the current one; turning it off restores the original order. */
     fun toggleShuffle() {
         val now = current

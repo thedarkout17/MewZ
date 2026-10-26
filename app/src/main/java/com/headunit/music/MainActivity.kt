@@ -75,6 +75,9 @@ class MainActivity : ComponentActivity() {
                 // A library held on the home screen (its options), and one being confirmed for deleting.
                 var held by remember { mutableStateOf<HeldLibrary?>(null) }
                 var deleting by remember { mutableStateOf<Library?>(null) }
+                // A library being renamed (from the hold menu).
+                var renaming by remember { mutableStateOf<Library?>(null) }
+                var lastRenaming by remember { mutableStateOf<Library?>(null) }
 
                 // Keep the screen on while music plays (headunits shouldn't dim mid-song).
                 LaunchedEffect(player.isPlaying) {
@@ -134,6 +137,21 @@ class MainActivity : ComponentActivity() {
                         },
                     )
                     NewLibrarySheet(
+                        visible = renaming != null,
+                        // (Keeps the old name on screen while the sheet slides away.)
+                        initialName = (renaming ?: lastRenaming)?.name.orEmpty(),
+                        title = getString(R.string.rename_library),
+                        actionLabel = getString(R.string.key_save),
+                        onCreate = { name ->
+                            renaming?.let {
+                                libraries.rename(it.id, name)
+                                player.renameQueue(it.name, name.trim())
+                            }
+                            renaming = null
+                        },
+                        onCancel = { renaming = null },
+                    )
+                    NewLibrarySheet(
                         visible = naming,
                         onCreate = { name ->
                             val lib = libraries.create(name)
@@ -146,6 +164,7 @@ class MainActivity : ComponentActivity() {
                         held = held,
                         libraries = libraries,
                         onDelete = { lib -> held = null; deleting = lib },
+                        onRename = { lib -> held = null; renaming = lib; lastRenaming = lib },
                         onClose = { held = null },
                     )
                     DeleteLibraryDialog(

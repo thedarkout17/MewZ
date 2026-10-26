@@ -131,6 +131,13 @@ class LibraryStore(context: Context) {
         }
     }
 
+    /** Gives a library you made a new name. (Liked and History keep theirs.) */
+    fun rename(libraryId: String, name: String) {
+        val clean = name.trim()
+        if (clean.isEmpty()) return
+        updateCustom(libraryId) { it.copy(name = clean) }
+    }
+
     /** Removes a library you made. Liked and History can't be deleted; its songs stay liked. */
     fun delete(libraryId: String) {
         if (libraryId == LIKED_ID || libraryId == HISTORY_ID) return
