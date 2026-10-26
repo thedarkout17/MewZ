@@ -49,8 +49,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.headunit.music.data.youtube.Album
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -191,18 +189,13 @@ private fun TrackList(
                     )
                 },
         ) {
-            // Albums first (when any match), then the songs under their own label.
-            if (state.albums.isNotEmpty()) {
-                item(key = "albums") {
-                    Column {
-                        SectionLabel("Albums")
-                        AlbumRow(state.albums, onOpenAlbum)
-                        if (tracks.isNotEmpty()) SectionLabel("Songs", top = 28f)
-                    }
+            // Songs, with any matching albums slotted in among them (square artwork).
+            itemsIndexed(mixInAlbums(tracks, state.albums), key = { _, r -> r.key }) { index, row ->
+                when (row) {
+                    is ResultRow.Song ->
+                        TrackRow(row.track, index, onClick = { onPlay(row.track) }, onLongClick = { onQueue(row.track) })
+                    is ResultRow.AlbumItem -> AlbumResultRow(row.album, index, onClick = { onOpenAlbum(row.album) })
                 }
-            }
-            itemsIndexed(tracks, key = { _, t -> t.videoId }) { index, track ->
-                TrackRow(track, index, onClick = { onPlay(track) }, onLongClick = { onQueue(track) })
             }
             // Footer: spinner while the next page loads, or why it couldn't.
             if (state.loadingMore || state.moreFailed != null) {
@@ -335,63 +328,98 @@ internal fun TrackRow(
     }
 }
 
-@Composable
-private fun SectionLabel(text: String, top: Float = 0f) {
-    with(LocalDesignScale.current) {
-        Text(
-            text,
-            style = TextStyle(Color.White, fontSize = 52.usp, fontWeight = FontWeight.SemiBold, shadow = TextShadow),
-            modifier = Modifier.padding(start = 16.u, top = top.u, bottom = 16.u),
-        )
-    }
+/** A row in the results: a song, or an album among them. */
+private sealed interface ResultRow {
+    val key: String
+    data class Song(val track: Track) : ResultRow { override val key get() = track.videoId }
+    data class AlbumItem(val album: Album) : ResultRow { override val key get() = "album:" + album.url }
 }
 
-/** Albums side by side, scrolling sideways: square cover, then title and artist. */
-@Composable
-private fun AlbumRow(albums: List<Album>, onOpen: (Album) -> Unit) {
-    with(LocalDesignScale.current) {
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(36.u),
-            contentPadding = PaddingValues(horizontal = 16.u),
-        ) {
-            items(albums, key = { it.url }) { album ->
-                val shape = RoundedCornerShape(36.u)
-                Column(
-                    Modifier
-                        .width(ALBUM_CARD.u)
-                        .clip(RoundedCornerShape(36.u))
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = ripple(color = Color.White),
-                        ) { onOpen(album) },
-                ) {
-                    AsyncImage(
-                        model = album.coverUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(ALBUM_CARD.u)
-                            .clip(shape)
-                            .background(Color.White.copy(alpha = 0.10f))
-                            .border(1.5f.u, Color.White.copy(alpha = 0.22f), shape),
-                    )
-                    Text(
-                        album.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        style = TextStyle(Color.White, fontSize = 48.usp, fontWeight = FontWeight.Medium, shadow = TextShadow),
-                        modifier = Modifier.padding(start = 8.u, top = 16.u),
-                    )
-                    Text(
-                        album.artist, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        style = TextStyle(Secondary, fontSize = 38.usp, shadow = TextShadow),
-                        modifier = Modifier.padding(start = 8.u, bottom = 8.u),
-                    )
-                }
-            }
+/**
+ * Puts each album just after the first song by its artist (so "starboy" gives
+ * the song, then the album), or after the second song if none of its songs
+ * came up.
+ */
+private fun mixInAlbums(tracks: List<Track>, albums: List<Album>): List<ResultRow> {
+    if (albums.isEmpty()) return tracks.map { ResultRow.Song(it) }
+    fun norm(s: String) = s.lowercase().removePrefix("the ").filter { it.isLetterOrDigit() }
+    val after = HashMap<Int, MutableList<Album>>() // song position → albums to put after it
+    albums.forEach { album ->
+        val artist = norm(album.artist)
+        val at = tracks.indexOfFirst { artist.isNotEmpty() && norm(it.artist).startsWith(artist) }
+            .takeIf { it >= 0 } ?: minOf(1, tracks.size - 1)
+        after.getOrPut(at) { mutableListOf() } += album
+    }
+    return buildList {
+        if (tracks.isEmpty()) albums.forEach { add(ResultRow.AlbumItem(it)) }
+        tracks.forEachIndexed { i, t ->
+            add(ResultRow.Song(t))
+            after[i]?.forEach { add(ResultRow.AlbumItem(it)) }
         }
     }
 }
 
-private const val ALBUM_CARD = 360f
+/**
+ * An album in the results: like a song row, but with square artwork (and
+ * "Album · artist") so it stands out. Tap to open it.
+ */
+@Composable
+private fun AlbumResultRow(album: Album, index: Int, onClick: () -> Unit) {
+    val anim = remember { Animatable(if (index < 6) 0f else 1f) }
+    LaunchedEffect(Unit) {
+        if (anim.value < 1f) {
+            delay(index * 50L)
+            anim.animateTo(1f, tween(320, easing = FastOutSlowInEasing))
+        }
+    }
+    with(LocalDesignScale.current) {
+        val slide = 28.u
+        val shape = RoundedCornerShape(22.u)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(220.u)
+                .graphicsLayer {
+                    alpha = anim.value
+                    translationY = (1f - anim.value) * slide.toPx()
+                }
+                .clip(RoundedCornerShape(28.u))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = ripple(color = Color.White),
+                    onClick = onClick,
+                )
+                .padding(horizontal = 16.u),
+        ) {
+            AsyncImage(
+                model = album.coverUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(196.u)
+                    .clip(shape)
+                    .background(Color.White.copy(alpha = 0.10f))
+                    .border(1.5f.u, Color.White.copy(alpha = 0.18f), shape),
+            )
+            Spacer(Modifier.width(48.u))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.u)) {
+                Text(
+                    album.title,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = TextStyle(Color.White, fontSize = 66.usp, fontWeight = FontWeight.Medium, shadow = TextShadow),
+                )
+                Text(
+                    listOf("Album", album.artist).filter { it.isNotBlank() }.joinToString("  ·  "),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = TextStyle(Secondary, fontSize = 46.usp, shadow = TextShadow),
+                )
+            }
+        }
+    }
+}
 
 /** Placeholder rows that gently pulse while YouTube answers. */
 @Composable
