@@ -59,8 +59,9 @@ import com.headunit.music.ui.library.LibraryTextShadow
 import com.headunit.music.ui.theme.LocalDesignScale
 
 // Header (design px), the same as an open library: big "Up Next", shrinking as you scroll.
-private const val HEADER_TALL = 470f
-private const val HEADER_SHORT = 190f
+// Taller than a library's, with room for the hint line, so the header is an easy target to tap out on.
+private const val HEADER_TALL = 560f
+private const val HEADER_SHORT = 236f
 private const val TITLE_BIG = 132f
 private const val TITLE_SMALL = 76f
 /** A row (220) plus the gap under it (20). */
@@ -230,8 +231,9 @@ fun QueuePage(player: PlayerController, onClose: () -> Unit, modifier: Modifier 
                 }
             }
 
-            // "Up Next" (and how many are lined up), shrinking into the top-left as you scroll.
-            Column(Modifier.offset(x = 96.u, y = (226f + (64f - 226f) * c).u)) {
+            // "Up Next", the gesture hint, and how many are lined up, shrinking into the
+            // top-left as you scroll (the count fades; the hint stays).
+            Column(Modifier.offset(x = 96.u, y = (226f + (44f - 226f) * c).u)) {
                 Text(
                     stringResource(R.string.up_next),
                     maxLines = 1,
@@ -241,6 +243,12 @@ fun QueuePage(player: PlayerController, onClose: () -> Unit, modifier: Modifier 
                         fontWeight = FontWeight.SemiBold,
                         shadow = LibraryTextShadow,
                     ),
+                )
+                Text(
+                    "Double Tap To Queue  ·  Hold To Move",
+                    maxLines = 1,
+                    style = TextStyle(LibrarySecondary, fontSize = 40.usp, shadow = LibraryTextShadow),
+                    modifier = Modifier.padding(top = 2.u, bottom = 6.u),
                 )
                 // In a mix only the songs you added count (the mix itself is endless);
                 // in a library, everything still to come. Nothing shown at 0.
