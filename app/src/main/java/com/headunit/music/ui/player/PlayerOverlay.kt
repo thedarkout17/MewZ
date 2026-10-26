@@ -173,9 +173,11 @@ fun PlayerOverlay(
     // player's Back, so Back closes them first).
     var showingQueue by remember { mutableStateOf(false) }
     var showingAdd by remember { mutableStateOf(false) }
+    var showingLyrics by remember { mutableStateOf(false) }
+    fun closePages() { showingQueue = false; showingAdd = false; showingLyrics = false }
     // Minimizing closes them, so Now Playing opens normally next time.
-    LaunchedEffect(player.expanded) { if (!player.expanded) { showingQueue = false; showingAdd = false } }
-    BackHandler(enabled = showingQueue || showingAdd) { showingQueue = false; showingAdd = false }
+    LaunchedEffect(player.expanded) { if (!player.expanded) closePages() }
+    BackHandler(enabled = showingQueue || showingAdd || showingLyrics) { closePages() }
     val queueP by animateFloatAsState(
         targetValue = if (showingQueue) 1f else 0f,
         animationSpec = tween(340, easing = FastOutSlowInEasing),
@@ -186,8 +188,13 @@ fun PlayerOverlay(
         animationSpec = tween(340, easing = FastOutSlowInEasing),
         label = "addToLibrary",
     )
+    val lyricsP by animateFloatAsState(
+        targetValue = if (showingLyrics) 1f else 0f,
+        animationSpec = tween(340, easing = FastOutSlowInEasing),
+        label = "lyrics",
+    )
     // How much a page has taken over the screen (Now Playing fades out under it).
-    val q = maxOf(queueP, addP)
+    val q = maxOf(queueP, addP, lyricsP)
 
     Box(Modifier.fillMaxSize()) {
         if (e > 0f) {
@@ -234,6 +241,8 @@ fun PlayerOverlay(
                         onOpenQueue = { showingQueue = true },
                         onOpenAdd = { showingAdd = true },
                         adding = showingAdd,
+                        onOpenLyrics = { showingLyrics = true },
+                        showingLyrics = showingLyrics,
                     )
                 }
 
@@ -289,6 +298,17 @@ fun PlayerOverlay(
                         modifier = Modifier.graphicsLayer {
                             alpha = queueP * e
                             translationY = (1f - queueP) * 48.u.toPx()
+                        },
+                    )
+                }
+                if (lyricsP > 0f) {
+                    LyricsPage(
+                        player = player,
+                        track = track,
+                        onClose = { showingLyrics = false },
+                        modifier = Modifier.graphicsLayer {
+                            alpha = lyricsP * e
+                            translationY = (1f - lyricsP) * 48.u.toPx()
                         },
                     )
                 }
@@ -388,6 +408,9 @@ private fun NowPlaying(
     onOpenAdd: () -> Unit,
     /** That page is open (the + tile shows as on). */
     adding: Boolean,
+    /** The lyrics tile: open the Lyrics page. */
+    onOpenLyrics: () -> Unit,
+    showingLyrics: Boolean,
 ) {
     val track = player.current ?: return
     with(LocalDesignScale.current) {
@@ -488,7 +511,7 @@ private fun NowPlaying(
                 .graphicsLayer { this.alpha = alpha },
         )
 
-        // Shuffle · Loop · Like · Add, centred under the bar
+        // Shuffle · Loop · Like · Add · Lyrics, centred under the bar
         Row(
             horizontalArrangement = Arrangement.spacedBy(48.u, Alignment.CenterHorizontally),
             modifier = Modifier
@@ -525,6 +548,13 @@ private fun NowPlaying(
                 contentDescription = stringResource(R.string.add_to_library),
                 active = adding,
                 onClick = onOpenAdd,
+            )
+            GlassTile(
+                icon = R.drawable.ic_lyrics,
+                activeIcon = R.drawable.ic_lyrics_bold,
+                contentDescription = stringResource(R.string.lyrics),
+                active = showingLyrics,
+                onClick = onOpenLyrics,
             )
         }
     }
