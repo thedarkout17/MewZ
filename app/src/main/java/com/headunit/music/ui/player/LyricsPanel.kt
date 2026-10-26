@@ -53,11 +53,12 @@ import com.headunit.music.player.PlayerController
 import com.headunit.music.ui.library.LibrarySecondary
 import com.headunit.music.ui.library.LibraryTextShadow
 import com.headunit.music.ui.theme.LocalDesignScale
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import java.io.IOException
 
-/** After you scroll the lyrics yourself, wait this long before following the song again. */
-private const val FOLLOW_AGAIN_MS = 4_000L
+/** After you scroll the lyrics yourself, go back to the current line this long after you let go. */
+private const val FOLLOW_AGAIN_MS = 2_500L
 
 private sealed interface LyricsState {
     data object Loading : LyricsState
@@ -113,9 +114,25 @@ private fun LyricsList(player: PlayerController, lyrics: Lyrics, height: android
     // When you last scrolled by hand (the list stops following for a moment).
     var touchedAt by remember { mutableLongStateOf(0L) }
     var following by remember { mutableStateOf(false) }
+    var manual by remember { mutableStateOf(false) }
     LaunchedEffect(list) {
         snapshotFlow { list.isScrollInProgress }.collectLatest { scrolling ->
-            if (scrolling && !following) touchedAt = System.currentTimeMillis()
+            if (scrolling && !following) manual = true
+            // Counts from when your scroll (fling included) comes to rest.
+            if (manual) touchedAt = System.currentTimeMillis()
+            if (!scrolling) manual = false
+        }
+    }
+    // ...and then, if you haven't touched it again, back to the line being sung.
+    LaunchedEffect(touchedAt) {
+        if (touchedAt == 0L || !lyrics.synced) return@LaunchedEffect
+        delay(FOLLOW_AGAIN_MS)
+        if (list.isScrollInProgress || current < 0) return@LaunchedEffect
+        following = true
+        try {
+            list.animateScrollToItem(current)
+        } finally {
+            following = false
         }
     }
     // Keep the line being sung a third of the way down (where the top padding puts it).
