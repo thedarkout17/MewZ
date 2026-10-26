@@ -562,7 +562,7 @@ private fun Dock(player: PlayerController, width: Float, modifier: Modifier) {
                 ),
         ) {
             // Glass made from the song's artwork: loaded tiny and stretched (soft on
-            // every Android version), heavily blurred on 12+, brightened, ~92% opaque.
+            // every Android version), heavily blurred on 12+, brightened, ~95% opaque.
             val context = LocalContext.current
             val artRequest = remember(track.thumbnailUrl) {
                 ImageRequest.Builder(context).data(track.thumbnailUrl).size(24, 14).build()
@@ -576,7 +576,7 @@ private fun Dock(player: PlayerController, width: Float, modifier: Modifier) {
                 modifier = Modifier
                     .matchParentSize()
                     .graphicsLayer {
-                        alpha = 0.92f
+                        alpha = 0.95f
                         // Zoom hides the soft edges the blur leaves.
                         scaleX = 1.25f; scaleY = 1.25f
                         if (Build.VERSION.SDK_INT >= 31) renderEffect = BlurEffect(90f, 90f, TileMode.Clamp)
