@@ -1,6 +1,9 @@
 package com.headunit.music.ui.home
 
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -100,11 +103,11 @@ fun SearchResults(
     modifier: Modifier = Modifier,
 ) {
     // Keyed by kind, so more results arriving just extend the list (no crossfade, no jump to the top).
-    Crossfade(
+    AnimatedContent(
         targetState = state,
-        animationSpec = tween(220),
-        label = "results",
+        transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(220)) },
         contentKey = { it::class },
+        label = "results",
         modifier = modifier,
     ) { s ->
         when (s) {
