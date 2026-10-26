@@ -510,7 +510,7 @@ private fun Dock(player: PlayerController, width: Float, modifier: Modifier) {
                     GlassCircleButton(
                         if (player.isPlaying) R.drawable.ic_pause else R.drawable.ic_play,
                         stringResource(if (player.isPlaying) R.string.pause else R.string.play),
-                        160f, 80f, accent = true, onClick = player::togglePlay,
+                        160f, 80f, onClick = player::togglePlay,
                     )
                     GlassCircleButton(
                         R.drawable.ic_skip_next, stringResource(R.string.next_song), 124f, 60f,
