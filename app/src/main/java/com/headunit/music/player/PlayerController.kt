@@ -285,8 +285,9 @@ class PlayerController(context: Context) {
     }
 
     /**
-     * Queue page double-tap: the song at [i] joins the songs you've queued,
-     * at the end of them (like hold-to-queue), ahead of the rest of the list or mix.
+     * Queue page double-tap: the song at [i] joins the songs you've queued, at
+     * the end of them (like hold-to-queue), ahead of the rest of the list or mix.
+     * Double-tapping a song that's already one of them moves it to the very front.
      */
     fun playNext(i: Int) {
         if (i !in queue.indices || i == index) return
@@ -294,7 +295,9 @@ class PlayerController(context: Context) {
         val list = queue.toMutableList()
         list.removeAt(i)
         val now = if (i < index) index - 1 else index
-        val queuedAhead = list.drop(now + 1).takeWhile { it.videoId in heldQueued && it.videoId != track.videoId }.size
+        val alreadyQueued = i > index && track.videoId in heldQueued
+        val queuedAhead = if (alreadyQueued) 0
+            else list.drop(now + 1).takeWhile { it.videoId in heldQueued }.size
         val at = now + 1 + queuedAhead
         list.add(at, track)
         queue = list
