@@ -27,6 +27,8 @@ import com.headunit.music.data.SearchHistory
 import com.headunit.music.data.Track
 import com.headunit.music.ui.library.NewLibrarySheet
 import com.headunit.music.ui.library.DeleteLibraryDialog
+import com.headunit.music.ui.library.HeldLibrary
+import com.headunit.music.ui.library.LibraryOptions
 import com.headunit.music.data.Library
 import com.headunit.music.player.PlayerController
 import com.headunit.music.ui.player.DOCK_HEIGHT
@@ -70,7 +72,8 @@ class MainActivity : ComponentActivity() {
                 // "New library" sheet; the song to put in it when opened from Now Playing's + list.
                 var naming by remember { mutableStateOf(false) }
                 var namingFor by remember { mutableStateOf<Track?>(null) }
-                // Library being asked about after a hold on its tile ("Delete “Road trip”?").
+                // A library held on the home screen (its options), and one being confirmed for deleting.
+                var held by remember { mutableStateOf<HeldLibrary?>(null) }
                 var deleting by remember { mutableStateOf<Library?>(null) }
 
                 // Keep the screen on while music plays (headunits shouldn't dim mid-song).
@@ -91,7 +94,7 @@ class MainActivity : ComponentActivity() {
                             else player.playQueue(tracks, index, name = collection, wrap = true)
                         },
                         onCreateLibrary = { namingFor = null; naming = true },
-                        onHoldLibrary = { deleting = it },
+                        onHoldLibrary = { lib, tile -> held = HeldLibrary(lib.id, tile) },
                         onQueue = { track ->
                             val msg = if (player.addToQueue(track)) "Added to queue: ${track.title}" else "Playing ${track.title}"
                             Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
@@ -138,6 +141,12 @@ class MainActivity : ComponentActivity() {
                             naming = false
                         },
                         onCancel = { naming = false },
+                    )
+                    LibraryOptions(
+                        held = held,
+                        libraries = libraries,
+                        onDelete = { lib -> held = null; deleting = lib },
+                        onClose = { held = null },
                     )
                     DeleteLibraryDialog(
                         library = deleting,

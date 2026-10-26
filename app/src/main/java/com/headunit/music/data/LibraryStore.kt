@@ -9,7 +9,27 @@ import org.json.JSONObject
 import java.util.UUID
 
 /** A collection of songs. [id] is [LIKED_ID], [HISTORY_ID] or a random id for ones you make. */
-data class Library(val id: String, val name: String, val tracks: List<Track>)
+data class Library(
+    val id: String,
+    val name: String,
+    val tracks: List<Track>,
+    /** Video ids picked for the cover, by spot ("Change Cover Songs"); empty = the first songs. */
+    val covers: List<String> = emptyList(),
+) {
+    /**
+     * The songs whose artwork makes the tile's cover: one per spot, up to four.
+     * Picked ones first (if still in the library), the rest filled from the
+     * first songs added.
+     */
+    val coverTracks: List<Track>
+        get() {
+            val n = minOf(4, tracks.size)
+            val picked = (0 until n).map { k -> covers.getOrNull(k)?.let { id -> tracks.firstOrNull { it.videoId == id } } }
+            val used = picked.filterNotNull().mapTo(HashSet()) { it.videoId }
+            val fill = tracks.filter { it.videoId !in used }.iterator()
+            return picked.map { it ?: fill.next() }
+        }
+}
 
 const val LIKED_ID = "liked"
 const val HISTORY_ID = "history"
@@ -90,6 +110,21 @@ class LibraryStore(context: Context) {
         writeCustom()
     }
 
+    /**
+     * "Change Cover Songs": put [track]'s artwork in cover spot [slot]. If it's
+     * already in another spot, the two swap.
+     */
+    fun setCover(libraryId: String, slot: Int, track: Track) {
+        updateCustom(libraryId) { lib ->
+            val ids = lib.coverTracks.map { it.videoId }.toMutableList()
+            if (slot !in ids.indices) return@updateCustom lib
+            val was = ids.indexOf(track.videoId)
+            if (was >= 0) ids[was] = ids[slot]
+            ids[slot] = track.videoId
+            lib.copy(covers = ids)
+        }
+    }
+
     /** Removes a library you made. Liked and History can't be deleted; its songs stay liked. */
     fun delete(libraryId: String) {
         if (libraryId == LIKED_ID || libraryId == HISTORY_ID) return
@@ -130,14 +165,18 @@ class LibraryStore(context: Context) {
         val arr = JSONArray(prefs.getString(KEY_CUSTOM, null) ?: return emptyList())
         List(arr.length()) { i ->
             val o = arr.getJSONObject(i)
-            Library(o.getString("id"), o.getString("name"), o.getJSONArray("tracks").toTracks())
+            val covers = o.optJSONArray("covers")?.let { c -> List(c.length()) { k -> c.getString(k) } }.orEmpty()
+            Library(o.getString("id"), o.getString("name"), o.getJSONArray("tracks").toTracks(), covers)
         }
     }.getOrDefault(emptyList())
 
     private fun writeCustom() {
         val arr = JSONArray()
         custom.forEach { lib ->
-            arr.put(JSONObject().put("id", lib.id).put("name", lib.name).put("tracks", lib.tracks.toJson()))
+            arr.put(
+                JSONObject().put("id", lib.id).put("name", lib.name).put("tracks", lib.tracks.toJson())
+                    .put("covers", JSONArray(lib.covers))
+            )
         }
         prefs.edit().putString(KEY_CUSTOM, arr.toString()).apply()
     }

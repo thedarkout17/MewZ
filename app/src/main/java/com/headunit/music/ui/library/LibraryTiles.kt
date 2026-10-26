@@ -25,6 +25,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -93,8 +101,11 @@ fun LibraryGrid(
     custom: List<Library>,
     onOpen: (Library) -> Unit,
     onCreate: () -> Unit,
-    /** A library you made was held: ask to delete it. (Liked and History can't be.) */
-    onHoldLibrary: (Library) -> Unit = {},
+    /**
+     * A library you made was held (with where its tile is on screen): show its
+     * options. Liked and History can't be held.
+     */
+    onHoldLibrary: (Library, Rect) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
     /**
      * Over-scroll squish, 0 at rest and 1 at full pull (briefly negative as it
@@ -121,9 +132,9 @@ fun LibraryGrid(
                                 onClick = { onOpen(item.library) },
                                 // Your libraries show their first four songs' artwork; Liked and
                                 // History always keep their icons.
-                                covers = if (isBuiltIn(item.library)) emptyList() else item.library.tracks.take(4),
+                                covers = if (isBuiltIn(item.library)) emptyList() else item.library.coverTracks,
                                 onLongClick = if (isBuiltIn(item.library)) null
-                                    else ({ onHoldLibrary(item.library) }),
+                                    else ({ rect -> onHoldLibrary(item.library, rect) }),
                                 squish = squish,
                             )
                             LibraryTileItem.Create -> LibraryTile(
@@ -164,11 +175,13 @@ private fun LibraryTile(
     subtitle: String?,
     onClick: () -> Unit,
     squish: () -> Float,
-    onLongClick: (() -> Unit)? = null,
+    /** Held: gets the tile's bounds on screen (so a cover can grow out of it). */
+    onLongClick: ((Rect) -> Unit)? = null,
     /** Up to four songs whose artwork replaces the icon (none: show the icon). */
     covers: List<Track> = emptyList(),
 ) {
     val haptics = LocalHapticFeedback.current
+    var bounds by remember { mutableStateOf(Rect.Zero) }
     with(LocalDesignScale.current) {
         val shape = RoundedCornerShape(72.u)
         Column(Modifier.width(LIBRARY_TILE.u)) {
@@ -176,6 +189,7 @@ private fun LibraryTile(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .size(LIBRARY_TILE.u)
+                    .onGloballyPositioned { bounds = it.boundsInRoot() }
                     // Over-scroll: squeezed in, a little taller and skinnier.
                     .graphicsLayer {
                         val k = squish()
@@ -190,7 +204,7 @@ private fun LibraryTile(
                         onLongClick = onLongClick?.let { hold ->
                             {
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                hold()
+                                hold(bounds)
                             }
                         },
                     ),
@@ -198,7 +212,7 @@ private fun LibraryTile(
                 GlassPane(Modifier.fillMaxSize())
                 Box(Modifier.fillMaxSize().border(3.u, LibraryGlass.Edge, shape))
                 if (covers.isNotEmpty()) {
-                    ArtCollage(covers)
+                    CoverCollage(covers, Modifier.fillMaxSize())
                 } else {
                     // Soft shadow under the icon so white reads on the light glass
                     // (blurred on Android 12+, a faint offset copy before that).
@@ -236,54 +250,72 @@ private fun LibraryTile(
     }
 }
 
-// Artwork inside a library tile (design px): inset so the glass edge still shows.
-private const val ART_INSET = 52f
-private const val ART_GAP = 20f
-private const val ART_AREA = LIBRARY_TILE - 2 * ART_INSET          // 656
-private const val ART_SMALL = (ART_AREA - ART_GAP) / 2f              // 318
+// Artwork inside a library tile, as fractions of the tile: inset so the glass edge still shows.
+private const val ART_INSET = 52f / LIBRARY_TILE
+private const val ART_GAP = 20f / LIBRARY_TILE
 
 /**
- * The first one to four songs' artwork, as squares inside the tile:
+ * The first one to four songs' artwork, as squares inside a tile of any size:
  * one big square; two side by side; three as two over one; four as a 2x2 grid.
+ * With [onSlot], each square is tappable (the cover editor); [selected] gets a
+ * bright outline.
  */
 @Composable
-private fun ArtCollage(tracks: List<Track>) {
-    with(LocalDesignScale.current) {
+internal fun CoverCollage(
+    tracks: List<Track>,
+    modifier: Modifier = Modifier,
+    onSlot: ((Int) -> Unit)? = null,
+    selected: Int? = null,
+) {
+    BoxWithConstraints(modifier) {
+        val s = maxWidth
+        val inset = s * ART_INSET
+        val gap = s * ART_GAP
+        val area = s - inset * 2
+        val small = (area - gap) / 2
         val big = tracks.size == 1
-        // Top-left corner of each square, relative to the art area.
-        val half = (ART_AREA - ART_SMALL) / 2f
-        val far = ART_SMALL + ART_GAP
-        val spots: List<Pair<Float, Float>> = when (tracks.size) {
-            1 -> listOf(0f to 0f)
-            2 -> listOf(0f to half, far to half)
-            3 -> listOf(0f to 0f, far to 0f, half to far)
-            else -> listOf(0f to 0f, far to 0f, 0f to far, far to far)
+        val half = (area - small) / 2
+        val far = small + gap
+        val zero = s * 0f
+        val spots = when (tracks.size) {
+            1 -> listOf(zero to zero)
+            2 -> listOf(zero to half, far to half)
+            3 -> listOf(zero to zero, far to zero, half to far)
+            else -> listOf(zero to zero, far to zero, zero to far, far to far)
         }
-        val side = if (big) ART_AREA else ART_SMALL
-        val shape = RoundedCornerShape((if (big) 44f else 30f).u)
-        Box(Modifier.fillMaxSize()) {
-            tracks.zip(spots).forEach { (track, spot) ->
-                val context = LocalContext.current
-                val request = remember(track.artworkUrl) {
-                    ImageRequest.Builder(context)
-                        .data(track.artworkUrl)
-                        .size(640) // plenty for a tile; keeps memory down
-                        .transformations(CenterSquareCrop(letterboxed = track.artworkLetterboxed, side = 400))
-                        .allowHardware(false)
-                        .build()
-                }
-                AsyncImage(
-                    model = request,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .offset(x = (ART_INSET + spot.first).u, y = (ART_INSET + spot.second).u)
-                        .size(side.u)
-                        .clip(shape)
-                        .background(Color(0x33000000))
-                        .border(1.5f.u, Color.White.copy(alpha = 0.22f), shape),
-                )
+        val side = if (big) area else small
+        val shape = RoundedCornerShape(if (big) s * (44f / LIBRARY_TILE) else s * (30f / LIBRARY_TILE))
+        tracks.zip(spots).forEachIndexed { k, (track, spot) ->
+            val context = LocalContext.current
+            val request = remember(track.artworkUrl) {
+                ImageRequest.Builder(context)
+                    .data(track.artworkUrl)
+                    .size(640) // plenty for a tile; keeps memory down
+                    .transformations(CenterSquareCrop(letterboxed = track.artworkLetterboxed, side = 400))
+                    .allowHardware(false)
+                    .build()
             }
+            AsyncImage(
+                model = request,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .offset(x = inset + spot.first, y = inset + spot.second)
+                    .size(side)
+                    .clip(shape)
+                    .background(Color(0x33000000))
+                    .border(
+                        if (k == selected) s * (6f / LIBRARY_TILE) else s * (1.5f / LIBRARY_TILE),
+                        if (k == selected) Color.White else Color.White.copy(alpha = 0.22f),
+                        shape,
+                    )
+                    .then(
+                        if (onSlot != null) Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = ripple(color = Color.White),
+                        ) { onSlot(k) } else Modifier
+                    ),
+            )
         }
     }
 }

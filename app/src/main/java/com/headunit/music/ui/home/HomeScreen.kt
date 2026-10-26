@@ -68,6 +68,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -120,8 +121,8 @@ fun HomeScreen(
     onPlay: (tracks: List<Track>, index: Int, collection: String?) -> Unit,
     /** The + tile: name a new library. */
     onCreateLibrary: () -> Unit,
-    /** A library you made was held: confirm deleting it. */
-    onHoldLibrary: (Library) -> Unit = {},
+    /** A library you made was held (with where its tile is on screen): show its options. */
+    onHoldLibrary: (Library, Rect) -> Unit = { _, _ -> },
     /** A song (in search results or a library) was held: add it to the queue. */
     onQueue: (Track) -> Unit = {},
     onVoiceSearch: () -> Unit,
