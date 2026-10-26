@@ -424,12 +424,14 @@ private fun NowPlaying(player: PlayerController, width: Float, shiftY: Float, al
         ) {
             GlassTile(
                 icon = R.drawable.ic_shuffle,
+                activeIcon = R.drawable.ic_shuffle_bold,
                 contentDescription = stringResource(R.string.shuffle),
                 active = player.shuffle,
                 onClick = player::toggleShuffle,
             )
             GlassTile(
-                icon = if (player.repeat == RepeatMode.One) R.drawable.ic_repeat_one else R.drawable.ic_repeat,
+                icon = R.drawable.ic_repeat,
+                activeIcon = if (player.repeat == RepeatMode.One) R.drawable.ic_repeat_one_bold else R.drawable.ic_repeat_bold,
                 contentDescription = stringResource(
                     when (player.repeat) {
                         RepeatMode.Off -> R.string.repeat_off
@@ -569,9 +571,18 @@ private fun SeekBar(player: PlayerController, modifier: Modifier) {
     }
 }
 
-/** Shuffle / loop / add: a frosted rounded tile; red when switched on. */
+/**
+ * Shuffle / loop / add. Off: just the icon on the background. On: a frosted
+ * glass box around it and a bolder icon ([activeIcon]).
+ */
 @Composable
-private fun GlassTile(icon: Int, contentDescription: String, active: Boolean, onClick: () -> Unit) {
+private fun GlassTile(
+    icon: Int,
+    contentDescription: String,
+    active: Boolean,
+    onClick: () -> Unit,
+    activeIcon: Int = icon,
+) {
     with(LocalDesignScale.current) {
         val shape = RoundedCornerShape(30.u)
         Box(
@@ -581,17 +592,21 @@ private fun GlassTile(icon: Int, contentDescription: String, active: Boolean, on
                 .height(116.u)
                 .clip(shape)
                 .then(
-                    if (active) Modifier.background(Brand.Red)
-                    else Modifier.background(PlayerGlass.Tile)
+                    if (active) Modifier.background(PlayerGlass.Tile).border(1.5f.u, PlayerGlass.Edge, shape)
+                    else Modifier
                 )
-                .border(1.5f.u, PlayerGlass.Edge, shape)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = ripple(color = Color.White),
                     onClick = onClick,
                 ),
         ) {
-            Icon(painterResource(icon), contentDescription, tint = Color.White, modifier = Modifier.size(60.u))
+            Icon(
+                painterResource(if (active) activeIcon else icon),
+                contentDescription,
+                tint = Color.White,
+                modifier = Modifier.size(60.u),
+            )
         }
     }
 }

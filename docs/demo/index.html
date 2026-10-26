@@ -309,13 +309,17 @@ body {
 .seek.drag .track, .seek.drag .fill { height: calc(26 * var(--u)); margin-top: calc(-13 * var(--u)); }
 .tiles { position: absolute; left: 0; right: 0; top: calc(1006 * var(--u)); display: flex; justify-content: center; gap: calc(48 * var(--u)); }
 .tile {
+  /* off: just the icon; on: glass box + bolder icon */
   width: calc(190 * var(--u)); height: calc(116 * var(--u)); border-radius: calc(30 * var(--u)); padding: 0; cursor: pointer;
   display: grid; place-items: center;
-  border: calc(1.5 * var(--u)) solid rgba(255,255,255,.14); border-top-color: rgba(255,255,255,.5);
+  border: calc(1.5 * var(--u)) solid transparent; background: transparent;
+}
+.tile svg { width: calc(60 * var(--u)); height: calc(60 * var(--u)); filter: drop-shadow(0 2px 8px rgba(0,0,0,.3)); }
+.tile.on {
+  border-color: rgba(255,255,255,.14); border-top-color: rgba(255,255,255,.5);
   background: linear-gradient(rgba(255,255,255,.18), rgba(255,255,255,.08));
 }
-.tile svg { width: calc(60 * var(--u)); height: calc(60 * var(--u)); }
-.tile.on { background: var(--red); border-color: rgba(255,255,255,.25); }
+.tile.on svg path { stroke-width: 2.8; }
 .tile:active { transform: scale(.96); }
 @media (prefers-reduced-motion: reduce) { .art, .dock, .np, .np-col, .np-backdrop, .art .cover { transition: none; } }
 .bounds .art, .bounds .dock, .bounds .cbtn, .bounds .np-col, .bounds .glyph, .bounds .tile { outline: 1px dashed #00e5ff; }
@@ -551,7 +555,7 @@ body {
       <span class="chip">Canvas <b>2000×1200</b></span>
       <span class="chip">Scale <b id="scale">–</b></span>
       <span class="chip">Back <b>Esc</b></span>
-      <span class="chip">Build <b>v0.19 · player</b></span>
+      <span class="chip">Build <b>v0.20 · player</b></span>
       <label class="chip" for="mode">Results
         <select class="sel" id="mode">
           <option value="ok">Sample songs</option>
