@@ -45,6 +45,14 @@ jobs:
             :phone:desktopTest 2>&1 | tee build.log
           exit ${PIPESTATUS[0]}
 
+      - name: Compile the iPhone code on Linux (quick check before the Mac build; informational)
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          ./gradlew --no-daemon -Pkotlin.native.enableKlibsCrossCompilation=true :phone:compileKotlinIosArm64 2>&1 | tee ios-klib.log
+          exit ${PIPESTATUS[0]}
+
       - name: Live YouTube check (from GitHub's network; informational)
         if: always()
         continue-on-error: true
@@ -59,6 +67,7 @@ jobs:
           python3 .github/scripts/report.py build.log "Build"
           python3 .github/scripts/report.py build.log "Results" notice
           python3 .github/scripts/report.py live.log "Live YouTube" notice
+          python3 .github/scripts/report.py ios-klib.log "iOS compile on Linux"
 
       - name: Publish outputs (draft release ci-android)
         if: always()
