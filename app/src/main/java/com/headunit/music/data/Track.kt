@@ -11,7 +11,7 @@ data class Track(
     val artworkUrl: String = thumbnailUrl,
     /**
      * True when [artworkUrl] is one of YouTube's 4:3 images with black bars baked
-     * in above and below the picture; the artwork zooms past them before cropping.
+     * in above and below the picture; the square is cut from between them.
      */
     val artworkLetterboxed: Boolean = false,
     /** Null until we know it (durations come from a second API call). */

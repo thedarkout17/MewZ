@@ -63,6 +63,7 @@ import coil.request.ImageRequest
 import com.headunit.music.R
 import com.headunit.music.data.Track
 import com.headunit.music.player.PlayerController
+import com.headunit.music.ui.components.CenterSquareCrop
 import com.headunit.music.ui.theme.Brand
 import com.headunit.music.ui.theme.DesignCanvas
 import com.headunit.music.ui.theme.LocalDesignScale
@@ -213,20 +214,24 @@ fun PlayerOverlay(
                         modifier = Modifier.fillMaxSize(),
                     )
                     if (video < 1f) {
+                        val context = LocalContext.current
+                        val artRequest = remember(track.artworkUrl) {
+                            ImageRequest.Builder(context)
+                                .data(track.artworkUrl)
+                                // Work from the full-size download, then cut an exact
+                                // 720x720 square from the dead centre (bars skipped).
+                                .size(coil.size.Size.ORIGINAL)
+                                .transformations(CenterSquareCrop(letterboxed = track.artworkLetterboxed))
+                                .allowHardware(false)
+                                .build()
+                        }
                         AsyncImage(
-                            model = track.artworkUrl,
+                            model = artRequest,
                             contentDescription = null,
-                            // Fill the square, cropping the sides of the 16:9 picture.
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
                                 .fillMaxSize()
-                                .graphicsLayer {
-                                    alpha = 1f - video
-                                    // 4:3 YouTube images have black bars taking 1/8 of the
-                                    // height top and bottom; zoom 4/3 so the picture fills
-                                    // the square and the bars fall outside it.
-                                    if (track.artworkLetterboxed) { scaleX = 4f / 3f; scaleY = 4f / 3f }
-                                },
+                                .graphicsLayer { alpha = 1f - video },
                         )
                     }
                     VideoOverlay(player)
