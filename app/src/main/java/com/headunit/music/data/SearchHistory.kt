@@ -7,7 +7,7 @@ import org.json.JSONArray
  * Past searches, newest first, saved on the device so they survive restarts.
  * Searching something again moves it back to the top instead of duplicating it.
  */
-class SearchHistory(context: Context, private val maxEntries: Int = 30) {
+class SearchHistory(context: Context, private val maxEntries: Int = 15) {
 
     private val prefs = context.getSharedPreferences("search_history", Context.MODE_PRIVATE)
 
@@ -15,7 +15,8 @@ class SearchHistory(context: Context, private val maxEntries: Int = 30) {
         val raw = prefs.getString(KEY, null) ?: return emptyList()
         return runCatching {
             val arr = JSONArray(raw)
-            List(arr.length()) { arr.getString(it) }
+            // Anything past the limit (e.g. saved when it was higher) is dropped.
+            List(minOf(arr.length(), maxEntries)) { arr.getString(it) }
         }.getOrDefault(emptyList())
     }
 

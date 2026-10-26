@@ -646,13 +646,13 @@ function sampleResults(q) {
 }
 
 // ---------- Search history (mirrors SearchHistory.kt; saved in this browser) ----------
-const HISTORY_KEY = 'muz.searchHistory', MAX_HISTORY = 30, MAX_HISTORY_WHILE_TYPING = 2;
+const HISTORY_KEY = 'muz.searchHistory', MAX_HISTORY = 15, MAX_HISTORY_WHILE_TYPING = 2;
 function loadHistory() {
   try { const v = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); return Array.isArray(v) ? v : []; }
   catch { return []; }
 }
 function saveHistory(list) { try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list)); } catch {} }
-let recent = loadHistory();
+let recent = loadHistory().slice(0, MAX_HISTORY);
 function addHistory(q) {
   q = q.trim(); if (!q) return;
   recent = [q, ...recent.filter(h => h.toLowerCase() !== q.toLowerCase())].slice(0, MAX_HISTORY);
@@ -672,7 +672,7 @@ function matchingHistory(typed) {
   return [...starts, ...words];
 }
 function listItems() {
-  if (!query.trim()) return recent.slice(0, 30).map(text => ({ text, hist: true }));   // all of it, scrollable
+  if (!query.trim()) return recent.slice(0, MAX_HISTORY).map(text => ({ text, hist: true }));   // all of it, scrollable
   const past = matchingHistory(query).slice(0, MAX_HISTORY_WHILE_TYPING);
   const fresh = suggestions.filter(s => !past.some(p => p.toLowerCase() === s.toLowerCase()));
   return [...past.map(text => ({ text, hist: true })), ...fresh.map(text => ({ text, hist: false }))].slice(0, MAX_SUGGESTIONS);
