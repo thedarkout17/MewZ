@@ -25,6 +25,9 @@ data class Album(
  */
 object YouTubeAlbums {
 
+    /** Albums' songs once fetched (for the song count in results, and opening them instantly). */
+    private val trackCache = java.util.concurrent.ConcurrentHashMap<String, List<Track>>()
+
     /** Albums matching [query] (YouTube Music's first page, best match first). Throws on failure. */
     suspend fun search(query: String, max: Int = 12): List<Album> = withContext(Dispatchers.IO) {
         NewPipeDownloader.init()
@@ -129,6 +132,7 @@ object YouTubeAlbums {
      * artwork (cleaner than the video stills). Throws on failure.
      */
     suspend fun tracks(album: Album): List<Track> = withContext(Dispatchers.IO) {
+        trackCache[album.url]?.let { return@withContext it }
         NewPipeDownloader.init()
         val info = PlaylistInfo.getInfo(ServiceList.YouTube, album.url)
         val items = info.relatedItems.toMutableList()
@@ -154,5 +158,6 @@ object YouTubeAlbums {
                     artworkLetterboxed = false,
                 )
             }
+            .also { if (it.isNotEmpty()) trackCache[album.url] = it }
     }
 }

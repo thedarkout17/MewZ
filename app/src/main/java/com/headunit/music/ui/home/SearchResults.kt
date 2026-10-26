@@ -49,6 +49,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.headunit.music.data.youtube.Album
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import com.headunit.music.data.youtube.YouTubeAlbums
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -359,12 +362,19 @@ private fun mixInAlbums(tracks: List<Track>, albums: List<Album>): List<ResultRo
     }
 }
 
+private const val ALBUM_ART = 212f
+
 /**
  * An album in the results: like a song row, but with square artwork (and
  * "Album · artist") so it stands out. Tap to open it.
  */
 @Composable
 private fun AlbumResultRow(album: Album, index: Int, onClick: () -> Unit) {
+    // How many songs: fetched in the background (and kept, so opening it is instant).
+    var count by remember(album.url) { mutableStateOf<Int?>(null) }
+    LaunchedEffect(album.url) {
+        count = runCatching { YouTubeAlbums.tracks(album).size }.getOrNull()?.takeIf { it > 0 }
+    }
     val anim = remember { Animatable(if (index < 6) 0f else 1f) }
     LaunchedEffect(Unit) {
         if (anim.value < 1f) {
@@ -397,7 +407,8 @@ private fun AlbumResultRow(album: Album, index: Int, onClick: () -> Unit) {
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .size(196.u)
+                    // A touch taller than song thumbnails (196): a square reads smaller than a wide one.
+                    .size(ALBUM_ART.u)
                     .clip(shape)
                     .background(Color.White.copy(alpha = 0.10f))
                     .border(1.5f.u, Color.White.copy(alpha = 0.18f), shape),
@@ -411,7 +422,11 @@ private fun AlbumResultRow(album: Album, index: Int, onClick: () -> Unit) {
                     style = TextStyle(Color.White, fontSize = 66.usp, fontWeight = FontWeight.Medium, shadow = TextShadow),
                 )
                 Text(
-                    listOf("Album", album.artist).filter { it.isNotBlank() }.joinToString("  ·  "),
+                    listOfNotNull(
+                        "Album",
+                        album.artist.ifBlank { null },
+                        count?.let { if (it == 1) "1 song" else "$it songs" },
+                    ).joinToString("  ·  "),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     style = TextStyle(Secondary, fontSize = 46.usp, shadow = TextShadow),
