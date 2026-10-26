@@ -141,11 +141,11 @@ class PlayerController(context: Context) {
 
     private enum class Source { YouTube, Audio }
     /** Which one is playing the current song. */
-    private var source = Source.YouTube
+    private var source: Source = Source.YouTube
     /** Songs YouTube's player refused this session: they play audio-only from now on. */
-    private val audioOnly = HashSet<String>()
+    private val audioOnly: HashSet<String> = HashSet()
 
-    private val events = object : HiddenYouTubePlayer.Events {
+    private val events: HiddenYouTubePlayer.Events = object : HiddenYouTubePlayer.Events {
         override fun onState(player: HiddenYouTubePlayer, state: Int) {
             if (player === active && source == Source.YouTube) onYouTubeState(state)
         }
@@ -168,15 +168,17 @@ class PlayerController(context: Context) {
         }
     }
 
-    private val players = listOf(HiddenYouTubePlayer(context, events), HiddenYouTubePlayer(context, events))
-    private var active = players[0]
-    private val standby get() = if (active === players[0]) players[1] else players[0]
+    private val players: List<HiddenYouTubePlayer> =
+        listOf(HiddenYouTubePlayer(context, events), HiddenYouTubePlayer(context, events))
+    private var active: HiddenYouTubePlayer = players[0]
+    private val standby: HiddenYouTubePlayer
+        get() = if (active === players[0]) players[1] else players[0]
 
     /** Both YouTube players' views; the overlay keeps them on screen, tiny, behind the artwork. */
     val playerViews: List<android.webkit.WebView> get() = players.map { it.view }
 
     /** Pausing for calls / nav prompts while YouTube plays (ExoPlayer handles its own). */
-    private val focus = YouTubeAudioFocus(
+    private val focus: YouTubeAudioFocus = YouTubeAudioFocus(
         context,
         onPause = { if (source == Source.YouTube) active.pause() },
         onResume = { if (source == Source.YouTube) active.play() },
@@ -676,7 +678,7 @@ class PlayerController(context: Context) {
         }
     }
 
-    private var startedFromPreload = false
+    private var startedFromPreload: Boolean = false
 
     private fun onYouTubeState(state: Int) {
         isPlaying = state == HiddenYouTubePlayer.STATE_PLAYING
