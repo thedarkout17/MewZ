@@ -66,6 +66,8 @@ private const val TITLE_BIG = 132f
 private const val TITLE_SMALL = 76f
 /** A row (220) plus the gap under it (20). */
 private const val ROW_STEP = 240f
+/** The tap-out zone at the top: the header's height times this. */
+private const val TAP_OUT_BUFFER = 1.25f
 
 /**
  * The queue, laid out like an open library over Now Playing's blurred artwork:
@@ -124,6 +126,16 @@ fun QueuePage(player: PlayerController, onClose: () -> Unit, modifier: Modifier 
             }
         }
         val headerH = HEADER_TALL + (HEADER_SHORT - HEADER_TALL) * c
+        // Taps this close to the top count as "tap out", even on a song sliding under the
+        // header: the header plus a quarter of its height again, so a stab at the top to
+        // leave doesn't play a previous song by accident.
+        val tapOutPx by rememberUpdatedState(with(density) { (headerH * TAP_OUT_BUFFER).u.toPx() })
+        /** Where [localY] in row [key] sits, measured from the top of the page (px); null if not laid out. */
+        fun pageY(key: String, localY: Float): Float? {
+            val info = list.layoutInfo
+            val item = info.visibleItemsInfo.firstOrNull { it.key == key } ?: return null
+            return item.offset - info.viewportStartOffset + localY
+        }
 
         // A tap on empty space (not a song or button) goes back to Now Playing.
         Box(modifier.fillMaxSize().pointerInput(onClose) { detectTapGestures(onTap = { onClose() }) }) {
@@ -179,11 +191,19 @@ fun QueuePage(player: PlayerController, onClose: () -> Unit, modifier: Modifier 
                             // staying here. (Hold is the drag below; it stops the tap firing.)
                             .pointerInput(Unit) {
                                 detectTapGestures(
-                                    onTap = {
-                                        if (at != player.index) player.skipTo(at)
+                                    onTap = { pos ->
+                                        val y = pageY(key, pos.y)
+                                        if (y == null || y >= tapOutPx) {
+                                            if (at != player.index) player.skipTo(at)
+                                        }
                                         onClose()
                                     },
-                                    onDoubleTap = {
+                                    onDoubleTap = { pos ->
+                                        val y = pageY(key, pos.y)
+                                        if (y != null && y < tapOutPx) {
+                                            onClose()
+                                            return@detectTapGestures
+                                        }
                                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                         player.playNext(at)
                                     },
