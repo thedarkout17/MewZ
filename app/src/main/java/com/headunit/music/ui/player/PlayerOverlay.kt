@@ -481,6 +481,7 @@ private fun NowPlaying(
                 contentDescription = stringResource(R.string.loop_song),
                 active = player.loopSong,
                 onClick = player::toggleLoop,
+                onAnimation = { t -> LoopGlyph(t) },
             )
             GlassTile(
                 icon = R.drawable.ic_heart,
@@ -744,6 +745,72 @@ private fun GlassTile(
 
 /** How long a tile animation runs. */
 private const val TILE_ANIM_MS = 760
+
+/**
+ * The loop icon drawn live, for its animation: its two arrows sit on one rounded
+ * loop (the icon's outline), and they chase each other once around it, stretching
+ * a little as they speed up, back to where they started. At [p] = 0 and 1 it's
+ * the normal (bold) icon.
+ */
+@Composable
+private fun LoopGlyph(p: Float) {
+    Canvas(Modifier.fillMaxSize()) {
+        val k = size.minDimension / 24f // the icon's 24x24 grid
+        val stroke = Stroke(width = 2.8f * k, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        val eased = if (p < 0.5f) 4f * p * p * p else 1f - (-2f * p + 2f).let { it * it * it } / 2f
+        val shift = LOOP_PERIMETER * eased
+        val stretch = 1f + 0.3f * sin(PI.toFloat() * p)
+        // Each arrow at rest: tail 3 units up the left side, 17.7 long (the other is half a lap on).
+        for (tail0 in floatArrayOf(3f, 3f + LOOP_PERIMETER / 2f)) {
+            val head = tail0 + LOOP_ARROW + shift
+            val tail = head - LOOP_ARROW * stretch
+            val n = 60
+            val pts = Array(n + 1) { i -> loopPoint(tail + (head - tail) * i / n) }
+            val body = Path().apply {
+                moveTo(pts[0].x * k, pts[0].y * k)
+                for (i in 1..n) lineTo(pts[i].x * k, pts[i].y * k)
+            }
+            drawPath(body, Color.White, style = stroke)
+            val a = pts[n - 2]; val h = pts[n]
+            val angle = atan2(h.y - a.y, h.x - a.x)
+            val wing = 3.5f
+            val arrow = Path().apply {
+                moveTo((h.x - wing * cos(angle - PI.toFloat() / 4f)) * k, (h.y - wing * sin(angle - PI.toFloat() / 4f)) * k)
+                lineTo(h.x * k, h.y * k)
+                lineTo((h.x - wing * cos(angle + PI.toFloat() / 4f)) * k, (h.y - wing * sin(angle + PI.toFloat() / 4f)) * k)
+            }
+            drawPath(arrow, Color.White, style = stroke)
+        }
+    }
+}
+
+/**
+ * The loop icon's track: a rounded rectangle from (4,7) to (20,17), corner radius 3,
+ * walked clockwise starting at (4,14), the bottom of its left side.
+ */
+private val LOOP_PERIMETER: Float = 4f * 4f + 2f * 10f + 2f * 3f * PI.toFloat() // straights + four quarter-circles
+/** Length of each arrow's line at rest. */
+private val LOOP_ARROW: Float = 1f + 1.5f * PI.toFloat() + 12f
+
+/** The point [distance] along the loop track (wraps around). */
+private fun loopPoint(distance: Float): Offset {
+    val quarter = 1.5f * PI.toFloat() // a quarter-circle of radius 3
+    var d = ((distance % LOOP_PERIMETER) + LOOP_PERIMETER) % LOOP_PERIMETER
+    fun arc(cx: Float, cy: Float, from: Float): Offset {
+        val a = from + (d / quarter) * (PI.toFloat() / 2f)
+        return Offset(cx + 3f * cos(a), cy + 3f * sin(a))
+    }
+    // left side up, top-left corner, top, top-right corner, right side down,
+    // bottom-right corner, bottom, bottom-left corner
+    if (d <= 4f) return Offset(4f, 14f - d); d -= 4f
+    if (d <= quarter) return arc(7f, 10f, PI.toFloat()); d -= quarter
+    if (d <= 10f) return Offset(7f + d, 7f); d -= 10f
+    if (d <= quarter) return arc(17f, 10f, 1.5f * PI.toFloat()); d -= quarter
+    if (d <= 4f) return Offset(20f, 10f + d); d -= 4f
+    if (d <= quarter) return arc(17f, 14f, 0f); d -= quarter
+    if (d <= 10f) return Offset(17f - d, 17f); d -= 10f
+    return arc(7f, 14f, PI.toFloat() / 2f)
+}
 
 /**
  * The shuffle icon drawn live, for its animation. The two lines slither like
