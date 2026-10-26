@@ -75,7 +75,8 @@ private val Secondary = Color.White.copy(alpha = 0.78f)
 private val Tertiary = Color.White.copy(alpha = 0.62f)
 
 private object PlayerGlass {
-    val SheetTint = Color(0x47300008)
+    /** Dock background: the same dark wine as the keyboard, but more solid (~55%). */
+    val SheetTint = Color(0x8C300008)
     val SheetSheen = Brush.verticalGradient(listOf(Color(0x30FFFFFF), Color(0x10FFFFFF)))
     val Edge = Brush.verticalGradient(listOf(Color(0x80FFFFFF), Color(0x1FFFFFFF)))
     val Tile = Brush.verticalGradient(listOf(Color(0x2EFFFFFF), Color(0x14FFFFFF)))
