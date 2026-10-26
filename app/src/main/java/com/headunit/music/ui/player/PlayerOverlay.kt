@@ -1,7 +1,6 @@
 package com.headunit.music.ui.player
 
 import android.os.Build
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -59,6 +58,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.headunit.music.R
+import com.headunit.music.data.LibraryStore
+import com.headunit.music.ui.library.AddToLibraryPanel
 import com.headunit.music.data.Track
 import com.headunit.music.player.PlayerController
 import com.headunit.music.ui.components.CenterSquareCrop
@@ -117,6 +118,9 @@ private const val ART_MINI_X = 56f
 fun PlayerOverlay(
     player: PlayerController,
     dockHidden: Boolean,
+    libraries: LibraryStore,
+    /** "New library" in the + list: name one, then the song goes in it. */
+    onNewLibrary: (Track) -> Unit,
     /** ⌄ or Back on Now Playing: shrink to the dock (the caller also goes back home). */
     onMinimize: () -> Unit = { player.expanded = false },
 ) {
@@ -173,7 +177,10 @@ fun PlayerOverlay(
 
                 // ---- Now Playing (expanded) ----
                 if (e > 0f) {
-                    NowPlaying(player = player, width = w, shiftY = shiftY, alpha = e, onMinimize = onMinimize)
+                    NowPlaying(
+                        player = player, libraries = libraries, width = w, screenHeight = h, shiftY = shiftY,
+                        alpha = e, onMinimize = onMinimize, onNewLibrary = onNewLibrary,
+                    )
                 }
 
                 // ---- Artwork, with the YouTube player right behind it ----
@@ -286,13 +293,16 @@ private fun ArtOverlay(player: PlayerController) {
 @Composable
 private fun NowPlaying(
     player: PlayerController,
+    libraries: LibraryStore,
     width: Float,
+    screenHeight: Float,
     shiftY: Float,
     alpha: Float,
     onMinimize: () -> Unit,
+    onNewLibrary: (Track) -> Unit,
 ) {
     val track = player.current ?: return
-    val context = LocalContext.current
+    var picking by remember { mutableStateOf(false) }
     with(LocalDesignScale.current) {
         val colX = ART_FULL_X + ART_FULL + COLUMN_GAP
         val colW = width - colX - SIDE
@@ -386,7 +396,7 @@ private fun NowPlaying(
                 .graphicsLayer { this.alpha = alpha },
         )
 
-        // Shuffle · Loop · Add, centred under the bar
+        // Shuffle · Loop · Like · Add, centred under the bar
         Row(
             horizontalArrangement = Arrangement.spacedBy(48.u, Alignment.CenterHorizontally),
             modifier = Modifier
@@ -409,14 +419,60 @@ private fun NowPlaying(
                 onClick = player::toggleLoop,
             )
             GlassTile(
+                icon = R.drawable.ic_heart,
+                activeIcon = R.drawable.ic_heart_filled,
+                contentDescription = stringResource(R.string.like),
+                active = libraries.isLiked(track),
+                onClick = { libraries.toggleLike(track) },
+            )
+            GlassTile(
                 icon = R.drawable.ic_add,
                 contentDescription = stringResource(R.string.add_to_library),
-                active = false,
-                onClick = {
-                    // Libraries come later; the button is in place for them.
-                    Toast.makeText(context, "Libraries are coming soon", Toast.LENGTH_SHORT).show()
-                },
+                active = picking,
+                onClick = { picking = !picking },
             )
+        }
+
+        // + list: your libraries, just above the tiles. A tap anywhere else closes it.
+        if (picking) {
+            Box(
+                contentAlignment = Alignment.BottomStart,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { picking = false }
+                    // Just above the tiles, starting right of the artwork so it isn't covered.
+                    .padding(
+                        start = (ART_FULL_X + ART_FULL + 64f).u,
+                        bottom = (screenHeight - (TILES_TOP - 28f + shiftY)).u,
+                    )
+                    .graphicsLayer { this.alpha = alpha },
+            ) {
+                AddToLibraryPanel(
+                    libraries = libraries.custom,
+                    contains = { libraries.contains(it.id, track) },
+                    onPick = { lib ->
+                        // Ticked ones come back out; otherwise in it goes (and it's liked too).
+                        if (libraries.contains(lib.id, track)) {
+                            libraries.removeFrom(lib.id, track)
+                        } else {
+                            libraries.addTo(lib.id, track)
+                            picking = false
+                        }
+                    },
+                    onNewLibrary = {
+                        picking = false
+                        onNewLibrary(track)
+                    },
+                    // Taps on the panel itself shouldn't close it.
+                    modifier = Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { },
+                )
+            }
         }
     }
 }

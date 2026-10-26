@@ -22,7 +22,10 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import com.headunit.music.data.LibraryStore
 import com.headunit.music.data.SearchHistory
+import com.headunit.music.data.Track
+import com.headunit.music.ui.library.NewLibrarySheet
 import com.headunit.music.player.PlayerController
 import com.headunit.music.ui.player.DOCK_HEIGHT
 import com.headunit.music.ui.player.PlayerOverlay
@@ -35,12 +38,16 @@ class MainActivity : ComponentActivity() {
 
     /** Lives as long as the activity so music keeps going between screens. */
     private lateinit var player: PlayerController
+    private lateinit var libraries: LibraryStore
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         goImmersive()
         NewPipeDownloader.init()
         player = PlayerController(this)
+        libraries = LibraryStore(applicationContext)
+        // History: songs that played for 3 seconds or more.
+        player.onPlayedLongEnough = libraries::recordPlayed
 
         setContent {
             HeadunitMusicTheme {
@@ -58,6 +65,9 @@ class MainActivity : ComponentActivity() {
                 val history = remember { SearchHistory(applicationContext) }
                 var keyboardUp by remember { mutableStateOf(false) }
                 var goHomeRequests by remember { mutableIntStateOf(0) }
+                // "New library" sheet; the song to put in it when opened from Now Playing's + list.
+                var naming by remember { mutableStateOf(false) }
+                var namingFor by remember { mutableStateOf<Track?>(null) }
 
                 // Keep the screen on while music plays (headunits shouldn't dim mid-song).
                 LaunchedEffect(player.isPlaying) {
@@ -69,8 +79,12 @@ class MainActivity : ComponentActivity() {
                     HomeScreen(
                         youtube = youtube,
                         history = history,
-                        // Search results play as a plain queue: no library/playlist name.
-                        onPlay = { tracks, index, _ -> player.playQueue(tracks, index) },
+                        libraries = libraries,
+                        // Search results play as a plain queue; libraries loop and show their name.
+                        onPlay = { tracks, index, collection ->
+                            player.playQueue(tracks, index, name = collection, wrap = collection != null)
+                        },
+                        onCreateLibrary = { namingFor = null; naming = true },
                         dockInset = if (player.current != null) DOCK_HEIGHT else 0f,
                         onKeyboardShownChange = { keyboardUp = it },
                         goHomeRequests = goHomeRequests,
@@ -96,12 +110,23 @@ class MainActivity : ComponentActivity() {
                     // Now Playing / mini player, over everything.
                     PlayerOverlay(
                         player = player,
-                        dockHidden = keyboardUp,
+                        dockHidden = keyboardUp || naming,
+                        libraries = libraries,
+                        onNewLibrary = { track -> namingFor = track; naming = true },
                         // Minimizing goes to the "Listen..." home, with the song in the dock.
                         onMinimize = {
                             player.expanded = false
                             goHomeRequests++
                         },
+                    )
+                    NewLibrarySheet(
+                        visible = naming,
+                        onCreate = { name ->
+                            val lib = libraries.create(name)
+                            namingFor?.let { libraries.addTo(lib.id, it) }
+                            naming = false
+                        },
+                        onCancel = { naming = false },
                     )
                 }
             }

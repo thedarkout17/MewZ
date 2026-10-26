@@ -91,6 +91,9 @@ fun GlassKeyboard(
     onSearch: () -> Unit,
     onHide: () -> Unit,
     modifier: Modifier = Modifier,
+    /** The red key: "Search" by default; naming a library uses "Create". */
+    actionLabel: String = stringResource(R.string.key_search),
+    actionIcon: Int? = R.drawable.ic_search,
 ) {
     var symbols by rememberSaveable { mutableStateOf(false) }
 
@@ -150,14 +153,16 @@ fun GlassKeyboard(
                 CharKey('.', onType)
                 GlassKey(
                     weight = 2f,
-                    label = stringResource(R.string.key_search),
+                    label = actionLabel,
                     accent = true,
                     onPress = onSearch,
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        KeyIcon(R.drawable.ic_search, 46.u)
-                        Spacer(Modifier.width(16.u))
-                        KeyLabel(stringResource(R.string.key_search), small = true)
+                        if (actionIcon != null) {
+                            KeyIcon(actionIcon, 46.u)
+                            Spacer(Modifier.width(16.u))
+                        }
+                        KeyLabel(actionLabel, small = true)
                     }
                 }
             }

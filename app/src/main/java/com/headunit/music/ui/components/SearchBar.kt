@@ -163,7 +163,7 @@ fun SearchBar(
 
 /** Red text cursor. Blinks every 530ms (Android's rate) and stays solid right after each keystroke. */
 @Composable
-private fun BlinkingCursor(visible: Boolean, restartKey: Any, height: Float) {
+internal fun BlinkingCursor(visible: Boolean, restartKey: Any, height: Float) {
     var on by remember { mutableStateOf(true) }
     LaunchedEffect(visible, restartKey) {
         on = true

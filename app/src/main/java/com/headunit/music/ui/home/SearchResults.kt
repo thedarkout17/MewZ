@@ -125,7 +125,7 @@ private fun TrackList(tracks: List<Track>, onPlay: (Track) -> Unit) {
 }
 
 @Composable
-private fun TrackRow(track: Track, index: Int, onClick: () -> Unit) {
+internal fun TrackRow(track: Track, index: Int, onClick: () -> Unit) {
     // First screenful staggers in; rows further down just appear as you scroll.
     val anim = remember { Animatable(if (index < 6) 0f else 1f) }
     LaunchedEffect(Unit) {
@@ -260,12 +260,17 @@ private fun FailureMessage(reason: Reason, onRetry: () -> Unit) {
 }
 
 @Composable
-private fun Message(title: String, detail: String, action: Pair<String, () -> Unit>? = null) {
+internal fun Message(
+    title: String,
+    detail: String,
+    action: Pair<String, () -> Unit>? = null,
+    modifier: Modifier = Modifier,
+) {
     with(LocalDesignScale.current) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(24.u),
-            modifier = Modifier.fillMaxWidth().padding(top = 200.u, start = 120.u, end = 120.u),
+            modifier = modifier.fillMaxWidth().padding(top = 200.u, start = 120.u, end = 120.u),
         ) {
             Text(
                 title,

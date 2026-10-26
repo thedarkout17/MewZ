@@ -16,5 +16,9 @@
     <string name="shuffle">Shuffle</string>
     <string name="loop_song">Loop this song</string>
     <string name="add_to_library">Add to library</string>
+    <string name="like">Like</string>
+    <string name="back">Back</string>
+    <string name="new_library">New library</string>
+    <string name="key_create">Create</string>
     <string name="voice_prompt">Say a song, artist or album</string>
 </resources>

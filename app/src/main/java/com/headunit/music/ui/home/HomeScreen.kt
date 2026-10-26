@@ -9,6 +9,22 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
+import com.headunit.music.data.HISTORY_ID
+import com.headunit.music.data.LIKED_ID
+import com.headunit.music.data.Library
+import com.headunit.music.data.LibraryStore
+import com.headunit.music.ui.library.LibraryGrid
+import com.headunit.music.ui.library.LibraryPage
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -53,6 +69,9 @@ private const val SUGGEST_DEBOUNCE_MS = 120L
 /** How many past searches the empty search bar lists (scrollable). */
 private const val MAX_RECENT_SHOWN = 30
 
+/** How much of the first library row peeks up from the bottom of the idle screen (design px). */
+private const val LIBRARY_PEEK = 110f
+
 /**
  * Home screen.
  *
@@ -70,13 +89,23 @@ private const val MAX_RECENT_SHOWN = 30
  * Results: sending a search (Search key, a suggestion, or voice) closes the
  * panel and lists YouTube songs under the bar. Tap the bar to search again;
  * back from results returns to the idle home screen.
+ *
+ * Libraries: scroll down from "Listen..." to big glass squares, two per row
+ * (Liked, History, yours, then + to make one). Tapping one opens its songs
+ * under its name; nothing plays until you pick a song.
  */
 @Composable
 fun HomeScreen(
     youtube: YouTubeSearch,
     history: SearchHistory,
-    /** A song was tapped: the whole result list, the tapped position, and the search text. */
-    onPlay: (tracks: List<Track>, index: Int, query: String) -> Unit,
+    libraries: LibraryStore,
+    /**
+     * A song was tapped: the whole list, the tapped position, and the library's
+     * name (null for search results, which aren't a collection).
+     */
+    onPlay: (tracks: List<Track>, index: Int, collection: String?) -> Unit,
+    /** The + tile: name a new library. */
+    onCreateLibrary: () -> Unit,
     onVoiceSearch: () -> Unit,
     voiceResult: String? = null,
     onVoiceResultConsumed: () -> Unit = {},
@@ -110,6 +139,14 @@ fun HomeScreen(
     var attempt by remember { mutableStateOf(0) }
     var results by remember { mutableStateOf<ResultsState>(ResultsState.Loading) }
 
+    // Library page open (by id, so it updates as songs are added).
+    var openLibraryId by rememberSaveable { mutableStateOf<String?>(null) }
+    val openLibrary: Library? = openLibraryId?.let { libraries.byId(it) }
+    // Kept for the closing animation after the page is dismissed.
+    var lastLibrary by remember { mutableStateOf<Library?>(null) }
+    SideEffect { if (openLibrary != null) lastLibrary = openLibrary }
+    val homeScroll = rememberScrollState()
+
     val searching = open || query.isNotEmpty() || submitted != null
     val showResults = submitted != null && !open
     val keyboardShown = open && keyboard
@@ -119,6 +156,13 @@ fun HomeScreen(
         animationSpec = tween(420, easing = FastOutSlowInEasing),
         label = "searchMode",
     )
+    val libP by animateFloatAsState(
+        targetValue = if (openLibrary != null) 1f else 0f,
+        animationSpec = tween(380, easing = FastOutSlowInEasing),
+        label = "library",
+    )
+    // Frosted background: searching or in a library.
+    val frost = maxOf(progress, libP)
     val kb by animateFloatAsState(
         targetValue = if (keyboardShown) 1f else 0f,
         animationSpec = tween(360, easing = FastOutSlowInEasing),
@@ -145,6 +189,7 @@ fun HomeScreen(
         else closePanel()                                    // then: close suggestions
     }
     fun goHome() {
+        openLibraryId = null
         query = ""
         submitted = null
         open = false
@@ -184,8 +229,12 @@ fun HomeScreen(
     LaunchedEffect(goHomeRequests) { if (goHomeRequests > 0) goHome() }
 
     // Back: panel open over results → back to results; otherwise → idle home.
-    BackHandler(enabled = searching) {
-        if (open && submitted != null) closePanel() else goHome()
+    BackHandler(enabled = searching || openLibraryId != null) {
+        when {
+            openLibraryId != null -> openLibraryId = null
+            open && submitted != null -> closePanel()
+            else -> goHome()
+        }
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -198,7 +247,7 @@ fun HomeScreen(
         )
         // Frosted glass: a pre-blurred copy (works on every Android version,
         // unlike Modifier.blur which needs Android 12) plus a light veil.
-        if (progress > 0f) {
+        if (frost > 0f) {
             Image(
                 painter = painterResource(R.drawable.home_background_blur),
                 contentDescription = null,
@@ -206,16 +255,16 @@ fun HomeScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
-                        alpha = progress
+                        alpha = frost
                         // Settles from slightly zoomed to rest, so the glass feels like it lands.
-                        val s = 1.04f - 0.04f * progress
+                        val s = 1.04f - 0.04f * frost
                         scaleX = s; scaleY = s
                     },
             )
             Box(
                 Modifier
                     .fillMaxSize()
-                    .graphicsLayer { alpha = progress }
+                    .graphicsLayer { alpha = frost }
                     .background(Color(0x1F2A0006)), // faint dark-red tint helps white text
             )
         }
@@ -242,8 +291,11 @@ fun HomeScreen(
                     )
                 }
 
-                // "Listen..." zooms out and fades away.
-                if (progress < 1f) {
+                val home = (1f - progress) * (1f - libP) // idle home showing (1) or not (0)
+                val scrollFadePx = with(LocalDensity.current) { 520.u.toPx() }
+
+                // "Listen..." zooms out and fades away; scrolls up and away to the libraries.
+                if (progress < 1f && libP < 1f) {
                     Image(
                         painter = painterResource(R.drawable.listen_title),
                         contentDescription = "Listen",
@@ -255,8 +307,59 @@ fun HomeScreen(
                             .graphicsLayer {
                                 val s = 1f - 0.35f * progress
                                 scaleX = s; scaleY = s
-                                alpha = 1f - progress
+                                translationY = -homeScroll.value.toFloat()
+                                alpha = home * (1f - homeScroll.value / scrollFadePx).coerceIn(0f, 1f)
                             },
+                    )
+
+                    // Libraries, under "Listen...": the page scrolls, the search bar stays put.
+                    val screenH = maxHeight / 1.u
+                    val barBottom = 64f + BAR_HEIGHT_IDLE
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                alpha = home
+                                compositingStrategy = CompositingStrategy.Offscreen
+                            }
+                            // Tiles dissolve as they pass under the search bar.
+                            .drawWithContent {
+                                drawContent()
+                                val clear = (barBottom - 30f).u.toPx() / size.height
+                                val solid = (barBottom + 80f).u.toPx() / size.height
+                                drawRect(
+                                    Brush.verticalGradient(0f to Color.Transparent, clear to Color.Transparent, solid to Color.Black),
+                                    blendMode = BlendMode.DstIn,
+                                )
+                            }
+                            .verticalScroll(homeScroll, enabled = !searching && openLibraryId == null),
+                    ) {
+                        Spacer(Modifier.height((screenH - LIBRARY_PEEK).u))
+                        LibraryGrid(
+                            liked = libraries.byId(LIKED_ID)!!,
+                            history = libraries.byId(HISTORY_ID)!!,
+                            custom = libraries.custom,
+                            onOpen = { openLibraryId = it.id },
+                            onCreate = onCreateLibrary,
+                        )
+                        Spacer(Modifier.height((dockInset + 40f).u))
+                    }
+                }
+
+                // A library's songs.
+                val pageLibrary = openLibrary ?: lastLibrary
+                if (libP > 0f && pageLibrary != null) {
+                    LibraryPage(
+                        library = pageLibrary,
+                        onBack = { openLibraryId = null },
+                        // Libraries play in a loop, showing "Name — 3 of 20" on Now Playing.
+                        onPlay = { i -> onPlay(pageLibrary.tracks, i, pageLibrary.name) },
+                        dockInset = dockInset,
+                        modifier = Modifier.graphicsLayer {
+                            alpha = libP
+                            translationY = (1f - libP) * 48.u.toPx()
+                        },
                     )
                 }
 
@@ -267,7 +370,7 @@ fun HomeScreen(
                         state = results,
                         onPlay = { track ->
                             (results as? ResultsState.Done)?.let { done ->
-                                onPlay(done.tracks, done.tracks.indexOf(track), done.query)
+                                onPlay(done.tracks, done.tracks.indexOf(track), null)
                             }
                         },
                         onRetry = { attempt++ },
@@ -308,7 +411,7 @@ fun HomeScreen(
                         ),
                 )
 
-                SearchBar(
+                if (libP < 1f) SearchBar(
                     query = query,
                     // Blinking cursor while typing, and on the idle screen like the mockup.
                     active = keyboardShown || !searching,
@@ -318,7 +421,8 @@ fun HomeScreen(
                     compact = progress,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = barTop.u, start = 96.u, end = 96.u),
+                        .padding(top = barTop.u, start = 96.u, end = 96.u)
+                        .graphicsLayer { alpha = 1f - libP },
                 )
 
                 // Glass keyboard slides up from the bottom edge.
@@ -352,7 +456,9 @@ private fun HomeScreenPreview() {
         HomeScreen(
             youtube = YouTubeSearch(apiKey = ""),
             history = remember { SearchHistory(context) },
+            libraries = remember { LibraryStore(context) },
             onPlay = { _, _, _ -> },
+            onCreateLibrary = {},
             onVoiceSearch = {},
         )
     }

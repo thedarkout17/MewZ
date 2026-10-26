@@ -98,6 +98,14 @@ class PlayerController(context: Context) {
     /** Now Playing screen open (true) or minimized to the dock (false). */
     var expanded by mutableStateOf(false)
 
+    /**
+     * Called once per play when a song has actually played for [COUNTS_AS_PLAYED_MS]
+     * (paused time doesn't count). History listens to this.
+     */
+    var onPlayedLongEnough: ((Track) -> Unit)? = null
+    private var playedMs = 0L
+    private var reportedPlay = false
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var loadJob: Job? = null
     private var skipJob: Job? = null
@@ -141,8 +149,15 @@ class PlayerController(context: Context) {
         // Seek bar / timer: read the position a few times a second while playing.
         scope.launch {
             while (isActive) {
-                if (exo.isPlaying) positionSeconds = exo.currentPosition / 1000f
-                delay(250)
+                if (exo.isPlaying) {
+                    positionSeconds = exo.currentPosition / 1000f
+                    playedMs += POLL_MS
+                    if (!reportedPlay && playedMs >= COUNTS_AS_PLAYED_MS) {
+                        reportedPlay = true
+                        current?.let { onPlayedLongEnough?.invoke(it) }
+                    }
+                }
+                delay(POLL_MS)
             }
         }
     }
@@ -225,6 +240,11 @@ class PlayerController(context: Context) {
         loadJob?.cancel()
         index = i
         error = null
+        // A fresh play (not a resume after a link refresh) starts the 3-second count again.
+        if (resumeAtMs == 0L) {
+            playedMs = 0L
+            reportedPlay = false
+        }
         positionSeconds = resumeAtMs / 1000f
         durationSeconds = (track.durationSeconds ?: 0).toFloat()
         isBuffering = true
@@ -339,6 +359,10 @@ class PlayerController(context: Context) {
 }
 
 private const val TAG = "MuZ"
+
+private const val POLL_MS = 250L
+/** A song goes into History once it has played this long. */
+private const val COUNTS_AS_PLAYED_MS = 3_000L
 
 /**
  * How much of the next song to download ahead: ~5 s of 128 kbps audio (80 KB)

@@ -231,7 +231,7 @@ body {
 .dock .meta .t { font-size: calc(60 * var(--u)); }
 .dock .meta .a { font-size: calc(44 * var(--u)); }
 .dock .meta { flex: 1; }
-.kb-up .dock { transform: translateY(calc(320 * var(--u))); }
+.kb-up .dock, .naming .dock { transform: translateY(calc(320 * var(--u))); }
 .expanded .dock { opacity: 0; pointer-events: none; }
 
 .ctrls { display: flex; align-items: center; gap: calc(32 * var(--u)); flex: none; }
@@ -364,6 +364,106 @@ body {
   .caret.on { animation: none; opacity: 1; }
 }
 
+/* ---------- Libraries (LibraryTiles.kt / LibraryPage.kt) ---------- */
+/* Home scrolls: "Listen..." first, then glass squares two per row. The bar stays put. */
+.home-scroll {
+  position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
+  transition: opacity .42s var(--ease);
+  -webkit-mask-image: linear-gradient(transparent calc(266 * var(--u)), #000 calc(376 * var(--u)));
+  mask-image: linear-gradient(transparent calc(266 * var(--u)), #000 calc(376 * var(--u)));
+}
+.home-scroll::-webkit-scrollbar { display: none; }
+.home-first { position: relative; height: calc(1090 * var(--u)); }   /* screen minus the 110px peek */
+.home-first .title { top: calc(600 * var(--u)); }
+.lib-grid {
+  display: grid; grid-template-columns: repeat(2, calc(760 * var(--u)));
+  column-gap: calc(80 * var(--u)); justify-content: center;
+  padding-bottom: calc(40 * var(--u));
+}
+.has-dock .lib-grid { padding-bottom: calc(320 * var(--u)); }
+.lib-tile { height: calc(950 * var(--u)); display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; border: 0; padding: 0; background: none; color: #fff; text-align: left; cursor: pointer; font-family: var(--font-app); }
+.lib-tile .pane {
+  width: calc(760 * var(--u)); height: calc(760 * var(--u)); border-radius: calc(72 * var(--u));
+  display: grid; place-items: center; box-sizing: border-box;
+  background: linear-gradient(rgba(255,255,255,.24), rgba(255,255,255,.06) 55%, rgba(255,255,255,.10)),
+              url("home_background_blur.jpg") center / cover;
+  border: calc(2 * var(--u)) solid rgba(255,255,255,.18); border-top-color: rgba(255,255,255,.6);
+  transition: transform .12s;
+}
+.lib-tile:active .pane { transform: scale(.98); }
+.lib-tile:focus-visible { outline: 0; }
+.lib-tile:focus-visible .pane { outline: calc(4 * var(--u)) solid #fff; outline-offset: calc(4 * var(--u)); }
+.lib-tile .pane svg { width: calc(250 * var(--u)); height: calc(250 * var(--u)); filter: drop-shadow(0 4px 16px rgba(0,0,0,.18)); }
+.lib-tile .n { display: block; margin: calc(30 * var(--u)) 0 0 calc(12 * var(--u)); font: 500 calc(66 * var(--u)) / 1.2 var(--font-app); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 8px rgba(0,0,0,.33); }
+.lib-tile .c { display: block; margin: calc(4 * var(--u)) 0 0 calc(12 * var(--u)); font-size: calc(46 * var(--u)); color: rgba(255,255,255,.72); text-shadow: 0 2px 8px rgba(0,0,0,.33); }
+.searching .home-scroll, .in-library .home-scroll { opacity: 0; pointer-events: none; }
+.in-library .glass, .in-library .veil { opacity: 1; transform: scale(1); }
+.bar { transition-property: top, height, width, padding, margin, font-size, left, opacity; }
+.in-library .bar { opacity: 0; pointer-events: none; }
+
+/* Library page: name at the top shrinks as the songs scroll up */
+.libpage { position: absolute; inset: 0; --c: 0; color: #fff; animation: libIn .38s var(--ease) both; }
+@keyframes libIn { from { opacity: 0; transform: translateY(calc(48 * var(--u))); } }
+.libpage .list {
+  position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
+  padding: calc(420 * var(--u)) calc(80 * var(--u)) calc(48 * var(--u)); box-sizing: border-box;
+  --cut: calc((420 - 230 * var(--c)) * var(--u));
+  -webkit-mask-image: linear-gradient(transparent calc(var(--cut) - 30 * var(--u)), #000 calc(var(--cut) + 30 * var(--u)));
+  mask-image: linear-gradient(transparent calc(var(--cut) - 30 * var(--u)), #000 calc(var(--cut) + 30 * var(--u)));
+}
+.libpage .list::-webkit-scrollbar { display: none; }
+.libpage .list > * + * { margin-top: calc(20 * var(--u)); }
+.has-dock .libpage .list { padding-bottom: calc(328 * var(--u)); }
+.libpage .back { position: absolute; left: calc(56 * var(--u)); top: calc(48 * var(--u)); --s: calc(130 * var(--u)); --g: calc(70 * var(--u)); }
+.libpage .head {
+  position: absolute; pointer-events: none; right: calc(120 * var(--u));
+  left: calc((96 + 134 * var(--c)) * var(--u)); top: calc((176 - 112 * var(--c)) * var(--u));
+}
+.libpage .head .n { font: 600 calc((132 - 56 * var(--c)) * var(--u)) / 1.2 var(--font-app); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 8px rgba(0,0,0,.33); }
+.libpage .head .c { font-size: calc(46 * var(--u)); color: rgba(255,255,255,.72); opacity: calc(1 - var(--c)); text-shadow: 0 2px 8px rgba(0,0,0,.33); }
+.libpage .msg { padding-top: calc(340 * var(--u)); }
+
+/* + list on Now Playing (AddToLibraryPanel.kt) */
+.picker-catch { position: absolute; inset: 0; }
+.picker {
+  position: absolute; left: calc(760 * var(--u)); bottom: calc(222 * var(--u));   /* clear of the artwork */
+  width: calc(1000 * var(--u)); box-sizing: border-box; padding: calc(28 * var(--u)) 0;
+  border-radius: calc(56 * var(--u)); color: #fff;
+  background: linear-gradient(rgba(255,255,255,.14), rgba(255,255,255,.03)), rgba(30, 7, 11, .95);
+  border: calc(2 * var(--u)) solid rgba(255,255,255,.18); border-top-color: rgba(255,255,255,.6);
+  animation: pickIn .22s var(--ease) both;
+}
+@keyframes pickIn { from { opacity: 0; transform: translateY(calc(24 * var(--u))); } }
+.picker .h { padding: 0 0 calc(12 * var(--u)) calc(56 * var(--u)); font: 500 calc(44 * var(--u)) var(--font-app); color: rgba(255,255,255,.72); }
+.picker .rows { max-height: calc(544 * var(--u)); overflow-y: auto; scrollbar-width: none; }
+.picker .row {
+  display: flex; align-items: center; gap: calc(36 * var(--u)); width: 100%; height: calc(136 * var(--u));
+  padding: 0 calc(40 * var(--u)); box-sizing: border-box; border: 0; background: transparent; color: #fff;
+  font-family: var(--font-app); text-align: left; cursor: pointer;
+}
+.picker .row:hover, .picker .row:focus-visible { background: rgba(255,255,255,.10); outline: 0; }
+.picker .ic { flex: none; width: calc(96 * var(--u)); height: calc(96 * var(--u)); border-radius: calc(24 * var(--u)); display: grid; place-items: center; background: linear-gradient(rgba(255,255,255,.18), rgba(255,255,255,.08)); }
+.picker .ic svg { width: calc(52 * var(--u)); height: calc(52 * var(--u)); }
+.picker .tx { flex: 1; min-width: 0; }
+.picker .tx b { display: block; font: 500 calc(52 * var(--u)) / 1.2 var(--font-app); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.picker .tx span { font-size: calc(36 * var(--u)); color: rgba(255,255,255,.72); }
+.picker .ck svg { width: calc(60 * var(--u)); height: calc(60 * var(--u)); }
+
+/* New library sheet (NewLibrarySheet.kt): over everything, its own keyboard */
+.namer { position: absolute; inset: 0; background: url("home_background_blur.jpg") center / cover; animation: fadeIn .3s var(--ease) both; }
+.namer::before { content: ""; position: absolute; inset: 0; background: rgba(42, 0, 6, .2); }
+@keyframes fadeIn { from { opacity: 0; } }
+.namer .x { position: absolute; left: calc(56 * var(--u)); top: calc(48 * var(--u)); --s: calc(130 * var(--u)); --g: calc(64 * var(--u)); }
+.namer .h { position: absolute; left: 0; right: 0; top: calc(64 * var(--u)); text-align: center; color: #fff; font: 600 calc(80 * var(--u)) / 1.2 var(--font-app); text-shadow: 0 2px 8px rgba(0,0,0,.33); }
+.namer .name {
+  position: absolute; left: calc(200 * var(--u)); right: calc(200 * var(--u)); top: calc(250 * var(--u)); height: calc(200 * var(--u));
+  border-radius: 999px; background: var(--frost); display: flex; align-items: center; padding: 0 calc(80 * var(--u));
+  font: 400 calc(84 * var(--u)) / 1 var(--font-app); color: var(--red-text); white-space: pre; overflow: hidden;
+}
+.namer .name .ph { opacity: .45; }
+.namer .kb { transform: none; opacity: 1; pointer-events: auto; animation: kbIn .36s var(--ease) both; }
+@keyframes kbIn { from { transform: translateY(100%); } }
+
 /* Android-style toast */
 .toast {
   position: absolute; left: 50%; top: calc(560 * var(--u));
@@ -452,6 +552,11 @@ body {
       <div class="veil"></div>
       <div class="catcher" id="catcher" hidden></div>
 
+      <div class="home-scroll" id="homeScroll">
+        <div class="home-first"><img class="title" src="listen_title.png" alt="Listen..."></div>
+        <div class="lib-grid" id="libGrid" aria-label="Libraries"></div>
+      </div>
+
       <div class="bar" id="bar" role="button" aria-label="Search">
         <svg class="search" viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="10.5" cy="10.5" r="7.5" fill="none" stroke="var(--red)" stroke-width="2.6"/>
@@ -469,9 +574,14 @@ body {
         </button>
       </div>
 
-      <img class="title" src="listen_title.png" alt="Listen...">
 
       <div class="results" id="results" hidden aria-label="Search results"></div>
+
+      <div class="libpage" id="libPage" hidden>
+        <div class="list" id="libList"></div>
+        <button class="cbtn back" type="button" id="libBack" aria-label="Back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <div class="head"><div class="n" id="libName"></div><div class="c" id="libCount"></div></div>
+      </div>
 
       <ul class="suggest" id="suggest" aria-label="Suggestions"></ul>
 
@@ -511,12 +621,26 @@ body {
           <div class="tiles">
             <button class="tile" type="button" data-act="shuffle" aria-label="Shuffle" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3.5c1.6 0 3 .8 3.9 2.1l3.2 4.8c.9 1.3 2.3 2.1 3.9 2.1H20M3 17h3.5c1.6 0 3-.8 3.9-2.1M13.6 9.1c.9-1.3 2.3-2.1 3.9-2.1H20M17.5 4.5 20 7l-2.5 2.5M17.5 13.5 20 16l-2.5 2.5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             <button class="tile" type="button" data-act="repeat" aria-label="Loop this song" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11v-1a3 3 0 0 1 3-3h12M16.5 4.5 19 7l-2.5 2.5M20 13v1a3 3 0 0 1-3 3H5M7.5 19.5 5 17l2.5-2.5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-            <button class="tile" type="button" data-act="add" aria-label="Add to library"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+            <button class="tile" type="button" data-act="like" aria-label="Like" aria-pressed="false"></button>
+            <button class="tile" type="button" data-act="add" aria-label="Add to library" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+          </div>
+          <div class="picker-catch" id="pickerCatch" hidden>
+            <div class="picker" id="picker" role="dialog" aria-label="Add to library">
+              <div class="h">Add to library</div>
+              <div class="rows" id="pickerRows"></div>
+            </div>
           </div>
         </div>
         <div class="art" id="art">
           <div class="cover" id="cover"><span></span></div>
         </div>
+      </div>
+
+      <div class="namer" id="namer" hidden role="dialog" aria-label="New library">
+        <button class="cbtn x" type="button" id="namerCancel" aria-label="Cancel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+        <div class="h">New library</div>
+        <div class="name" id="namerField"></div>
+        <div class="kb" id="namerKb" aria-label="Keyboard"></div>
       </div>
 
       <div class="toast" id="toast" hidden></div>
@@ -543,7 +667,7 @@ body {
       <span class="chip">Canvas <b>2000×1200</b></span>
       <span class="chip">Scale <b id="scale">–</b></span>
       <span class="chip">Back <b>Esc</b></span>
-      <span class="chip">Build <b>v0.28 · API + audio-only</b></span>
+      <span class="chip">Build <b>v0.29 · libraries</b></span>
       <label class="chip" for="mode">Results
         <select class="sel" id="mode">
           <option value="ok">Sample songs</option>
@@ -752,6 +876,7 @@ const shuffled = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { 
 
 function playQueue(tracks, i, name) {
   P.original = tracks; P.name = name; P.expanded = true;
+  P.wrap = !!name;   // libraries loop; search results stop at the end
   if (P.shuffle) { const first = tracks[i]; P.queue = [first, ...shuffled(tracks.filter(t => t !== first))]; i = 0; }
   else P.queue = tracks;
   logEvent('player.playQueue', `${tracks.length} songs${name ? ` from "${name}"` : ' from search'}, start at #${i + 1}`);
@@ -759,6 +884,7 @@ function playQueue(tracks, i, name) {
 }
 function playAt(i) {
   P.index = i; P.pos = 0; P.dur = toSec(cur().duration); P.playing = true;
+  P.played = 0; P.reported = false;   // History counts a song after 3 s of actual playing
   logEvent('player.load', `${JSON.stringify(cur().title)} – ${cur().artist}`);
   tick(); renderPlayer();
 }
@@ -767,6 +893,8 @@ function tick() {
   P.timer = setInterval(() => {
     if (!P.playing) return;
     P.pos += 0.25;
+    P.played += 0.25;
+    if (!P.reported && P.played >= 3) { P.reported = true; recordPlayed(cur()); }
     if (P.pos >= P.dur) {                               // STATE_ENDED
       if (P.loop) { P.pos = 0; logEvent('player.ended', 'loop this song'); }
       else if (hasNext()) { logEvent('player.ended', 'next in queue'); next(); return; }
@@ -788,10 +916,11 @@ function toggleShuffle() {
   logEvent('player', `shuffle ${P.shuffle ? 'on' : 'off'}`); renderPlayer();
 }
 function toggleLoop() { P.loop = !P.loop; logEvent('player', `loop this song ${P.loop ? 'on' : 'off'}`); renderPlayer(); }
-function setExpanded(v) { P.expanded = v; logEvent('player', v ? 'expand' : 'minimize'); renderPlayer(); }
+function setExpanded(v) { P.expanded = v; if (!v) picking = false; logEvent('player', v ? 'expand' : 'minimize'); renderPlayer(); }
 // ⌄ / Back on Now Playing: minimize to the dock AND go back to the "Listen..." home.
 function minimizeToHome() {
   setExpanded(false);
+  closeLibrary(true);
   query = ''; open = false; keyboard = false; suggestions = []; submitted = null;
   clearTimeout(searchTimer);
   logEvent('home', 'back to Listen…');
@@ -833,6 +962,12 @@ function renderPlayer() {
   sh.classList.toggle('on', P.shuffle); sh.setAttribute('aria-pressed', P.shuffle);
   const rp = playerEl.querySelector('[data-act="repeat"]');
   rp.classList.toggle('on', P.loop); rp.setAttribute('aria-pressed', P.loop);
+  const lk = playerEl.querySelector('[data-act="like"]'), liked = isLiked(t);
+  lk.classList.toggle('on', liked); lk.setAttribute('aria-pressed', liked);
+  lk.innerHTML = liked ? LICON.heartFilled : LICON.heart;
+  const ad = playerEl.querySelector('[data-act="add"]');
+  ad.classList.toggle('on', picking); ad.setAttribute('aria-pressed', picking);
+  renderPicker();
   renderProgress();
 }
 playerEl.addEventListener('click', (e) => {
@@ -841,7 +976,8 @@ playerEl.addEventListener('click', (e) => {
     e.stopPropagation();
     ({ prev: previous, next, toggle: togglePlay, min: minimizeToHome,
        shuffle: toggleShuffle, repeat: toggleLoop,
-       add: () => { logEvent('player', 'add to library (coming later)'); toast('Libraries are coming soon'); },
+       like: () => { toggleLike(cur()); },
+       add: () => { picking = !picking; logEvent('player', picking ? '+ list open' : '+ list closed'); renderPlayer(); },
     })[b.dataset.act]();
     return;
   }
@@ -902,22 +1038,197 @@ function renderResults() {
     resultsEl.append(message(`No songs found for “${results.query}”`, "Try a different spelling or the artist's name."));
   } else {
     results.tracks.forEach((tr, i) => {
-      const b = document.createElement('button');
-      b.type = 'button'; b.className = 'track';
-      b.style.setProperty('--i', Math.min(i, 6));
-      const th = document.createElement('div'); th.className = 'thumb';
-      th.style.background = `linear-gradient(135deg, hsl(${tr.hue} 70% 45%), hsl(${(tr.hue + 50) % 360} 75% 30%))`;
-      const mono = document.createElement('span'); mono.textContent = tr.artist[0]; th.append(mono);
-      const meta = document.createElement('div'); meta.className = 'meta';
-      const t = document.createElement('div'); t.className = 't'; t.textContent = tr.title;
-      const a = document.createElement('div'); a.className = 'a'; a.textContent = `${tr.artist}  ·  ${tr.duration}`;
-      meta.append(t, a);
-      b.append(th, meta);
+      const b = trackButton(tr, i);
       b.addEventListener('click', () => play(tr));
       resultsEl.append(b);
     });
   }
 }
+function trackButton(tr, i) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'track';
+  b.style.setProperty('--i', Math.min(i, 6));
+  if (i > 6) b.style.animation = 'none';
+  const th = document.createElement('div'); th.className = 'thumb';
+  th.style.background = `linear-gradient(135deg, hsl(${tr.hue} 70% 45%), hsl(${(tr.hue + 50) % 360} 75% 30%))`;
+  const mono = document.createElement('span'); mono.textContent = tr.artist[0]; th.append(mono);
+  const meta = document.createElement('div'); meta.className = 'meta';
+  const t = document.createElement('div'); t.className = 't'; t.textContent = tr.title;
+  const a = document.createElement('div'); a.className = 'a'; a.textContent = `${tr.artist}  ·  ${tr.duration}`;
+  meta.append(t, a);
+  b.append(th, meta);
+  return b;
+}
+
+// ---------- Libraries (mirrors LibraryStore.kt; saved in this browser) ----------
+const HEART = 'M12 20.3c-.4 0-.8-.2-1.1-.4C6.6 16.2 3 13.1 3 9.2 3 6.6 5 4.6 7.5 4.6c1.7 0 3.4.9 4.5 2.4 1.1-1.5 2.8-2.4 4.5-2.4C19 4.6 21 6.6 21 9.2c0 3.9-3.6 7-7.9 10.7-.3.2-.7.4-1.1.4z';
+const LICON = {
+  heart: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${HEART}" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>`,
+  heartFilled: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${HEART}" fill="#fff" stroke="#fff" stroke-width="1" stroke-linejoin="round"/></svg>`,
+  clock: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="#fff" stroke-width="1.8"/><path d="M12 7v5.2l3.4 2.2" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  note: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 17.5V6l11-2.5V15" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.5" cy="17.5" r="2.5" fill="none" stroke="#fff" stroke-width="1.8"/><circle cx="17.5" cy="15" r="2.5" fill="none" stroke="#fff" stroke-width="1.8"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+const LIB_KEY = 'muz.libraries', HISTORY_SIZE = 30;
+function loadLibs() {
+  try {
+    const v = JSON.parse(localStorage.getItem(LIB_KEY) || 'null');
+    if (v && Array.isArray(v.liked) && Array.isArray(v.history) && Array.isArray(v.custom)) return v;
+  } catch {}
+  return { liked: [], history: [], custom: [] };
+}
+let LIB = loadLibs();
+function saveLibs() { try { localStorage.setItem(LIB_KEY, JSON.stringify(LIB)); } catch {} }
+const sameSong = (a, b) => a.artist === b.artist && a.title === b.title;   // stands in for videoId
+function libById(id) {
+  if (id === 'liked') return { id, name: 'Liked', tracks: LIB.liked };
+  if (id === 'history') return { id, name: 'History', tracks: LIB.history };
+  return LIB.custom.find(l => l.id === id) || null;
+}
+const isLiked = t => LIB.liked.some(x => sameSong(x, t));
+function like(t) { if (isLiked(t)) return; LIB.liked = [t, ...LIB.liked]; saveLibs(); }
+function toggleLike(t) {
+  if (isLiked(t)) LIB.liked = LIB.liked.filter(x => !sameSong(x, t)); else LIB.liked = [t, ...LIB.liked];
+  saveLibs(); logEvent('library', `${isLiked(t) ? 'liked' : 'unliked'} ${JSON.stringify(t.title)}`);
+  renderPlayer(); renderLibraries();
+}
+function recordPlayed(t) {
+  LIB.history = [t, ...LIB.history.filter(x => !sameSong(x, t))].slice(0, HISTORY_SIZE);
+  saveLibs(); logEvent('history', `+ ${JSON.stringify(t.title)} (played 3 s)`); renderLibraries();
+}
+const inLib = (lib, t) => lib.tracks.some(x => sameSong(x, t));
+function addTo(lib, t) {
+  like(t);   // adding anywhere likes it too
+  if (!inLib(lib, t)) lib.tracks.push(t);
+  saveLibs(); logEvent('library', `added ${JSON.stringify(t.title)} to "${lib.name}" (and liked)`);
+}
+function removeFrom(lib, t) {
+  lib.tracks = lib.tracks.filter(x => !sameSong(x, t));
+  saveLibs(); logEvent('library', `removed ${JSON.stringify(t.title)} from "${lib.name}"`);
+}
+function createLibrary(name) {
+  const lib = { id: 'l' + Date.now().toString(36), name, tracks: [] };
+  LIB.custom.push(lib); saveLibs(); logEvent('library', `created "${name}"`);
+  return lib;
+}
+const songCount = n => n === 1 ? '1 song' : `${n} songs`;
+const libIcon = id => id === 'liked' ? LICON.heartFilled : id === 'history' ? LICON.clock : LICON.note;
+
+// Home grid: Liked, History, yours, then +
+function renderLibraries() {
+  const grid = $('libGrid');
+  grid.textContent = '';
+  const items = [libById('liked'), libById('history'), ...LIB.custom, null];
+  items.forEach(lib => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'lib-tile';
+    b.innerHTML = `<span class="pane">${lib ? libIcon(lib.id) : LICON.plus}</span><span class="n"></span>${lib ? '<span class="c"></span>' : ''}`;
+    b.querySelector('.n').textContent = lib ? lib.name : 'New library';
+    if (lib) b.querySelector('.c').textContent = songCount(lib.tracks.length);
+    b.addEventListener('click', () => lib ? openLibrary(lib.id) : openNamer(null));
+    grid.append(b);
+  });
+  if (openLibId) renderLibPage(false);
+}
+
+// Library page
+let openLibId = null;
+function openLibrary(id) {
+  openLibId = id; logEvent('library', `open "${libById(id).name}"`);
+  $('libList').scrollTop = 0;
+  renderLibPage(true); render();
+}
+function closeLibrary(silent) {
+  if (!openLibId) return;
+  openLibId = null; if (!silent) logEvent('back', 'library → home');
+  $('libPage').hidden = true; render();
+}
+function renderLibPage(fresh) {
+  const lib = libById(openLibId);
+  if (!lib) { closeLibrary(true); return; }
+  $('libPage').hidden = false;
+  if (fresh) { $('libPage').style.animation = 'none'; void $('libPage').offsetWidth; $('libPage').style.animation = ''; }
+  $('libName').textContent = lib.name;
+  $('libCount').textContent = songCount(lib.tracks.length);
+  const list = $('libList');
+  list.textContent = '';
+  if (!lib.tracks.length) {
+    list.append(message('No songs yet', lib.id === 'liked' ? 'Tap the heart on Now Playing to like a song.'
+      : lib.id === 'history' ? 'Songs you play show up here.' : "Tap + on Now Playing to add the song that's playing."));
+    return;
+  }
+  lib.tracks.forEach((tr, i) => {
+    const b = trackButton(tr, fresh ? i : 99);
+    // No autoplay: picking a song plays the library from there, looping.
+    b.addEventListener('click', () => playQueue(lib.tracks.slice(), i, lib.name));
+    list.append(b);
+  });
+}
+$('libList').addEventListener('scroll', () => {
+  $('libPage').style.setProperty('--c', Math.min(1, $('libList').scrollTop / ((420 - 190) * screen.getBoundingClientRect().width / 2000)));
+});
+$('libBack').addEventListener('click', () => closeLibrary());
+
+// + list on Now Playing (your libraries; Liked isn't listed)
+let picking = false;
+function renderPicker() {
+  $('pickerCatch').hidden = !picking;
+  if (!picking) return;
+  const t = cur(), rows = $('pickerRows');
+  rows.textContent = '';
+  const row = (icon, title, sub, checked, act) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'row';
+    b.innerHTML = `<span class="ic">${icon}</span><span class="tx"><b></b>${sub ? '<span></span>' : ''}</span>${checked ? `<span class="ck">${LICON.check}</span>` : ''}`;
+    b.querySelector('b').textContent = title;
+    if (sub) b.querySelector('.tx span').textContent = sub;
+    b.addEventListener('click', (e) => { e.stopPropagation(); act(); });
+    return b;
+  };
+  LIB.custom.forEach(lib => rows.append(row(LICON.note, lib.name, songCount(lib.tracks.length), inLib(lib, t), () => {
+    if (inLib(lib, t)) removeFrom(lib, t); else { addTo(lib, t); picking = false; }
+    renderPlayer(); renderLibraries();
+  })));
+  rows.append(row(LICON.plus, 'New library', null, false, () => { picking = false; renderPlayer(); openNamer(t); }));
+}
+$('pickerCatch').addEventListener('click', (e) => {
+  if (e.target.closest('.picker')) return;
+  e.stopPropagation(); picking = false; renderPlayer();
+});
+
+// New library sheet
+let naming = false, namingFor = null, newName = '';
+const NAME_KB = {
+  el: () => $('namerKb'), sym: () => namerSymbols, flip: () => { namerSymbols = !namerSymbols; },
+  type: (c) => { if (newName.length < 40 && (c !== ' ' || (newName && !newName.endsWith(' ')))) { newName += c; renderNamer(); } },
+  backspace: () => { newName = newName.slice(0, -1); renderNamer(); },
+  hide: () => closeNamer(), action: () => createFromNamer(), actionLabel: 'Create', actionIcon: false,
+};
+const shownName = () => newName.replace(/^./, c => c.toUpperCase());
+function openNamer(track) {
+  naming = true; namingFor = track; newName = ''; namerSymbols = false;
+  logEvent('library', track ? `new library for ${JSON.stringify(track.title)}` : 'new library');
+  buildKeyboard(NAME_KB); renderNamer();
+}
+function closeNamer() { naming = false; $('namer').hidden = true; screen.classList.remove('naming'); }
+function createFromNamer() {
+  const name = shownName().trim();
+  if (!name) return;
+  const lib = createLibrary(name);
+  if (namingFor) addTo(lib, namingFor);
+  closeNamer(); renderLibraries(); renderPlayer();
+}
+function renderNamer() {
+  $('namer').hidden = !naming;
+  screen.classList.toggle('naming', naming);
+  const f = $('namerField');
+  f.textContent = '';
+  caret2.classList.remove('on'); void caret2.offsetWidth; caret2.classList.add('on');
+  if (!newName) { const ph = document.createElement('span'); ph.className = 'ph'; ph.textContent = 'Library name'; f.append(caret2, ph); }
+  else f.append(shownName(), caret2);
+}
+const caret2 = document.createElement('span'); caret2.className = 'caret';
+$('namerCancel').addEventListener('click', closeNamer);
 
 // ---------- Render ----------
 const caret = document.createElement('span'); caret.className = 'caret';
@@ -984,6 +1295,7 @@ function render() {
   if (k !== wasKb) logEvent('keyboard', k ? 'up' : 'down');
   wasSearching = s; wasKb = k;
   screen.classList.toggle('searching', s);
+  screen.classList.toggle('in-library', !!openLibId);
   kbEl.classList.toggle('up', k);
   screen.classList.toggle('kb-up', k);
   kbEl.inert = !k;
@@ -1006,7 +1318,7 @@ const PAGES = {
   letters: ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'],
   symbols: ['1234567890', '-/:;()$&@"', ".,?!'#+"],
 };
-let symbols = false;
+let symbols = false, namerSymbols = false;
 
 function type(c) {
   if (c === ' ' && (!query || query.endsWith(' '))) return;   // no leading/double spaces
@@ -1041,37 +1353,53 @@ function makeKey({ label, html, w = 1, cls = '', act, repeat = false }) {
   k.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); act(); } });
   return k;
 }
-function buildKeyboard() {
+// The search keyboard; NewLibrarySheet passes its own handlers and a "Create" key.
+const SEARCH_KB = {
+  el: () => kbEl, sym: () => symbols, flip: () => { symbols = !symbols; },
+  type: (c) => type(c), backspace: () => backspace(), hide: () => { keyboard = false; render(); },
+  action: () => { if (query.trim()) submit(query.trim()); }, actionLabel: 'Search', actionIcon: true,
+};
+function buildKeyboard(h = SEARCH_KB) {
+  const kbEl = h.el();
   kbEl.textContent = '';
-  const [r1, r2, r3] = symbols ? PAGES.symbols : PAGES.letters;
+  const [r1, r2, r3] = h.sym() ? PAGES.symbols : PAGES.letters;
   const row = () => { const r = document.createElement('div'); r.className = 'kb-row'; kbEl.appendChild(r); return r; };
   const gap = () => { const g = document.createElement('span'); g.className = 'kb-gap'; return g; };
-  const char = (c) => makeKey({ label: c, act: () => type(c) });
+  const char = (c) => makeKey({ label: c, act: () => h.type(c) });
+  const symbols = h.sym(), type = h.type, backspace = h.backspace;
 
   const a = row(); [...r1].forEach(c => a.appendChild(char(c)));
   const b = row(); if (r2.length < 10) b.appendChild(gap());
   [...r2].forEach(c => b.appendChild(char(c))); if (r2.length < 10) b.appendChild(gap());
   const c = row();
   c.appendChild(makeKey({ label: symbols ? 'abc' : '123', w: 1.5, cls: 'small',
-    act: () => { symbols = !symbols; buildKeyboard(); } }));
+    act: () => { h.flip(); buildKeyboard(h); } }));
   [...r3].forEach(ch => c.appendChild(char(ch)));
   c.appendChild(makeKey({ label: 'Delete', html: ICON.back, w: 1.5, act: backspace, repeat: true }));
   const d = row();
-  d.appendChild(makeKey({ label: 'Hide keyboard', html: ICON.hide, w: 1.5,
-    act: () => { keyboard = false; render(); } }));
+  d.appendChild(makeKey({ label: 'Hide keyboard', html: ICON.hide, w: 1.5, act: h.hide }));
   d.appendChild(char(','));
   d.appendChild(makeKey({ label: 'space', w: 4.5, cls: 'small faded', act: () => type(' ') }));
   d.appendChild(char('.'));
-  d.appendChild(makeKey({ label: 'Search', html: `${ICON.search}<span>Search</span>`, w: 2, cls: 'small accent',
-    act: () => { if (query.trim()) submit(query.trim()); } }));
+  d.appendChild(makeKey({ label: h.actionLabel, html: `${h.actionIcon ? ICON.search : ''}<span>${h.actionLabel}</span>`,
+    w: 2, cls: 'small accent', act: h.action }));
 }
 buildKeyboard();
 
 // Computer keyboard works too while ours is up (handy for testing).
 document.addEventListener('keydown', (e) => {
   if (!voice.hidden || e.target.closest?.('.btn, .voice')) return;
+  if (naming) {      // the new-library sheet takes the keys while it's up
+    if (e.key === 'Escape') closeNamer();
+    else if (e.key === 'Backspace') { e.preventDefault(); NAME_KB.backspace(); }
+    else if (e.key === 'Enter') { e.preventDefault(); createFromNamer(); }
+    else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) { e.preventDefault(); NAME_KB.type(e.key.toLowerCase()); }
+    return;
+  }
   if (e.key === 'Escape') {
-    if (P.expanded && cur()) minimizeToHome();       // player's BackHandler wins
+    if (picking) { picking = false; renderPlayer(); }
+    else if (P.expanded && cur()) minimizeToHome();       // player's BackHandler wins
+    else if (openLibId) closeLibrary();
     else if (searching()) back();
     return;
   }
@@ -1130,7 +1458,8 @@ $('fsBtn').addEventListener('click', async () => {
 $('resetBtn').addEventListener('click', () => {
   query = ''; open = false; keyboard = false; suggestions = []; symbols = false;
   submitted = null; clearTimeout(searchTimer); voice.hidden = true; toastEl.hidden = true;
-  clearInterval(P.timer); Object.assign(P, { queue: [], index: -1, playing: false, expanded: false }); renderPlayer();
+  clearInterval(P.timer); Object.assign(P, { queue: [], index: -1, playing: false, expanded: false }); picking = false; renderPlayer();
+  closeNamer(); openLibId = null; $('libPage').hidden = true; $('homeScroll').scrollTop = 0;
   buildKeyboard();
   log.textContent = '';
   wasSearching = wasKb = false;
@@ -1143,6 +1472,7 @@ function updateScale() {
 }
 new ResizeObserver(updateScale).observe(screen);
 updateScale();
+renderLibraries();
 logEvent('app', 'MainActivity.onCreate → HomeScreen');
 render();
 </script>
