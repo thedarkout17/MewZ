@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import kotlin.math.sin
 import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.atan2
 import kotlin.math.PI
 import androidx.compose.animation.core.LinearEasing
@@ -489,6 +490,7 @@ private fun NowPlaying(
                 contentDescription = stringResource(R.string.like),
                 active = libraries.isLiked(track),
                 onClick = { libraries.toggleLike(track) },
+                onAnimation = { t -> HeartGlyph(t) },
             )
             GlassTile(
                 icon = R.drawable.ic_add,
@@ -745,6 +747,33 @@ private fun GlassTile(
 
 /** How long a tile animation runs. */
 private const val TILE_ANIM_MS = 760
+
+/**
+ * The heart, beating once for its animation: a strong "lub" then a softer "dub"
+ * (with a little dip between them), then it settles. Filled throughout, since
+ * it's being liked.
+ */
+@Composable
+private fun HeartGlyph(t: Float) {
+    fun bump(at: Float, width: Float): Float {
+        val x = (t - at) / width
+        return exp(-0.5f * x * x)
+    }
+    // Starts from a slight squeeze, so the first beat has something to push off.
+    val scale = 1f -
+        0.10f * bump(0.04f, 0.035f) +
+        0.34f * bump(0.17f, 0.055f) -
+        0.08f * bump(0.29f, 0.04f) +
+        0.22f * bump(0.42f, 0.06f)
+    Icon(
+        painterResource(R.drawable.ic_heart_filled),
+        contentDescription = null,
+        tint = Color.White,
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer { scaleX = scale; scaleY = scale },
+    )
+}
 
 /**
  * The loop icon drawn live, for its animation: its two arrows sit on one rounded
