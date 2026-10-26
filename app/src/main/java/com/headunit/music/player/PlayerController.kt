@@ -96,6 +96,9 @@ class PlayerController(context: Context) {
     /** Reached the end while a top-up was still loading: play on once it arrives. */
     private var advanceWhenMixArrives = false
 
+    /** Songs added with a hold that haven't played yet; they line up right after the current song. */
+    private val heldQueued = HashSet<String>()
+
     // ---- Playback ----
     var isPlaying by mutableStateOf(false)
         private set
@@ -185,6 +188,7 @@ class PlayerController(context: Context) {
     fun playQueue(tracks: List<Track>, startIndex: Int, name: String? = null, wrap: Boolean = false) {
         if (startIndex !in tracks.indices) return
         stopMix()
+        heldQueued.clear()
         originalOrder = tracks
         queueName = name
         wrapQueue = wrap
@@ -206,6 +210,7 @@ class PlayerController(context: Context) {
      */
     fun playWithMix(track: Track) {
         stopMix()
+        heldQueued.clear()
         autoMix = true
         mixSeen += track.videoId
         originalOrder = listOf(track)
@@ -214,6 +219,36 @@ class PlayerController(context: Context) {
         queue = listOf(track)
         playAt(0) // also starts loading the mix
         expanded = true
+    }
+
+    /**
+     * Hold-to-queue: [track] plays after the current song (and after anything
+     * queued before it), ahead of the rest of the list or mix. If nothing is
+     * playing it just starts playing. Returns true if it was queued.
+     */
+    fun addToQueue(track: Track): Boolean {
+        val now = current
+        if (now == null) {
+            playWithMix(track)
+            return false
+        }
+        // Already coming up later? Move it forward rather than playing it twice.
+        val behind = queue.take(index + 1)
+        val ahead = queue.drop(index + 1).filter { it.videoId != track.videoId }
+        val queuedFirst = ahead.takeWhile { it.videoId in heldQueued }.size
+        queue = behind + ahead.take(queuedFirst) + track + ahead.drop(queuedFirst)
+
+        // Same spot in the unshuffled order, so turning shuffle off keeps it.
+        val base = originalOrder.filter { it.videoId != track.videoId || it == now }
+        val at = (base.indexOf(now) + 1).coerceAtLeast(0)
+        val afterNow = base.drop(at)
+        val q = afterNow.takeWhile { it.videoId in heldQueued }.size
+        originalOrder = base.take(at) + afterNow.take(q) + track + afterNow.drop(q)
+
+        heldQueued += track.videoId
+        mixSeen += track.videoId
+        if (queuedFirst == 0) preloadNext() // it's the very next song now
+        return true
     }
 
     private fun stopMix() {
@@ -308,6 +343,7 @@ class PlayerController(context: Context) {
         loadJob?.cancel()
         index = i
         error = null
+        heldQueued -= track.videoId
         advanceWhenMixArrives = false
         // Mix running low: fetch more, seeded by this song so it keeps drifting naturally.
         if (autoMix && i >= queue.size - 3) extendMix(track)

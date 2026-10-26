@@ -10,7 +10,9 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,6 +30,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -75,6 +79,8 @@ fun SearchResults(
     state: ResultsState,
     onPlay: (Track) -> Unit,
     onRetry: () -> Unit,
+    /** A song was held: add it to the queue. */
+    onQueue: (Track) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Crossfade(targetState = state, animationSpec = tween(220), label = "results", modifier = modifier) { s ->
@@ -87,7 +93,7 @@ fun SearchResults(
                         detail = "Try a different spelling or the artist's name.",
                     )
                 } else {
-                    TrackList(s.tracks, onPlay)
+                    TrackList(s.tracks, onPlay, onQueue)
                 }
             is ResultsState.Failed -> FailureMessage(s.reason, onRetry)
         }
@@ -95,7 +101,7 @@ fun SearchResults(
 }
 
 @Composable
-private fun TrackList(tracks: List<Track>, onPlay: (Track) -> Unit) {
+private fun TrackList(tracks: List<Track>, onPlay: (Track) -> Unit, onQueue: (Track) -> Unit) {
     with(LocalDesignScale.current) {
         val fade = 48.u
         LazyColumn(
@@ -118,14 +124,16 @@ private fun TrackList(tracks: List<Track>, onPlay: (Track) -> Unit) {
                 },
         ) {
             itemsIndexed(tracks, key = { _, t -> t.videoId }) { index, track ->
-                TrackRow(track, index, onClick = { onPlay(track) })
+                TrackRow(track, index, onClick = { onPlay(track) }, onLongClick = { onQueue(track) })
             }
         }
     }
 }
 
 @Composable
-internal fun TrackRow(track: Track, index: Int, onClick: () -> Unit) {
+@OptIn(ExperimentalFoundationApi::class)
+internal fun TrackRow(track: Track, index: Int, onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
+    val haptics = LocalHapticFeedback.current
     // First screenful staggers in; rows further down just appear as you scroll.
     val anim = remember { Animatable(if (index < 6) 0f else 1f) }
     LaunchedEffect(Unit) {
@@ -147,10 +155,17 @@ internal fun TrackRow(track: Track, index: Int, onClick: () -> Unit) {
                     translationY = (1f - anim.value) * slide.toPx()
                 }
                 .clip(RoundedCornerShape(28.u))
-                .clickable(
+                .combinedClickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = ripple(color = Color.White),
                     onClick = onClick,
+                    // Hold: add to the queue.
+                    onLongClick = onLongClick?.let { hold ->
+                        {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            hold()
+                        }
+                    },
                 )
                 .padding(horizontal = 16.u),
         ) {

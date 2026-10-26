@@ -106,6 +106,8 @@ fun HomeScreen(
     onPlay: (tracks: List<Track>, index: Int, collection: String?) -> Unit,
     /** The + tile: name a new library. */
     onCreateLibrary: () -> Unit,
+    /** A song (in search results or a library) was held: add it to the queue. */
+    onQueue: (Track) -> Unit = {},
     onVoiceSearch: () -> Unit,
     voiceResult: String? = null,
     onVoiceResultConsumed: () -> Unit = {},
@@ -355,6 +357,7 @@ fun HomeScreen(
                         onBack = { openLibraryId = null },
                         // Libraries play in a loop, showing "Name — 3 of 20" on Now Playing.
                         onPlay = { i -> onPlay(pageLibrary.tracks, i, pageLibrary.name) },
+                        onQueue = onQueue,
                         dockInset = dockInset,
                         modifier = Modifier.graphicsLayer {
                             alpha = libP
@@ -374,6 +377,7 @@ fun HomeScreen(
                             }
                         },
                         onRetry = { attempt++ },
+                        onQueue = onQueue,
                         modifier = Modifier
                             .align(Alignment.TopStart)
                             .fillMaxSize()

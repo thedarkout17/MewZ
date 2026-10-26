@@ -41,6 +41,7 @@ import com.headunit.music.R
 import com.headunit.music.data.HISTORY_ID
 import com.headunit.music.data.LIKED_ID
 import com.headunit.music.data.Library
+import com.headunit.music.data.Track
 import com.headunit.music.ui.home.Message
 import com.headunit.music.ui.home.TrackRow
 import com.headunit.music.ui.theme.LocalDesignScale
@@ -61,6 +62,8 @@ fun LibraryPage(
     onBack: () -> Unit,
     /** A song was tapped: its position in [library]. */
     onPlay: (index: Int) -> Unit,
+    /** A song was held: add it to the queue. */
+    onQueue: (Track) -> Unit = {},
     dockInset: Float,
     modifier: Modifier = Modifier,
 ) {
@@ -117,7 +120,7 @@ fun LibraryPage(
                         },
                 ) {
                     itemsIndexed(library.tracks, key = { _, t -> t.videoId }) { i, track ->
-                        TrackRow(track, i, onClick = { onPlay(i) })
+                        TrackRow(track, i, onClick = { onPlay(i) }, onLongClick = { onQueue(track) })
                     }
                 }
             }

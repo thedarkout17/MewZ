@@ -87,6 +87,10 @@ class MainActivity : ComponentActivity() {
                             else player.playQueue(tracks, index, name = collection, wrap = true)
                         },
                         onCreateLibrary = { namingFor = null; naming = true },
+                        onQueue = { track ->
+                            val msg = if (player.addToQueue(track)) "Added to queue: ${track.title}" else "Playing ${track.title}"
+                            Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
+                        },
                         dockInset = if (player.current != null) DOCK_HEIGHT else 0f,
                         onKeyboardShownChange = { keyboardUp = it },
                         goHomeRequests = goHomeRequests,
