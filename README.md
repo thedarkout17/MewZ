@@ -1,4 +1,4 @@
-# MuZ — headunit music player
+# MewZ — headunit music player
 
 ![Home screen](docs/home_screen_preview.png)
 
