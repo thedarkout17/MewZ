@@ -56,7 +56,7 @@ internal fun MicNotesGlyph(t: Float) {
             notes.forEachIndexed { i, (start, deg, dist) ->
                 val u = ((t - start) / 0.62f).coerceIn(0f, 1f)
                 if (u <= 0f || u >= 1f) return@forEachIndexed
-                val a = Math.toRadians(deg.toDouble()).toFloat()
+                val a = (deg * PI / 180.0).toFloat()
                 val ease = 1f - (1f - u) * (1f - u)
                 val sway = sin(u * PI.toFloat() * 2.2f + i) * 1.6f
                 // Sway sideways to the direction of travel.
