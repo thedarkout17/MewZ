@@ -434,7 +434,7 @@ private fun NowPlaying(
     /** The lyrics tile: open the Lyrics page. */
     onOpenLyrics: () -> Unit,
     showingLyrics: Boolean,
-    /** 0 = artwork, 1 = lyrics in its place (the song title moves over a little to make room). */
+    /** 0 = artwork, 1 = lyrics in its place. */
     lyricsP: Float,
 ) {
     val track = player.current ?: return
@@ -485,11 +485,8 @@ private fun NowPlaying(
                 },
         ) {
             Spacer(Modifier.height(10.u))
-            // With lyrics showing, keep the song's name clear of the lyrics card.
-            val clear = (lyricsRight(width) + 24f - colX).coerceAtLeast(0f) * lyricsP
             Text(
                 track.title,
-                modifier = Modifier.padding(start = clear.u),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
@@ -501,7 +498,6 @@ private fun NowPlaying(
             Spacer(Modifier.height(14.u))
             Text(
                 track.artist,
-                modifier = Modifier.padding(start = clear.u),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,

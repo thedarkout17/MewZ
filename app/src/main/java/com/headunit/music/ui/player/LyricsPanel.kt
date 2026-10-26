@@ -67,8 +67,8 @@ private sealed interface LyricsState {
 }
 
 /**
- * The song's lyrics, in place of the artwork on Now Playing (a soft glass card
- * that reaches across to the transport). Synced lyrics follow along: the line
+ * The song's lyrics, in place of the artwork on Now Playing, straight on the
+ * blurred background, reaching across to the transport. Synced lyrics follow along: the line
  * being sung is bright and kept a third of the way down, the rest dimmed; tap a
  * line to jump the song there. Scroll yourself and it stops following for a few
  * seconds. Plain lyrics just scroll.
@@ -89,9 +89,6 @@ fun LyricsPanel(player: PlayerController, track: Track, modifier: Modifier = Mod
         BoxWithConstraints(
             modifier
                 .clip(shape)
-                .background(Color(0x38000000))
-                .background(Brush.verticalGradient(listOf(Color(0x1FFFFFFF), Color(0x0AFFFFFF))))
-                .border(1.5f.u, Brush.verticalGradient(listOf(Color(0x80FFFFFF), Color(0x1FFFFFFF))), shape)
                 // Taps on the card aren't "empty space" (which would minimize the player).
                 .pointerInput(Unit) { detectTapGestures { } },
         ) {
@@ -178,8 +175,8 @@ private fun LyricsList(player: PlayerController, lyrics: Lyrics, height: android
                     line.text.ifBlank { "♪" },
                     style = TextStyle(
                         color,
-                        fontSize = (if (lyrics.synced) 60 else 52).usp,
-                        lineHeight = (if (lyrics.synced) 74 else 66).usp,
+                        fontSize = (if (lyrics.synced) 68 else 58).usp,
+                        lineHeight = (if (lyrics.synced) 82 else 72).usp,
                         fontWeight = if (now) FontWeight.Bold else FontWeight.SemiBold,
                         shadow = LibraryTextShadow,
                     ),
