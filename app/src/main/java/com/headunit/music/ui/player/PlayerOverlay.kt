@@ -187,7 +187,7 @@ fun PlayerOverlay(
                 val artSize = lerp(ART_MINI, ART_FULL)
                 val x = lerp(ART_MINI_X, ART_FULL_X)
                 val y = lerp(dockTop + (DOCK_HEIGHT - ART_MINI) / 2f, artTopFull)
-                val radius = lerp(28f, 40f)
+                val radius = lerp(44f, 72f)
                 val shape = RoundedCornerShape(radius.u)
                 Box(
                     modifier = Modifier
