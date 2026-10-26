@@ -1,0 +1,652 @@
+package com.headunit.music.phone.ui.home
+
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+
+import com.headunit.music.phone.ui.components.BackHandler
+import com.headunit.music.phone.ui.components.Glass
+import com.headunit.music.phone.log
+import com.headunit.music.core.search.AlbumMatching
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
+import com.headunit.music.core.model.HISTORY_ID
+import com.headunit.music.core.model.LIKED_ID
+import com.headunit.music.core.model.Library
+import com.headunit.music.phone.data.LibraryStore
+import com.headunit.music.phone.ui.library.LibraryGrid
+import com.headunit.music.phone.ui.library.LibraryPage
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import org.jetbrains.compose.resources.painterResource
+import com.headunit.music.phone.res.*
+import com.headunit.music.phone.res.Res
+import com.headunit.music.phone.data.SearchHistory
+import com.headunit.music.core.sources.SuggestionSource
+import com.headunit.music.core.model.Track
+import com.headunit.music.core.search.Album
+import com.headunit.music.core.search.SearchResult
+import com.headunit.music.phone.data.YouTubeAlbums
+import com.headunit.music.phone.data.YouTubeSuggestions
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import com.headunit.music.phone.data.YouTubeSearch
+import com.headunit.music.phone.ui.components.BAR_HEIGHT_COMPACT
+import com.headunit.music.phone.ui.components.BAR_HEIGHT_IDLE
+import com.headunit.music.phone.ui.components.SearchBar
+import com.headunit.music.phone.ui.theme.DesignCanvas
+import com.headunit.music.phone.ui.theme.LocalDesignScale
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.spring
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
+import kotlin.math.abs
+import kotlin.math.sign
+
+private const val MAX_SUGGESTIONS = 14 // same as YouTube's suggestion list
+/** While typing, at most this many past searches lead the list; the rest are suggestions. */
+private const val MAX_HISTORY_WHILE_TYPING = 2
+private const val SUGGEST_DEBOUNCE_MS = 120L
+
+/** How many past searches the empty search bar lists (scrollable). */
+private const val MAX_RECENT_SHOWN = 30
+
+/** How much of the first library row peeks up from the bottom of the idle screen (design px). */
+private const val LIBRARY_PEEK = 110f
+
+/**
+ * Home screen.
+ *
+ * Idle: gradient background, search pill, script "Listen..." in the middle.
+ *
+ * Searching (bar tapped): "Listen..." zooms out, the background frosts over,
+ * the bar rises and slims down, and the iOS keyboard comes up. Suggestions
+ * appear as you type: three above the keyboard, the last two blurred behind it.
+ * The ⌄ key or a tap on empty space puts the keyboard away to show all five;
+ * tap the bar to bring it back.
+ *
+ * Recent searches: opening the bar with nothing typed lists all past searches
+ * in a scrollable list (clock icon, × to remove). While typing, matching past searches lead the list.
+ *
+ * Results: sending a search (Search key, a suggestion, or voice) closes the
+ * panel and lists YouTube songs under the bar. Tap the bar to search again;
+ * back from results returns to the idle home screen.
+ *
+ * Libraries: scroll down from "Listen..." to big glass squares, two per row
+ * (Liked, History, yours, then + to make one). Tapping one opens its songs
+ * under its name; nothing plays until you pick a song.
+ */
+@Composable
+fun HomeScreen(
+    youtube: YouTubeSearch,
+    history: SearchHistory,
+    libraries: LibraryStore,
+    /**
+     * A song was tapped: the whole list, the tapped position, and the library's
+     * name (null for search results, which aren't a collection).
+     */
+    onPlay: (tracks: List<Track>, index: Int, collection: String?) -> Unit,
+    /** The + tile: name a new library. */
+    onCreateLibrary: () -> Unit,
+    /** A library you made was held (with where its tile is on screen): show its options. */
+    onHoldLibrary: (Library, Rect) -> Unit = { _, _ -> },
+    /** A song (in search results or a library) was held: add it to the queue. */
+    onQueue: (Track) -> Unit = {},
+    suggestionProvider: SuggestionSource = remember { YouTubeSuggestions() },
+    /** Height (design px) of the mini player docked at the bottom; content stays clear of it. */
+    dockInset: Float = 0f,
+    /** Tells the player dock to slide away while our keyboard is up. */
+    onKeyboardShownChange: (Boolean) -> Unit = {},
+    /** Bump this to send the screen back to the idle "Listen..." home (e.g. after minimizing the player). */
+    goHomeRequests: Int = 0,
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    var open by rememberSaveable { mutableStateOf(false) }       // search panel open
+    var keyboard by rememberSaveable { mutableStateOf(false) }   // our keyboard showing
+    var suggestions by remember { mutableStateOf(emptyList<String>()) }
+    var recent by remember { mutableStateOf(history.load()) }
+
+    // What the list under the bar shows: recent searches when nothing is typed;
+    // otherwise matching recent searches first, then suggestions.
+    val listItems = if (query.isBlank()) {
+        recent.take(MAX_RECENT_SHOWN).map { SuggestionItem(it, fromHistory = true) }
+    } else {
+        val past = history.matching(recent, query).take(MAX_HISTORY_WHILE_TYPING)
+        val fresh = suggestions.filterNot { s -> past.any { it.equals(s, ignoreCase = true) } }
+        (past.map { SuggestionItem(it, fromHistory = true) } +
+            fresh.map { SuggestionItem(it, fromHistory = false) }).take(MAX_SUGGESTIONS)
+    }
+
+    // Last search sent, and its results. `attempt` bumps to retry the same query.
+    var submitted by rememberSaveable { mutableStateOf<String?>(null) }
+    var attempt by remember { mutableStateOf(0) }
+    var results by remember { mutableStateOf<ResultsState>(ResultsState.Loading) }
+
+    // Library page open (by id, so it updates as songs are added).
+    var openLibraryId by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // Album opened from the search results, and its songs (fetched when it opens).
+    var openAlbum by remember { mutableStateOf<Album?>(null) }
+    var lastAlbum by remember { mutableStateOf<Album?>(null) }
+    var albumTracks by remember { mutableStateOf<AlbumTracks>(AlbumTracks.Loading) }
+    var albumAttempt by remember { mutableStateOf(0) }
+    val openLibrary: Library? = openLibraryId?.let { libraries.byId(it) }
+    // Kept for the closing animation after the page is dismissed.
+    var lastLibrary by remember { mutableStateOf<Library?>(null) }
+    SideEffect { if (openLibrary != null) lastLibrary = openLibrary }
+    val homeScroll = rememberScrollState()
+    val squish = remember { SquishState() }
+    val scope = rememberCoroutineScope()
+
+    val searching = open || query.isNotEmpty() || submitted != null
+    val showResults = submitted != null && !open
+    val keyboardShown = open && keyboard
+
+    val progress by animateFloatAsState(
+        targetValue = if (searching) 1f else 0f,
+        animationSpec = tween(420, easing = FastOutSlowInEasing),
+        label = "searchMode",
+    )
+    val libP by animateFloatAsState(
+        targetValue = if (openLibrary != null) 1f else 0f,
+        animationSpec = tween(380, easing = FastOutSlowInEasing),
+        label = "library",
+    )
+    // Frosted background: searching or in a library.
+    val albumP by animateFloatAsState(
+        targetValue = if (openAlbum != null) 1f else 0f,
+        animationSpec = tween(380, easing = FastOutSlowInEasing),
+        label = "album",
+    )
+    val frost = maxOf(progress, libP)
+    val kb by animateFloatAsState(
+        targetValue = if (keyboardShown) 1f else 0f,
+        animationSpec = tween(360, easing = FastOutSlowInEasing),
+        label = "keyboard",
+    )
+
+    fun activate() { open = true; keyboard = true }
+    fun submit(text: String) {
+        query = text
+        open = false
+        keyboard = false
+        recent = history.add(text)
+        if (text == submitted) attempt++ else submitted = text
+    }
+    /** Close the search panel; if a search is showing, the bar goes back to its query. */
+    fun closePanel() {
+        open = false
+        keyboard = false
+        submitted?.let { query = it }
+    }
+    fun goHome() {
+        openLibraryId = null
+        openAlbum = null
+        query = ""
+        submitted = null
+        open = false
+        keyboard = false
+    }
+
+    /**
+     * A tap on empty space on the search screen. While typing, the first tap puts
+     * the keyboard away and the next closes the panel (back to results, if any);
+     * on the results, or with nothing searched, it goes back home.
+     */
+    fun tapOutside() {
+        when {
+            open && keyboard && query.isNotEmpty() -> keyboard = false
+            open && submitted != null -> closePanel()
+            else -> goHome()
+        }
+    }
+
+    // The search field and the iOS keyboard follow `keyboard`.
+    val searchFocus = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    LaunchedEffect(keyboardShown) {
+        if (keyboardShown) runCatching { searchFocus.requestFocus() } else focusManager.clearFocus()
+    }
+
+    // Run the search whenever a new query is sent (or Try again is tapped).
+    LaunchedEffect(submitted, attempt) {
+        val q = submitted ?: return@LaunchedEffect
+        results = ResultsState.Loading
+        coroutineScope {
+            // Albums come from YouTube Music at the same time (free; failures just mean no row).
+            val albums = async { runCatching { YouTubeAlbums.search(q) }.getOrDefault(emptyList()) }
+            results = when (val r = youtube.search(q)) {
+                is SearchResult.Success -> ResultsState.Done(q, r.tracks, nextPage = r.nextPageToken)
+                is SearchResult.Failure -> ResultsState.Failed(r.reason)
+            }
+            val now = results
+            // Only albums that really fit this search (see AlbumMatching.relevant).
+            val found = AlbumMatching.relevant(albums.await(), q, (now as? ResultsState.Done)?.tracks.orEmpty()) { log(it) }
+            val latest = results
+            if (found.isNotEmpty() && latest is ResultsState.Done && latest.query == q) results = latest.copy(albums = found)
+        }
+    }
+
+    // Fetch an album's songs when it's opened (or Try again is tapped).
+    LaunchedEffect(openAlbum, albumAttempt) {
+        val album = openAlbum ?: return@LaunchedEffect
+        lastAlbum = album
+        albumTracks = AlbumTracks.Loading
+        albumTracks = runCatching { YouTubeAlbums.tracks(album) }
+            .fold({ if (it.isEmpty()) AlbumTracks.Failed else AlbumTracks.Done(it) }, { AlbumTracks.Failed })
+    }
+
+    /** Scrolled near the end of the results: fetch the next page and add it on. */
+    fun loadMore() {
+        val done = results as? ResultsState.Done ?: return
+        val token = done.nextPage ?: return
+        if (done.loadingMore) return
+        results = done.copy(loadingMore = true, moreFailed = null)
+        scope.launch {
+            val r = youtube.search(done.query, pageToken = token)
+            // A new search may have started meanwhile; leave its results alone.
+            val now = results as? ResultsState.Done ?: return@launch
+            if (now.query != done.query || !now.loadingMore) return@launch
+            results = when (r) {
+                is SearchResult.Success -> {
+                    val seen = now.tracks.mapTo(HashSet()) { it.videoId }
+                    val added = r.tracks.filter { seen.add(it.videoId) }
+                    now.copy(
+                        tracks = now.tracks + added,
+                        // A page with nothing new means YouTube is out of results; stop
+                        // there rather than spend quota paging through repeats.
+                        nextPage = r.nextPageToken.takeIf { added.isNotEmpty() },
+                        loadingMore = false,
+                    )
+                }
+                is SearchResult.Failure -> now.copy(loadingMore = false, moreFailed = r.reason)
+            }
+        }
+    }
+
+    // Fetch suggestions as the query changes (short debounce so fast typing doesn't thrash).
+    LaunchedEffect(query) {
+        if (query.isBlank()) {
+            suggestions = emptyList()
+        } else {
+            delay(SUGGEST_DEBOUNCE_MS)
+            suggestions = suggestionProvider.suggest(query, MAX_SUGGESTIONS)
+        }
+    }
+
+    LaunchedEffect(keyboardShown) { onKeyboardShownChange(keyboardShown) }
+
+    LaunchedEffect(goHomeRequests) { if (goHomeRequests > 0) goHome() }
+
+    // Back: panel open over results → back to results; otherwise → idle home.
+    BackHandler(enabled = searching || openLibraryId != null) {
+        when {
+            openLibraryId != null -> openLibraryId = null
+            openAlbum != null -> openAlbum = null // album → back to the results
+            open && submitted != null -> closePanel()
+            else -> goHome()
+        }
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        // Sharp background, always there.
+        Image(
+            painter = painterResource(Res.drawable.home_background),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
+        // Frosted glass: a pre-blurred copy (works on every Android version,
+        // unlike Modifier.blur which needs Android 12) plus a light veil.
+        if (frost > 0f) {
+            Image(
+                painter = painterResource(Res.drawable.home_background_blur),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        alpha = frost
+                        // Settles from slightly zoomed to rest, so the glass feels like it lands.
+                        val s = 1.04f - 0.04f * frost
+                        scaleX = s; scaleY = s
+                    },
+            )
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { alpha = frost }
+                    .background(Color(0x1F2A0006)), // faint dark-red tint helps white text
+            )
+        }
+
+        // Everything below sits under the status bar / Dynamic Island, not behind it.
+        DesignCanvas(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
+            with(LocalDesignScale.current) {
+                // Bar rises and slims down as search opens; suggestions follow it.
+                fun lerp(idle: Float, searching: Float) = idle + (searching - idle) * progress
+                val barTop = lerp(64f, 28f)
+                val barHeight = lerp(BAR_HEIGHT_IDLE, BAR_HEIGHT_COMPACT)
+                val screenHeightPx = constraints.maxHeight.toFloat()
+                // The iOS keyboard's height (0 when it's down), in pixels and design px.
+                val keyboardHeightPx = WindowInsets.ime.getBottom(LocalDensity.current).toFloat()
+                val keyboardHeight = with(LocalDensity.current) { keyboardHeightPx.toDp() } / 1.u
+
+                // Taps on empty space while searching.
+                if (searching) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = ::tapOutside,
+                            ),
+                    )
+                }
+
+                val home = (1f - progress) * (1f - libP) // idle home showing (1) or not (0)
+                val squishMaxPx = with(LocalDensity.current) { SQUISH_PULL.u.toPx() }
+                val scrollFadePx = with(LocalDensity.current) { 520.u.toPx() }
+
+                // "Listen..." zooms out and fades away; scrolls up and away to the libraries.
+                if (progress < 1f && libP < 1f) {
+                    Image(
+                        painter = painterResource(Res.drawable.listen_title),
+                        contentDescription = "Listen",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .offset(y = 20.u)
+                            .width(1090.u)
+                            .graphicsLayer {
+                                val s = 1f - 0.35f * progress
+                                // Over-scroll: grows as you pull, springs back with the bar.
+                                val g = 1f + LISTEN_GROW * (squish.pull / squishMaxPx)
+                                scaleX = s * g
+                                scaleY = s * g
+                                translationY = -homeScroll.value.toFloat()
+                                alpha = home * (1f - homeScroll.value / scrollFadePx).coerceIn(0f, 1f)
+                            },
+                    )
+
+                    // Libraries, under "Listen...": the page scrolls, the search bar stays put.
+                    val screenH = maxHeight / 1.u
+                    val barBottom = 64f + BAR_HEIGHT_IDLE
+                    val squishScroll = remember(squishMaxPx) { squishConnection(squish, squishMaxPx, scope) }
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                alpha = home
+                                compositingStrategy = CompositingStrategy.Offscreen
+                            }
+                            // Tiles dissolve as they pass under the search bar.
+                            .drawWithContent {
+                                drawContent()
+                                val clear = (barBottom - 30f).u.toPx() / size.height
+                                val solid = (barBottom + 80f).u.toPx() / size.height
+                                drawRect(
+                                    Brush.verticalGradient(0f to Color.Transparent, clear to Color.Transparent, solid to Color.Black),
+                                    blendMode = BlendMode.DstIn,
+                                )
+                            }
+                            // Dragging past either end squishes the search bar instead.
+                            .nestedScroll(squishScroll)
+                            .verticalScroll(homeScroll, enabled = !searching && openLibraryId == null),
+                    ) {
+                        Spacer(Modifier.height((screenH - LIBRARY_PEEK).u))
+                        LibraryGrid(
+                            liked = libraries.byId(LIKED_ID)!!,
+                            history = libraries.byId(HISTORY_ID)!!,
+                            custom = libraries.custom,
+                            onOpen = { openLibraryId = it.id },
+                            onCreate = onCreateLibrary,
+                            onHoldLibrary = onHoldLibrary,
+                            squish = { squish.pull / squishMaxPx },
+                        )
+                        Spacer(Modifier.height((dockInset + 40f).u))
+                    }
+                }
+
+                // A library's songs.
+                val pageLibrary = openLibrary ?: lastLibrary
+                if (libP > 0f && pageLibrary != null) {
+                    LibraryPage(
+                        library = pageLibrary,
+                        onBack = { openLibraryId = null },
+                        // Libraries play in a loop, showing "Name — 3 of 20" on Now Playing.
+                        onPlay = { i ->
+                            libraries.touch(pageLibrary.id) // most recently played moves to the front
+                            onPlay(pageLibrary.tracks, i, pageLibrary.name)
+                        },
+                        onQueue = onQueue,
+                        // × on every row: History forgets it, Liked unlikes it, your libraries drop it.
+                        onRemove = { t ->
+                            when (pageLibrary.id) {
+                                HISTORY_ID -> libraries.removeFromHistory(t)
+                                LIKED_ID -> libraries.unlike(t)
+                                else -> libraries.removeFrom(pageLibrary.id, t)
+                            }
+                        },
+                        dockInset = dockInset,
+                        modifier = Modifier.graphicsLayer {
+                            alpha = libP
+                            translationY = (1f - libP) * 48.u.toPx()
+                        },
+                    )
+                }
+
+                // Results fill the space under the bar.
+                // (Not composed while the panel is open, so hidden rows can't be tapped.)
+                if (showResults) {
+                    SearchResults(
+                        state = results,
+                        onPlay = { track ->
+                            (results as? ResultsState.Done)?.let { done ->
+                                onPlay(done.tracks, done.tracks.indexOf(track), null)
+                            }
+                        },
+                        onRetry = { attempt++ },
+                        onQueue = onQueue,
+                        onLoadMore = ::loadMore,
+                        onTapEmptySpace = ::goHome,
+                        onOpenAlbum = { openAlbum = it },
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .fillMaxSize()
+                            .graphicsLayer { alpha = 1f - albumP }
+                            .padding(
+                                top = (barTop + barHeight + 12f).u,
+                                start = 80.u,
+                                end = 80.u,
+                                bottom = dockInset.u, // stop above the mini player
+                            ),
+                    )
+                }
+
+                // An album from the results, over them.
+                val pageAlbum = openAlbum ?: lastAlbum
+                if (albumP > 0f && pageAlbum != null) {
+                    AlbumPage(
+                        album = pageAlbum,
+                        state = albumTracks,
+                        onBack = { openAlbum = null },
+                        // Albums play like libraries: in order, looping, "Album — 3 of 12".
+                        onPlay = { tracks, i -> onPlay(tracks, i, pageAlbum.title) },
+                        onQueue = onQueue,
+                        onRetry = { albumAttempt++ },
+                        dockInset = dockInset,
+                        modifier = Modifier.graphicsLayer {
+                            alpha = albumP
+                            translationY = (1f - albumP) * 48.u.toPx()
+                        },
+                    )
+                }
+
+                // Suggestions line up with the text inside the bar.
+                if (open && listItems.isNotEmpty()) SearchSuggestions(
+                    query = query,
+                    items = listItems,
+                    onTapEmptySpace = ::tapOutside,
+                    // Scrolling the list puts the keyboard away so more of it shows.
+                    onUserScroll = { keyboard = false },
+                    onPick = ::submit,
+                    onRemove = { recent = history.remove(it) },
+                    // Rows blur as they pass behind the keyboard glass.
+                    glassTopPx = { screenHeightPx - keyboardHeightPx },
+                    // Lets the last rows scroll up clear of the keyboard (or the mini player).
+                    bottomPadding = (maxOf(keyboardHeight, dockInset * (1f - kb)) + 24f).u,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .fillMaxSize()
+                        .padding(
+                            top = (barTop + barHeight + lerp(40f, 24f)).u,
+                            // Icons sit under the bar's magnifier, text under the typed text,
+                            // × buttons under the mic.
+                            start = 126.u,
+                            end = 136.u,
+                        ),
+                )
+
+                if (libP < 1f && albumP < 1f) SearchBar(
+                    query = query,
+                    onQueryChange = { query = it; if (!open) activate() },
+                    // White outline only while typing.
+                    active = keyboardShown,
+                    focusRequester = searchFocus,
+                    onActivate = { if (!keyboardShown) activate() },
+                    // The keyboard went away by itself (e.g. dragged down): put the panel's keyboard state away too.
+                    onFocusLost = { if (keyboard) keyboard = false },
+                    onSearch = { if (query.isNotBlank()) submit(query.trim()) },
+                    onClear = { query = ""; activate() },
+                    compact = progress,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = barTop.u, start = 96.u, end = 96.u)
+                        .graphicsLayer {
+                            alpha = (1f - libP) * (1f - albumP)
+                            // Over-scroll squish: flatter and a touch wider; negative while
+                            // springing back, which briefly stretches it (the bounce).
+                            val k = squish.pull / squishMaxPx
+                            scaleY = 1f - SQUISH_Y * k
+                            scaleX = 1f + SQUISH_X * k
+                        },
+                )
+
+            }
+        }
+    }
+}
+
+/** How far (design px) you can drag past the end before the squish maxes out. */
+private const val SQUISH_PULL = 320f
+/** At full pull the bar is this much shorter / wider. */
+private const val SQUISH_Y = 0.16f
+private const val SQUISH_X = 0.035f
+/** "Listen..." grows this much at full pull. */
+private const val LISTEN_GROW = 0.18f
+
+/** How far the home page is being dragged past its end (px; 0 = at rest). */
+private class SquishState {
+    var pull by mutableFloatStateOf(0f)
+    var release: Job? = null
+}
+
+/**
+ * Feeds drags that run past the top or bottom of the home page into
+ * [SquishState] (with growing resistance, like a rubber band), and springs it
+ * back with a little bounce when the finger lifts. Flings aren't affected.
+ */
+private fun squishConnection(
+    state: SquishState,
+    maxPx: Float,
+    scope: kotlinx.coroutines.CoroutineScope,
+) = object : NestedScrollConnection {
+    /** +1 dragging down past the top, -1 dragging up past the bottom. */
+    private var dir = 0f
+
+    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+        if (source != NestedScrollSource.UserInput) return Offset.Zero
+        state.release?.cancel()
+        if (state.pull <= 0f) {
+            state.pull = 0f
+            return Offset.Zero
+        }
+        // Dragging back the other way un-squishes before the page scrolls again.
+        val towardRest = -available.y * dir
+        if (towardRest <= 0f) return Offset.Zero
+        val used = minOf(towardRest, state.pull)
+        state.pull -= used
+        return Offset(0f, -used * dir)
+    }
+
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+        if (source != NestedScrollSource.UserInput || available.y == 0f) return Offset.Zero
+        if (state.pull <= 0f) dir = sign(available.y)
+        if (sign(available.y) != dir) return Offset.Zero
+        val resistance = 0.5f * (1f - state.pull / maxPx).coerceAtLeast(0f)
+        state.pull = (state.pull + abs(available.y) * resistance).coerceAtMost(maxPx)
+        return available
+    }
+
+    override suspend fun onPreFling(available: Velocity): Velocity {
+        if (state.pull != 0f) {
+            val from = state.pull
+            state.release?.cancel()
+            state.release = scope.launch {
+                animate(
+                    initialValue = from,
+                    targetValue = 0f,
+                    animationSpec = spring(dampingRatio = 0.35f, stiffness = Spring.StiffnessMediumLow),
+                ) { v, _ -> state.pull = v }
+            }
+        }
+        return Velocity.Zero
+    }
+}

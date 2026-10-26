@@ -36,51 +36,33 @@ Nothing in `core`, `data` or `player` changes. The work is in `ui/`:
 5. Keep `applicationId = com.headunit.music` if it should update the headunit build
    in place (changing it loses saved libraries); use a new id for a separate app.
 
-## iPhone
+## iPhone (done: `phone/` + `iosApp/`)
 
-The cleanest route is Kotlin Multiplatform for the logic and SwiftUI for the screens.
+How it's put together, following the plan this section used to describe:
 
-### 1. Move `core` into a shared module
-1. Add a `shared` KMP module (targets: `androidTarget()`, `iosArm64()`,
-   `iosSimulatorArm64()`), with `kotlinx-coroutines-core` in `commonMain`.
-2. Move `app/src/main/java/com/headunit/music/core/**` into
-   `shared/src/commonMain/kotlin/` unchanged, and `app/src/test/.../core/**` into
-   `shared/src/commonTest/kotlin/` (swap JUnit for `kotlin.test`).
-3. Make `app` depend on `project(":shared")`. Package names stay the same, so no
-   Android code changes.
-4. The iOS build produces a framework Swift can import (`QueueState`, `LibraryBook`,
-   `SongText`, `AlbumMatching`, the source interfaces…).
+1. **Shared module.** `core/` moved unchanged into `shared/` (Kotlin Multiplatform:
+   Android, JVM, iOS). Its tests run on the JVM and on the iPhone simulator (which caught one
+   regex the iOS engine rejects, now fixed in `AlbumMatching`). The headunit depends on it.
+2. **Sources.** `phone/.../data` implements every interface in `core/sources/Sources.kt` in
+   plain Kotlin with Ktor:
+   - Search, suggestions, lyrics: the same HTTP calls as the headunit.
+   - Audio, Mix, albums: YouTube's InnerTube API called directly (`InnerTube.kt`), the way
+     NewPipeExtractor does it today: the **VISIONOS** client for audio (direct links, no JS
+     player or PO token), **WEB** "next" for Mixes and album track lists, **WEB_REMIX**
+     search for albums. No server.
+3. **Playback.** `phone/.../player/PlayerController.kt` is the headunit's controller over
+   `QueueState`, with the same API; `AvAudioEngine` (iosMain) plays through an
+   `AVQueuePlayer` (next song queued and buffered), with the `.playback` audio session,
+   `MPRemoteCommandCenter` and `MPNowPlayingInfoCenter`.
+4. **Saving.** `UserDefaults`, same JSON shapes as the headunit.
+5. **Screens.** Compose Multiplatform: the headunit's screens ported (`phone/.../ui`), on a
+   portrait canvas 1500 design px wide (where the headunit's sizes come out iPhone-sized),
+   with the iOS keyboard instead of the glass keyboard, a left-edge swipe for Back, and a
+   portrait Now Playing (`PlayerLayout.kt`).
 
-### 2. Implement the sources for iOS
-Each interface in `core/sources/Sources.kt` needs an iOS version:
-
-| Interface | Android today | iOS |
-|---|---|---|
-| `SongSearchSource` | YouTube Data API (`YouTubeSearch`) | Same HTTP calls; can be shared in `commonMain` with Ktor + kotlinx.serialization |
-| `SuggestionSource` | Google suggest endpoint | Same; shareable with Ktor |
-| `LyricsSource` | LRCLIB (`LyricsRepository`) | Same; shareable with Ktor |
-| `AudioStreamSource` | NewPipeExtractor (JVM only) | **No drop-in.** NewPipe doesn't run on iOS. Options: a small server you run that resolves stream URLs, or YouTube's IFrame player in a `WKWebView` (the approach tried on the old Hybrid branch) |
-| `MixSource`, `AlbumSource` | NewPipeExtractor | Same problem as audio: server-side, or YouTube Music's web endpoints called directly |
-
-Moving search/suggestions/lyrics from `HttpURLConnection` + `org.json` to Ktor +
-kotlinx.serialization is the first step that lets those three be shared as-is.
-
-### 3. Playback and saving on iOS
-- **Player:** `AVPlayer` / `AVQueuePlayer` takes the place of ExoPlayer. Drive it from
-  `QueueState` exactly as `PlayerController` does: call `next()`, `previous(seconds)`,
-  `enqueue`, `withMix`…, play `current`, and pre-load `ahead(1)` when it changes.
-- **Background audio:** `AVAudioSession` category `.playback`, plus the "Audio"
-  background mode.
-- **Car / lock screen controls:** `MPNowPlayingInfoCenter` and `MPRemoteCommandCenter`
-  (CarPlay is a separate entitlement).
-- **Saving:** `LibraryStore` saves `LibraryBook` as JSON; do the same with
-  `UserDefaults` or a file (or move the JSON to kotlinx.serialization in `commonMain`).
-
-### 4. Screens
-Rebuild in SwiftUI using the screens in `ui/` as the reference (or try Compose
-Multiplatform, though the glass blur effects would need platform code). The design
-values (sizes, colours, glass layers) are all in the Compose files and
-`ui/theme/Styles.kt` / `ui/components/Glass.kt`.
+The headunit could use the same InnerTube code for audio (it's plain Kotlin) if
+NewPipeExtractor ever falls behind: NewPipe's own dev branch has dropped the ANDROID client
+the 0.26.5 release still uses.
 
 ## Legal note
 Pulling YouTube audio without the official player isn't allowed by YouTube's terms.

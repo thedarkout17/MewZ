@@ -1,0 +1,301 @@
+package com.headunit.music.phone.ui.library
+
+import org.jetbrains.compose.resources.DrawableResource
+import com.headunit.music.phone.ui.components.GlassPane
+import com.headunit.music.phone.ui.components.Glass
+import com.headunit.music.phone.ui.theme.SecondaryText
+import com.headunit.music.phone.ui.theme.TextShadow
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.layout.ContentScale
+import org.jetbrains.compose.resources.painterResource
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import org.jetbrains.compose.resources.stringResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import com.headunit.music.phone.res.*
+import com.headunit.music.phone.res.Res
+import com.headunit.music.phone.ui.components.SquareArtwork
+import com.headunit.music.core.model.Track
+import coil3.request.ImageRequest
+import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import com.headunit.music.core.model.HISTORY_ID
+import com.headunit.music.core.model.LIKED_ID
+import com.headunit.music.core.model.Library
+import com.headunit.music.phone.ui.theme.LocalDesignScale
+
+/** Library squares on the home screen (design px). Two side by side, 80 from the screen edges. */
+const val LIBRARY_TILE = 640f
+const val LIBRARY_TILE_GAP = 100f
+/** At full over-scroll pull, tiles are this much skinnier / taller. */
+private const val TILE_SQUISH_X = 0.06f
+private const val TILE_SQUISH_Y = 0.05f
+/** Tile plus the name and song count under it. */
+const val LIBRARY_ROW_HEIGHT = LIBRARY_TILE + 190f
+
+/** What a tile on the home grid stands for. */
+sealed interface LibraryTileItem {
+    data class Open(val library: Library) : LibraryTileItem
+    data object Create : LibraryTileItem
+}
+
+/**
+ * The grid under "Listen...": Liked, History, your libraries, then a + tile
+ * to make a new one. Two large glass squares per row.
+ */
+@Composable
+fun LibraryGrid(
+    liked: Library,
+    history: Library,
+    custom: List<Library>,
+    onOpen: (Library) -> Unit,
+    onCreate: () -> Unit,
+    /**
+     * A library you made was held (with where its tile is on screen): show its
+     * options. Liked and History can't be held.
+     */
+    onHoldLibrary: (Library, Rect) -> Unit = { _, _ -> },
+    modifier: Modifier = Modifier,
+    /**
+     * Over-scroll squish, 0 at rest and 1 at full pull (briefly negative as it
+     * bounces back). Read while drawing, so it doesn't recompose the grid.
+     */
+    squish: () -> Float = { 0f },
+) {
+    val items = listOf(LibraryTileItem.Open(liked), LibraryTileItem.Open(history)) +
+        custom.map { LibraryTileItem.Open(it) } + LibraryTileItem.Create
+
+    with(LocalDesignScale.current) {
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(80.u)) {
+            items.chunked(2).forEach { row ->
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(LIBRARY_TILE_GAP.u),
+                    modifier = Modifier.height(LIBRARY_ROW_HEIGHT.u),
+                ) {
+                    row.forEach { item ->
+                        when (item) {
+                            is LibraryTileItem.Open -> LibraryTile(
+                                icon = iconFor(item.library),
+                                title = item.library.name,
+                                subtitle = songCount(item.library.tracks.size),
+                                onClick = { onOpen(item.library) },
+                                // Your libraries show their first four songs' artwork; Liked and
+                                // History always keep their icons.
+                                covers = if (isBuiltIn(item.library)) emptyList() else item.library.coverTracks,
+                                onLongClick = if (isBuiltIn(item.library)) null
+                                    else ({ rect -> onHoldLibrary(item.library, rect) }),
+                                squish = squish,
+                            )
+                            LibraryTileItem.Create -> LibraryTile(
+                                icon = Res.drawable.ic_add,
+                                title = stringResource(Res.string.new_library),
+                                subtitle = null,
+                                onClick = onCreate,
+                                squish = squish,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fun iconFor(library: Library): DrawableResource = when (library.id) {
+    LIKED_ID -> Res.drawable.ic_heart_filled
+    HISTORY_ID -> Res.drawable.ic_clock
+    else -> Res.drawable.ic_music_note
+}
+
+private fun isBuiltIn(library: Library) = library.id == LIKED_ID || library.id == HISTORY_ID
+
+fun songCount(n: Int): String = if (n == 1) "1 song" else "$n songs"
+
+/**
+ * One library square: a pane of frosted glass (a blurred piece of the
+ * background behind a sheen and a bright top edge) with a big icon in the
+ * middle; the name and song count sit underneath.
+ */
+@Composable
+@OptIn(ExperimentalFoundationApi::class)
+private fun LibraryTile(
+    icon: DrawableResource,
+    title: String,
+    subtitle: String?,
+    onClick: () -> Unit,
+    squish: () -> Float,
+    /** Held: gets the tile's bounds on screen (so a cover can grow out of it). */
+    onLongClick: ((Rect) -> Unit)? = null,
+    /** Up to four songs whose artwork replaces the icon (none: show the icon). */
+    covers: List<Track> = emptyList(),
+) {
+    val haptics = LocalHapticFeedback.current
+    var bounds by remember { mutableStateOf(Rect.Zero) }
+    with(LocalDesignScale.current) {
+        val shape = RoundedCornerShape(72.u)
+        Column(Modifier.width(LIBRARY_TILE.u)) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(LIBRARY_TILE.u)
+                    .onGloballyPositioned { bounds = it.boundsInRoot() }
+                    // Over-scroll: squeezed in, a little taller and skinnier.
+                    .graphicsLayer {
+                        val k = squish()
+                        scaleX = 1f - TILE_SQUISH_X * k
+                        scaleY = 1f + TILE_SQUISH_Y * k
+                    }
+                    .clip(shape)
+                    .combinedClickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = ripple(color = Color.White),
+                        onClick = onClick,
+                        onLongClick = onLongClick?.let { hold ->
+                            {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                hold(bounds)
+                            }
+                        },
+                    ),
+            ) {
+                GlassPane(Modifier.fillMaxSize())
+                Box(Modifier.fillMaxSize().border(3.u, Glass.Edge, shape))
+                if (covers.isNotEmpty()) {
+                    CoverCollage(covers, Modifier.fillMaxSize())
+                } else {
+                    // Soft shadow under the icon so white reads on the light glass
+                    // (blurred on Android 12+, a faint offset copy before that).
+                    Icon(
+                        painterResource(icon),
+                        contentDescription = null,
+                        tint = Color(0x29000000),
+                        modifier = Modifier.offset(y = 8.u).size(250.u).blur(14.u),
+                    )
+                    Icon(
+                        painterResource(icon),
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(250.u),
+                    )
+                }
+            }
+            Spacer(Modifier.height(30.u))
+            Text(
+                title,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = TextStyle(Color.White, fontSize = 66.usp, fontWeight = FontWeight.Medium, shadow = TextShadow),
+                modifier = Modifier.padding(start = 12.u),
+            )
+            if (subtitle != null) {
+                Text(
+                    subtitle,
+                    maxLines = 1,
+                    style = TextStyle(SecondaryText, fontSize = 46.usp, shadow = TextShadow),
+                    modifier = Modifier.padding(start = 12.u, top = 4.u),
+                )
+            }
+        }
+    }
+}
+
+// Artwork inside a library tile, as fractions of the tile: inset so the glass edge still shows.
+private const val ART_INSET = 52f / LIBRARY_TILE
+private const val ART_GAP = 20f / LIBRARY_TILE
+
+/**
+ * The first one to four songs' artwork, as squares inside a tile of any size:
+ * one big square; two side by side; three as two over one; four as a 2x2 grid.
+ * With [onSlot], each square is tappable (the cover editor); [selected] gets a
+ * bright outline.
+ */
+@Composable
+internal fun CoverCollage(
+    tracks: List<Track>,
+    modifier: Modifier = Modifier,
+    onSlot: ((Int) -> Unit)? = null,
+    selected: Int? = null,
+) {
+    BoxWithConstraints(modifier) {
+        val s = maxWidth
+        val inset = s * ART_INSET
+        val gap = s * ART_GAP
+        val area = s - inset * 2
+        val small = (area - gap) / 2
+        val big = tracks.size == 1
+        val half = (area - small) / 2
+        val far = small + gap
+        val zero = s * 0f
+        val spots = when (tracks.size) {
+            1 -> listOf(zero to zero)
+            2 -> listOf(zero to half, far to half)
+            3 -> listOf(zero to zero, far to zero, half to far)
+            else -> listOf(zero to zero, far to zero, zero to far, far to far)
+        }
+        val side = if (big) area else small
+        val shape = RoundedCornerShape(if (big) s * (44f / LIBRARY_TILE) else s * (30f / LIBRARY_TILE))
+        tracks.zip(spots).forEachIndexed { k, (track, spot) ->
+            SquareArtwork(
+                url = track.artworkUrl,
+                letterboxed = track.artworkLetterboxed,
+                modifier = Modifier
+                    .offset(x = inset + spot.first, y = inset + spot.second)
+                    .size(side)
+                    .clip(shape)
+                    .background(Color(0x33000000))
+                    .border(
+                        if (k == selected) s * (6f / LIBRARY_TILE) else s * (1.5f / LIBRARY_TILE),
+                        if (k == selected) Color.White else Color.White.copy(alpha = 0.22f),
+                        shape,
+                    )
+                    .then(
+                        if (onSlot != null) Modifier.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = ripple(color = Color.White),
+                        ) { onSlot(k) } else Modifier
+                    ),
+            )
+        }
+    }
+}

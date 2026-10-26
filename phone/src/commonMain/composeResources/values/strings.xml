@@ -1,0 +1,30 @@
+<resources>
+    <string name="app_name">MewZ</string>
+    <string name="search_hint">Search</string>
+    <string name="voice_search">Voice search</string>
+    <string name="clear_search">Clear search</string>
+    <string name="remove_from_history">Remove from recent searches</string>
+    <string name="key_search">Search</string>
+    <string name="key_space">space</string>
+    <string name="key_backspace">Delete</string>
+    <string name="key_shift">Shift</string>
+    <string name="key_hide">Hide keyboard</string>
+    <string name="queue">Queue</string>
+    <string name="rename_library">Rename library</string>
+    <string name="key_save">Save</string>
+    <string name="lyrics">Lyrics</string>
+    <string name="up_next">Up Next</string>
+    <string name="remove_from_queue">Remove from queue</string>
+    <string name="remove_from_library">Remove from this library</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="next_song">Next song</string>
+    <string name="previous_song">Previous song</string>
+    <string name="shuffle">Shuffle</string>
+    <string name="loop_song">Loop this song</string>
+    <string name="add_to_library">Add to library</string>
+    <string name="like">Like</string>
+    <string name="new_library">New library</string>
+    <string name="key_create">Create</string>
+    <string name="voice_prompt">Say a song, artist or album</string>
+</resources>

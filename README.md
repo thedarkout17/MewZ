@@ -4,6 +4,9 @@
 
 Kotlin + Jetpack Compose, landscape, designed on a 2000×1200 canvas.
 
+**Also on iPhone:** the same app in portrait, built on GitHub's Macs (no Mac needed).
+See [docs/IPHONE.md](docs/IPHONE.md) to install it.
+
 ## Run it
 1. Open this folder in Android Studio (Ladybug or newer) and let Gradle sync.
 2. Plug in the headunit (USB debugging on) or use an emulator set to 2000×1200, then press Run.
@@ -62,20 +65,21 @@ Use `with(LocalDesignScale.current) { 232.u }` for sizes and `92.usp` for text.
 ## Branches
 - `main`: the working build (YouTube Data API search + audio-only playback via NewPipeExtractor).
 - `cleanup`: the tidy-up below, to be merged into `main` once it's been tested on the headunit.
+- `ios`: `cleanup` plus the iPhone app (and the shared module the two apps use).
 
 ## Code layout
-The app is split in two so the logic can be reused on other platforms (see
-[docs/PORTING.md](docs/PORTING.md)):
+The rules of the app are shared with the iPhone app (see [docs/PORTING.md](docs/PORTING.md)):
 
 ```
-app/src/main/java/com/headunit/music/
-  core/        Plain Kotlin, no Android imports: the rules of the app
+shared/src/commonMain/kotlin/com/headunit/music/
+  core/        Plain Kotlin (Kotlin Multiplatform), no platform imports: the rules of the app
     model/       Track, Library, Lyrics (+ LRC parser)
     playback/    QueueState (queue, shuffle, loop, Mix), PlayerError
     library/     LibraryBook (Liked, History, your libraries)
     search/      SearchResult, result rows, album matching
     text/        SongText (title/artist clean-up, durations)
     sources/     Interfaces for search, audio, Mix, albums, lyrics, suggestions
+app/src/main/java/com/headunit/music/     The headunit app
   data/        Android/network implementations of those sources, and storage
     youtube/     YouTube Data API search, NewPipe audio/Mix/albums, suggestions
     LibraryStore, SearchHistory, Lyrics (LRCLIB)
@@ -84,6 +88,8 @@ app/src/main/java/com/headunit/music/
     theme/       DesignScale (.u / .usp), shared text styles
     components/  Glass, search bar, collapsing header
     home/ library/ player/ keyboard/
+phone/         The iPhone app's Kotlin (Compose Multiplatform screens, AVPlayer, InnerTube)
+iosApp/        The iPhone app's Xcode wrapper (XcodeGen)
 ```
 
 `core` holds state as immutable values (`QueueState`, `LibraryBook`); the Android
@@ -91,13 +97,18 @@ classes (`PlayerController`, `LibraryStore`) keep the current value in Compose s
 save it, and do the I/O. New logic belongs in `core` whenever it doesn't need Android.
 
 ## Tests
-Unit tests for `core` live in `app/src/test/`. In Android Studio right-click that folder →
-**Run Tests**, or from a terminal:
+Unit tests for `core` live in `shared/src/commonTest/`. In Android Studio right-click that
+folder → **Run Tests**, or from a terminal:
 ```
-gradlew testDebugUnitTest
+./gradlew :shared:jvmTest
 ```
+GitHub Actions (`.github/workflows/build.yml`) runs them on every push, on the JVM and on the
+iPhone simulator, and builds the headunit APK and the iPhone app.
 
 ## Repo layout
 - `app/` — the Android app
+- `shared/` — the rules both apps use
+- `phone/`, `iosApp/` — the iPhone app
 - `docs/design/` — original mockups and graphics
-- `docs/PORTING.md` — how to take the app to a phone layout or iPhone
+- `docs/PORTING.md` — how the app is split across platforms
+- `docs/IPHONE.md` — installing and building the iPhone app
