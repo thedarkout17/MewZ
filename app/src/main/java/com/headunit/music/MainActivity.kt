@@ -3,6 +3,10 @@ package com.headunit.music
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
+import com.headunit.music.player.PlaybackService
+import android.os.Build
+import android.content.pm.PackageManager
+import android.Manifest
 import android.speech.RecognizerIntent
 import android.view.WindowManager
 import android.widget.Toast
@@ -40,7 +44,7 @@ import com.headunit.music.ui.theme.HeadunitMusicTheme
 
 class MainActivity : ComponentActivity() {
 
-    /** Lives as long as the activity so music keeps going between screens. */
+    /** The app's one player: it outlives this screen (see PlaybackService). */
     private lateinit var player: PlayerController
     private lateinit var libraries: LibraryStore
 
@@ -48,8 +52,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         goImmersive()
         NewPipeDownloader.init()
-        player = PlayerController(this)
-        libraries = LibraryStore(applicationContext)
+        player = PlayerController.get(this)
+        libraries = LibraryStore.get(this)
+        // Android 13+: allow the media notification (with play / pause / skip) to show.
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 0)
+        }
         // History: songs that played for 3 seconds or more.
         player.onPlayedLongEnough = libraries::recordPlayed
 
@@ -180,16 +190,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        // The playback service: keeps music going in the background and lets the steering
+        // wheel, Bluetooth and the headunit's media controls reach the player. (Started each
+        // time the app comes to the front, in case Android stopped it while idle.)
+        startService(Intent(this, PlaybackService::class.java))
+    }
+
     override fun onStop() {
         super.onStop()
         // Leaving the app (or it's about to be closed): remember the song and where it's at.
         player.saveState()
     }
 
-    override fun onDestroy() {
-        player.release()
-        super.onDestroy()
-    }
+    // (No player.release() here: the music carries on in the background through
+    // PlaybackService, which releases the player when it shuts down.)
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)

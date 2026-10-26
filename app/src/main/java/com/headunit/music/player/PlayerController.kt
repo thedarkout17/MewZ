@@ -3,6 +3,9 @@
 package com.headunit.music.player
 
 import android.content.Context
+import androidx.media3.common.ForwardingPlayer
+import androidx.media3.common.MediaMetadata
+import android.net.Uri
 import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.OptIn
@@ -49,12 +52,32 @@ import kotlinx.coroutines.withContext
  *
  * Each song's audio stream is found with NewPipeExtractor ([AudioStreams]) and
  * played with Media3 ExoPlayer. A song played from search is followed by its
- * YouTube Mix ([YouTubeMix]), like YouTube's autoplay. While a song plays, the next one is looked up
- * in the background, so skipping is near-instant.
+ * YouTube Mix ([YouTubeMix]), like YouTube's autoplay.
+ *
+ * For dead zones, the song playing buffers all the way to its end, and once it
+ * has, the whole next song downloads into the disk cache.
+ *
+ * There's one for the whole app ([get]); [PlaybackService] keeps it playing in
+ * the background and exposes it ([sessionPlayer]) to the steering wheel,
+ * Bluetooth and the headunit's media controls.
  *
  * All state is Compose state, so the screens update on their own.
  */
-class PlayerController(context: Context) {
+class PlayerController private constructor(context: Context) {
+
+    companion object {
+        @Volatile private var instance: PlayerController? = null
+
+        /**
+         * The one player for the whole app. It outlives the screen: the playback
+         * service ([PlaybackService]) keeps it (and the music) going in the
+         * background, and the screen picks it back up when it reopens.
+         */
+        fun get(context: Context): PlayerController =
+            instance ?: synchronized(this) {
+                instance ?: PlayerController(context.applicationContext).also { instance = it }
+            }
+    }
 
     // ---- Queue ----
     var queue by mutableStateOf<List<Track>>(emptyList())
@@ -168,11 +191,24 @@ class PlayerController(context: Context) {
         // Keep what's already played in memory too (up to 5 minutes: a whole song for most),
         // so rewinds are instant. Anything older comes back from the disk cache, never
         // re-downloaded. (ExoPlayer fixes this when the player is made, so it can't vary per song.)
+        //
+        // Ahead: keep loading until the whole song is in (up to 15 minutes), so it plays on
+        // through tunnels and dead zones instead of stopping 50 seconds later.
         .setLoadControl(
             DefaultLoadControl.Builder()
                 .setBackBuffer(BACK_BUFFER_MS, /* retainBackBufferFromKeyframe = */ true)
+                .setBufferDurationsMs(
+                    /* minBufferMs = */ AHEAD_BUFFER_MS,
+                    /* maxBufferMs = */ AHEAD_BUFFER_MS,
+                    /* bufferForPlaybackMs = */ 2_500,
+                    /* bufferForPlaybackAfterRebufferMs = */ 5_000,
+                )
+                .setTargetBufferBytes(TARGET_BUFFER_BYTES)
+                .setPrioritizeTimeOverSizeThresholds(true)
                 .build(),
         )
+        // Keep the CPU and Wi-Fi awake while playing with the screen off.
+        .setWakeMode(C.WAKE_MODE_NETWORK)
         // Pause for navigation prompts / calls, and when headphones or Bluetooth drop.
         .setAudioAttributes(
             AudioAttributes.Builder()
@@ -184,6 +220,48 @@ class PlayerController(context: Context) {
         .setHandleAudioBecomingNoisy(true)
         .build()
         .apply { addListener(Listener()) }
+
+    /**
+     * What the media session talks to (steering-wheel buttons, Bluetooth, the
+     * headunit's own media controls, voice assistants): ExoPlayer, but with
+     * next / previous going through our queue, and Play loading the song first
+     * when it isn't loaded yet (e.g. last time's song after a restart).
+     */
+    val sessionPlayer: Player by lazy { SessionPlayer() }
+
+    private inner class SessionPlayer : ForwardingPlayer(exo) {
+        override fun getAvailableCommands(): Player.Commands =
+            super.getAvailableCommands().buildUpon()
+                .addAll(
+                    Player.COMMAND_PLAY_PAUSE,
+                    Player.COMMAND_SEEK_TO_NEXT,
+                    Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
+                    Player.COMMAND_SEEK_TO_PREVIOUS,
+                    Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
+                )
+                .build()
+
+        override fun isCommandAvailable(command: Int): Boolean = getAvailableCommands().contains(command)
+
+        override fun play() {
+            if (needsLoad()) loadAndPlay() else super.play()
+        }
+
+        override fun seekToNext() { this@PlayerController.next() }
+        override fun seekToNextMediaItem() { this@PlayerController.next() }
+        override fun seekToPrevious() { this@PlayerController.previous() }
+        override fun seekToPreviousMediaItem() { this@PlayerController.previous() }
+        override fun hasNextMediaItem(): Boolean = this@PlayerController.hasNext
+        override fun hasPreviousMediaItem(): Boolean = this@PlayerController.current != null
+    }
+
+    /** There's a song, but ExoPlayer doesn't have it loaded (restored from last time, or it failed). */
+    private fun needsLoad(): Boolean = current != null && (restoredAtMs != null || exo.mediaItemCount == 0)
+
+    private fun loadAndPlay() {
+        val at = restoredAtMs
+        if (at != null) playAt(index, resumeAtMs = at) else playAt(index)
+    }
 
     init {
         restoreState()
@@ -398,8 +476,8 @@ class PlayerController(context: Context) {
     fun togglePlay() {
         if (current == null) return
         // First Play after reopening the app: load last time's song where it was left.
-        restoredAtMs?.let { at ->
-            playAt(index, resumeAtMs = at)
+        if (needsLoad()) {
+            loadAndPlay()
             return
         }
         if (exo.isPlaying) exo.pause() else exo.play()
@@ -531,7 +609,7 @@ class PlayerController(context: Context) {
                 val url = AudioStreams.urlFor(track.videoId)
                 linkMs = SystemClock.elapsedRealtime() - tapAt
                 if (current?.videoId != track.videoId) return@launch // moved on meanwhile
-                exo.setMediaItem(mediaItem(track.videoId, url), resumeAtMs)
+                exo.setMediaItem(mediaItem(track, url), resumeAtMs)
                 exo.prepare()
                 exo.play()
                 preloadNext()
@@ -542,8 +620,10 @@ class PlayerController(context: Context) {
     }
 
     /**
-     * While this song plays, get the next one ready: look up its audio link and
-     * download its first ~5 seconds into the cache, so skipping starts instantly.
+     * While this song plays, get the next one ready: once this one has finished
+     * loading, download the whole next song into the disk cache, so it starts
+     * instantly and plays through dead zones too. (Skipping it wastes that
+     * download; a cached song costs nothing to play again.)
      */
     private fun preloadNext() {
         preloadJob?.cancel()
@@ -552,6 +632,10 @@ class PlayerController(context: Context) {
         next ?: return
         preloadJob = scope.launch {
             val url = runCatching { AudioStreams.urlFor(next.videoId) }.getOrNull() ?: return@launch
+            // Let the song that's playing finish loading first (it buffers to the end), so the
+            // two downloads don't fight over a weak signal.
+            delay(1_500)
+            while (exo.isLoading) delay(500)
             withContext(Dispatchers.IO) {
                 val writer = CacheWriter(
                     dataSource.createDataSource(),
@@ -559,7 +643,7 @@ class PlayerController(context: Context) {
                         .setUri(url)
                         .setKey(cacheKey(next.videoId, url)) // same key playback uses
                         .setPosition(0)
-                        .setLength(PRELOAD_BYTES)
+                        .setLength(C.LENGTH_UNSET.toLong()) // the whole song
                         .build(),
                     /* temporaryBuffer = */ null,
                     /* progressListener = */ null,
@@ -572,8 +656,21 @@ class PlayerController(context: Context) {
         }
     }
 
-    private fun mediaItem(videoId: String, url: String): MediaItem =
-        MediaItem.Builder().setUri(url).setCustomCacheKey(cacheKey(videoId, url)).build()
+    /** The song for ExoPlayer, with its title / artist / artwork for the car's media display. */
+    private fun mediaItem(track: Track, url: String): MediaItem =
+        MediaItem.Builder()
+            .setMediaId(track.videoId)
+            .setUri(url)
+            .setCustomCacheKey(cacheKey(track.videoId, url))
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(track.title)
+                    .setArtist(track.artist)
+                    .setArtworkUri(Uri.parse(track.artworkUrl))
+                    .setAlbumTitle(queueName)
+                    .build(),
+            )
+            .build()
 
     /**
      * Cache entries are keyed by video + audio format (YouTube's "itag"), not by
@@ -648,11 +745,10 @@ private const val KEEP_AHEAD = 250
 /** A song goes into History once it has played this long. */
 private const val COUNTS_AS_PLAYED_MS = 3_000L
 
-/**
- * How much of the next song to download ahead: ~5 s of 128 kbps audio (80 KB)
- * plus room for the file's header at the start (~48 KB).
- */
-private const val PRELOAD_BYTES = 128L * 1024
+/** Load the song that's playing this far ahead: the whole song for almost all of them. */
+private const val AHEAD_BUFFER_MS = 15 * 60_000
+/** Memory allowed for that (15 min at 128 kbps is ~14 MB; some streams run higher). */
+private const val TARGET_BUFFER_BYTES = 32 * 1024 * 1024
 
 private val ITAG = Regex("[?&]itag=(\\d+)")
 

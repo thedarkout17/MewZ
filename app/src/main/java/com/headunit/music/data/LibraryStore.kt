@@ -46,6 +46,16 @@ const val HISTORY_ID = "history"
  */
 class LibraryStore(context: Context) {
 
+    companion object {
+        @Volatile private var instance: LibraryStore? = null
+
+        /** The app's one copy, shared by the screen and the player (which records History). */
+        fun get(context: Context): LibraryStore =
+            instance ?: synchronized(this) {
+                instance ?: LibraryStore(context.applicationContext).also { instance = it }
+            }
+    }
+
     private val prefs = context.getSharedPreferences("libraries", Context.MODE_PRIVATE)
 
     var liked by mutableStateOf(readTracks(KEY_LIKED))

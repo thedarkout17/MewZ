@@ -40,8 +40,11 @@ Use `with(LocalDesignScale.current) { 232.u }` for sizes and `92.usp` for text.
 - Player: **audio only**. Search uses the YouTube Data API; for each song the app finds
   YouTube's audio-only stream (~128 kbps AAC, via NewPipeExtractor) and plays it with
   Media3 ExoPlayer, so no video is downloaded: roughly 60 MB per hour.
-  When a song starts, the next one's first ~5 seconds are pre-buffered into an on-disk
-  cache (64 MB, also keeps recently played songs), so skipping starts instantly.
+  The song playing buffers all the way to its end, and once it has, the whole next song
+  downloads into an on-disk cache (64 MB, also keeps recently played songs), so skipping
+  starts instantly and music keeps going through tunnels and dead zones.
+  Keeps playing in the background (a media service), and the steering wheel, Bluetooth and
+  the headunit's own media controls work, showing the song's title, artist and artwork.
   Pauses for navigation prompts / calls and when Bluetooth drops.
   Now Playing laid out like CarPlay (720×720 artwork, full-width seek bar, shuffle /
   loop-this-song / add); ⌄ minimizes to a glass dock and returns home.
