@@ -130,6 +130,19 @@ private const val TILES_TOP = 1006f
 private const val ART_MINI = 224f       // artwork square in the dock
 private const val ART_MINI_X = 56f
 
+/** The transport row's width: previous (200) + play (240) + next (200) and two 150 gaps. */
+private const val TRANSPORT_W = 200f + 240f + 200f + 2 * 150f
+
+/**
+ * Where the lyrics card ends on a screen [width] wide: just short of the
+ * previous button (the transport is centred in the column beside the artwork).
+ */
+private fun lyricsRight(width: Float): Float {
+    val colX = ART_FULL_X + ART_FULL + COLUMN_GAP
+    val colW = width - colX - SIDE
+    return colX + (colW - TRANSPORT_W) / 2f - 16f
+}
+
 /**
  * The player, drawn over everything.
  *
@@ -173,11 +186,12 @@ fun PlayerOverlay(
     // player's Back, so Back closes them first).
     var showingQueue by remember { mutableStateOf(false) }
     var showingAdd by remember { mutableStateOf(false) }
+    // Lyrics: shown in place of the artwork on Now Playing (not a page of its own).
     var showingLyrics by remember { mutableStateOf(false) }
-    fun closePages() { showingQueue = false; showingAdd = false; showingLyrics = false }
+    fun closePages() { showingQueue = false; showingAdd = false }
     // Minimizing closes them, so Now Playing opens normally next time.
-    LaunchedEffect(player.expanded) { if (!player.expanded) closePages() }
-    BackHandler(enabled = showingQueue || showingAdd || showingLyrics) { closePages() }
+    LaunchedEffect(player.expanded) { if (!player.expanded) { closePages(); showingLyrics = false } }
+    BackHandler(enabled = showingQueue || showingAdd) { closePages() }
     val queueP by animateFloatAsState(
         targetValue = if (showingQueue) 1f else 0f,
         animationSpec = tween(340, easing = FastOutSlowInEasing),
@@ -189,12 +203,12 @@ fun PlayerOverlay(
         label = "addToLibrary",
     )
     val lyricsP by animateFloatAsState(
-        targetValue = if (showingLyrics) 1f else 0f,
+        targetValue = if (showingLyrics && player.expanded) 1f else 0f,
         animationSpec = tween(340, easing = FastOutSlowInEasing),
         label = "lyrics",
     )
     // How much a page has taken over the screen (Now Playing fades out under it).
-    val q = maxOf(queueP, addP, lyricsP)
+    val q = maxOf(queueP, addP)
 
     Box(Modifier.fillMaxSize()) {
         if (e > 0f) {
@@ -241,8 +255,9 @@ fun PlayerOverlay(
                         onOpenQueue = { showingQueue = true },
                         onOpenAdd = { showingAdd = true },
                         adding = showingAdd,
-                        onOpenLyrics = { showingLyrics = true },
+                        onOpenLyrics = { showingLyrics = !showingLyrics },
                         showingLyrics = showingLyrics,
+                        lyricsP = lyricsP,
                     )
                 }
 
@@ -257,7 +272,8 @@ fun PlayerOverlay(
                         .offset(x = x.u, y = y.u)
                         .graphicsLayer {
                             translationY = (awayShift * (1f - e)).u.toPx()
-                            alpha = 1f - q // the queue page takes over the screen
+                            // A page takes over the screen; lyrics take the artwork's place.
+                            alpha = (1f - q) * (1f - lyricsP * e)
                         }
                         .size(artSize.u)
                         .clip(shape)
@@ -290,6 +306,24 @@ fun PlayerOverlay(
                     ArtOverlay(player)
                 }
 
+                // ---- Lyrics, in the artwork's place: from its left edge across to the
+                // previous button, over the artwork's height ----
+                if (lyricsP > 0f) {
+                    LyricsPanel(
+                        player = player,
+                        track = track,
+                        modifier = Modifier
+                            .offset(x = ART_FULL_X.u, y = artTopFull.u)
+                            .width((lyricsRight(w) - ART_FULL_X).u)
+                            .height(ART_FULL.u)
+                            .graphicsLayer {
+                                alpha = lyricsP * e * (1f - q)
+                                val s = 0.96f + 0.04f * lyricsP
+                                scaleX = s; scaleY = s
+                            },
+                    )
+                }
+
                 // ---- Pages, over everything (Now Playing's backdrop stays behind them) ----
                 if (queueP > 0f) {
                     QueuePage(
@@ -298,17 +332,6 @@ fun PlayerOverlay(
                         modifier = Modifier.graphicsLayer {
                             alpha = queueP * e
                             translationY = (1f - queueP) * 48.u.toPx()
-                        },
-                    )
-                }
-                if (lyricsP > 0f) {
-                    LyricsPage(
-                        player = player,
-                        track = track,
-                        onClose = { showingLyrics = false },
-                        modifier = Modifier.graphicsLayer {
-                            alpha = lyricsP * e
-                            translationY = (1f - lyricsP) * 48.u.toPx()
                         },
                     )
                 }
@@ -411,6 +434,8 @@ private fun NowPlaying(
     /** The lyrics tile: open the Lyrics page. */
     onOpenLyrics: () -> Unit,
     showingLyrics: Boolean,
+    /** 0 = artwork, 1 = lyrics in its place (the song title moves over a little to make room). */
+    lyricsP: Float,
 ) {
     val track = player.current ?: return
     with(LocalDesignScale.current) {
@@ -460,8 +485,11 @@ private fun NowPlaying(
                 },
         ) {
             Spacer(Modifier.height(10.u))
+            // With lyrics showing, keep the song's name clear of the lyrics card.
+            val clear = (lyricsRight(width) + 24f - colX).coerceAtLeast(0f) * lyricsP
             Text(
                 track.title,
+                modifier = Modifier.padding(start = clear.u),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
@@ -473,6 +501,7 @@ private fun NowPlaying(
             Spacer(Modifier.height(14.u))
             Text(
                 track.artist,
+                modifier = Modifier.padding(start = clear.u),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,

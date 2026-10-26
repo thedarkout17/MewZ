@@ -2,6 +2,9 @@ package com.headunit.music.ui.player
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -53,11 +56,6 @@ import com.headunit.music.ui.theme.LocalDesignScale
 import kotlinx.coroutines.flow.collectLatest
 import java.io.IOException
 
-// Header (design px), the same as the queue's: big title shrinking as you scroll.
-private const val HEADER_TALL = 470f
-private const val HEADER_SHORT = 190f
-private const val TITLE_BIG = 132f
-private const val TITLE_SMALL = 76f
 /** After you scroll the lyrics yourself, wait this long before following the song again. */
 private const val FOLLOW_AGAIN_MS = 4_000L
 
@@ -69,14 +67,14 @@ private sealed interface LyricsState {
 }
 
 /**
- * The song's lyrics, laid out like the queue over Now Playing's blurred artwork.
- * Synced lyrics follow along: the line being sung is bright and kept near the
- * top, the rest dimmed; tap a line to jump the song there. (Scroll yourself and
- * it stops following for a few seconds.) Plain lyrics just scroll. A tap on
- * empty space or Back returns to Now Playing.
+ * The song's lyrics, in place of the artwork on Now Playing (a soft glass card
+ * that reaches across to the transport). Synced lyrics follow along: the line
+ * being sung is bright and kept a third of the way down, the rest dimmed; tap a
+ * line to jump the song there. Scroll yourself and it stops following for a few
+ * seconds. Plain lyrics just scroll.
  */
 @Composable
-fun LyricsPage(player: PlayerController, track: Track, onClose: () -> Unit, modifier: Modifier = Modifier) {
+fun LyricsPanel(player: PlayerController, track: Track, modifier: Modifier = Modifier) {
     var state by remember(track.videoId) { mutableStateOf<LyricsState>(LyricsState.Loading) }
     LaunchedEffect(track.videoId) {
         state = try {
@@ -86,20 +84,17 @@ fun LyricsPage(player: PlayerController, track: Track, onClose: () -> Unit, modi
         }
     }
 
-    val list = rememberLazyListState()
-    val density = LocalDensity.current
     with(LocalDesignScale.current) {
-        val collapseDistance = (HEADER_TALL - HEADER_SHORT).u
-        val c by remember {
-            derivedStateOf {
-                if (list.firstVisibleItemIndex > 0) 1f
-                else (list.firstVisibleItemScrollOffset / with(density) { collapseDistance.toPx() }).coerceIn(0f, 1f)
-            }
-        }
-        val headerH = HEADER_TALL + (HEADER_SHORT - HEADER_TALL) * c
-
-        // A tap on empty space (not a line) goes back to Now Playing.
-        Box(modifier.fillMaxSize().pointerInput(onClose) { detectTapGestures(onTap = { onClose() }) }) {
+        val shape = RoundedCornerShape(56.u)
+        BoxWithConstraints(
+            modifier
+                .clip(shape)
+                .background(Color(0x38000000))
+                .background(Brush.verticalGradient(listOf(Color(0x1FFFFFFF), Color(0x0AFFFFFF))))
+                .border(1.5f.u, Brush.verticalGradient(listOf(Color(0x80FFFFFF), Color(0x1FFFFFFF))), shape)
+                // Taps on the card aren't "empty space" (which would minimize the player).
+                .pointerInput(Unit) { detectTapGestures { } },
+        ) {
             when (val s = state) {
                 LyricsState.Loading -> CircularProgressIndicator(
                     color = Color.White,
@@ -108,81 +103,60 @@ fun LyricsPage(player: PlayerController, track: Track, onClose: () -> Unit, modi
                 )
                 LyricsState.None -> Note("No lyrics found for this song", Modifier.align(Alignment.Center))
                 LyricsState.Offline -> Note("Couldn't load lyrics · no connection", Modifier.align(Alignment.Center))
-                is LyricsState.Found -> LyricsList(player, s.lyrics, list, headerH)
-            }
-
-            // "Lyrics" and the song, shrinking into the top-left as you scroll.
-            Column(Modifier.offset(x = 96.u, y = (226f + (64f - 226f) * c).u).padding(end = 96.u)) {
-                Text(
-                    "Lyrics",
-                    maxLines = 1,
-                    style = TextStyle(
-                        Color.White,
-                        fontSize = (TITLE_BIG + (TITLE_SMALL - TITLE_BIG) * c).usp,
-                        fontWeight = FontWeight.SemiBold,
-                        shadow = LibraryTextShadow,
-                    ),
-                )
-                Text(
-                    "${track.title}  ·  ${track.artist}",
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = TextStyle(LibrarySecondary, fontSize = 46.usp, shadow = LibraryTextShadow),
-                    modifier = Modifier.graphicsLayer { alpha = 1f - c },
-                )
+                is LyricsState.Found -> LyricsList(player, s.lyrics, maxHeight)
             }
         }
     }
 }
 
 @Composable
-private fun LyricsList(
-    player: PlayerController,
-    lyrics: Lyrics,
-    list: androidx.compose.foundation.lazy.LazyListState,
-    headerH: Float,
-) {
+private fun LyricsList(player: PlayerController, lyrics: Lyrics, height: androidx.compose.ui.unit.Dp) {
+    val list = rememberLazyListState()
     val current by remember(lyrics) { derivedStateOf { lyrics.lineAt(player.positionSeconds) } }
     // When you last scrolled by hand (the list stops following for a moment).
     var touchedAt by remember { mutableLongStateOf(0L) }
+    var following by remember { mutableStateOf(false) }
     LaunchedEffect(list) {
         snapshotFlow { list.isScrollInProgress }.collectLatest { scrolling ->
-            if (scrolling && !followScrolling) touchedAt = System.currentTimeMillis()
+            if (scrolling && !following) touchedAt = System.currentTimeMillis()
         }
     }
-    val density = LocalDensity.current
-    with(LocalDesignScale.current) {
-        // Keep the line being sung just under the shrunk title.
-        LaunchedEffect(current) {
-            if (!lyrics.synced || current < 0) return@LaunchedEffect
-            if (System.currentTimeMillis() - touchedAt < FOLLOW_AGAIN_MS) return@LaunchedEffect
-            followScrolling = true
-            try {
-                // Two lines of lead-in above it, where they fit.
-                val target = (current - 1).coerceAtLeast(0)
-                list.animateScrollToItem(target, -with(density) { (HEADER_SHORT - HEADER_TALL + 40f).u.roundToPx() })
-            } finally {
-                followScrolling = false
-            }
+    // Keep the line being sung a third of the way down (where the top padding puts it).
+    LaunchedEffect(current) {
+        if (!lyrics.synced || current < 0) return@LaunchedEffect
+        if (System.currentTimeMillis() - touchedAt < FOLLOW_AGAIN_MS) return@LaunchedEffect
+        following = true
+        try {
+            list.animateScrollToItem(current)
+        } finally {
+            following = false
         }
+    }
 
+    with(LocalDesignScale.current) {
+        val fade = 64.u
         LazyColumn(
             state = list,
-            verticalArrangement = Arrangement.spacedBy(28.u),
-            contentPadding = PaddingValues(top = HEADER_TALL.u, bottom = 520.u, start = 80.u, end = 160.u),
+            verticalArrangement = Arrangement.spacedBy(22.u),
+            contentPadding = PaddingValues(
+                top = height * 0.3f,
+                bottom = height * 0.6f,
+                start = 48.u,
+                end = 48.u,
+            ),
             modifier = Modifier
                 .fillMaxSize()
-                // Lines dissolve as they slide up under the title.
+                // Lines fade in and out at the card's top and bottom edges.
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                 .drawWithContent {
                     drawContent()
-                    val top = headerH.u.toPx() - 30.u.toPx()
-                    val solid = top + 60.u.toPx()
+                    val f = fade.toPx() / size.height
                     drawRect(
                         brush = Brush.verticalGradient(
                             0f to Color.Transparent,
-                            (top / size.height) to Color.Transparent,
-                            (solid / size.height) to Color.Black,
+                            f to Color.Black,
+                            (1f - f) to Color.Black,
+                            1f to Color.Transparent,
                         ),
                         blendMode = BlendMode.DstIn,
                     )
@@ -194,25 +168,24 @@ private fun LyricsList(
                 val color by animateColorAsState(
                     when {
                         !lyrics.synced || now -> Color.White
-                        sung -> Color.White.copy(alpha = 0.45f)
-                        else -> Color.White.copy(alpha = 0.6f)
+                        sung -> Color.White.copy(alpha = 0.42f)
+                        else -> Color.White.copy(alpha = 0.58f)
                     },
                     animationSpec = tween(250),
                     label = "lyricLine",
                 )
-                val text = line.text.ifBlank { "♪" }
                 Text(
-                    text,
+                    line.text.ifBlank { "♪" },
                     style = TextStyle(
                         color,
-                        fontSize = (if (lyrics.synced) 76 else 64).usp,
-                        lineHeight = (if (lyrics.synced) 92 else 80).usp,
+                        fontSize = (if (lyrics.synced) 60 else 52).usp,
+                        lineHeight = (if (lyrics.synced) 74 else 66).usp,
                         fontWeight = if (now) FontWeight.Bold else FontWeight.SemiBold,
                         shadow = LibraryTextShadow,
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(24.u))
+                        .clip(RoundedCornerShape(20.u))
                         .then(
                             // Synced: tap a line to jump the song there.
                             if (lyrics.synced && line.time != null) Modifier.clickable(
@@ -221,25 +194,22 @@ private fun LyricsList(
                             ) {
                                 touchedAt = 0L // follow from the new spot straight away
                                 player.seekTo(line.time)
-                            } else Modifier.pointerInput(Unit) { detectTapGestures { } } // not "empty space"
+                            } else Modifier
                         )
-                        .padding(horizontal = 16.u, vertical = 6.u),
+                        .padding(horizontal = 12.u, vertical = 4.u),
                 )
             }
         }
     }
 }
 
-/** Our own scrolls (following the song) shouldn't count as you scrolling. */
-private var followScrolling = false
-
 @Composable
 private fun Note(text: String, modifier: Modifier) {
     with(LocalDesignScale.current) {
         Text(
             text,
-            style = TextStyle(Color.White, fontSize = 60.usp, fontWeight = FontWeight.Medium, shadow = LibraryTextShadow),
-            modifier = modifier,
+            style = TextStyle(Color.White, fontSize = 50.usp, fontWeight = FontWeight.Medium, shadow = LibraryTextShadow),
+            modifier = modifier.padding(horizontal = 48.u),
         )
     }
 }
