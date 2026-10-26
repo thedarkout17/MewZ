@@ -38,6 +38,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.geometry.Size
 import kotlin.math.sin
 import kotlin.math.cos
 import kotlin.math.exp
@@ -579,7 +582,8 @@ private fun NowPlaying(
                 activeIcon = R.drawable.ic_lyrics_bold,
                 contentDescription = stringResource(R.string.lyrics),
                 active = showingLyrics,
-                onClick = onOpenLyrics,
+                onClick = onOpenLyrics, // lyrics show straight away; the notes play alongside
+                onAnimation = { t -> MicNotesGlyph(t) },
             )
         }
     }
@@ -787,6 +791,69 @@ private fun GlassTile(
 
 /** How long a tile animation runs. */
 private const val TILE_ANIM_MS = 760
+
+/**
+ * The microphone with music notes floating out of its head, for the lyrics
+ * tile's animation: three notes, one after another, drifting up and out with a
+ * little sway, fading as they go. The mic stays in its regular weight.
+ */
+@Composable
+private fun MicNotesGlyph(t: Float) {
+    Box(Modifier.fillMaxSize()) {
+        Icon(
+            painterResource(R.drawable.ic_lyrics),
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.fillMaxSize(),
+        )
+        Canvas(Modifier.fillMaxSize()) {
+            val k = size.minDimension / 24f // the icon's 24x24 grid
+            // The mic's head (top-right of the tilted icon).
+            val headX = 16.2f
+            val headY = 7.8f
+            // Each note: when it leaves (0..1 of the animation), which way it heads (degrees,
+            // 0 = right, -90 = up), and how far it goes (grid units).
+            val notes = listOf(Triple(0.00f, -35f, 15f), Triple(0.17f, -70f, 13f), Triple(0.34f, -10f, 16f))
+            notes.forEachIndexed { i, (start, deg, dist) ->
+                val u = ((t - start) / 0.62f).coerceIn(0f, 1f)
+                if (u <= 0f || u >= 1f) return@forEachIndexed
+                val a = Math.toRadians(deg.toDouble()).toFloat()
+                val ease = 1f - (1f - u) * (1f - u)
+                val sway = sin(u * PI.toFloat() * 2.2f + i) * 1.6f
+                // Sway sideways to the direction of travel.
+                val x = headX + cos(a) * dist * ease - sin(a) * sway
+                val y = headY + sin(a) * dist * ease + cos(a) * sway
+                val alpha = when {
+                    u < 0.15f -> u / 0.15f
+                    u > 0.6f -> (1f - u) / 0.4f
+                    else -> 1f
+                }
+                val scale = 0.75f + 0.55f * ease
+                val tilt = (if (i % 2 == 0) -12f else 10f) + sway * 4f
+                drawNote(x * k, y * k, k * scale, tilt, Color.White.copy(alpha = alpha))
+            }
+        }
+    }
+}
+
+/** An eighth note (♪) with its head at ([x], [y]), [unit] px per grid unit, leaning [tiltDeg]. */
+private fun DrawScope.drawNote(x: Float, y: Float, unit: Float, tiltDeg: Float, color: Color) {
+    rotate(tiltDeg, pivot = Offset(x, y)) {
+        // Head: a slightly tilted oval.
+        rotate(-20f, pivot = Offset(x, y)) {
+            drawOval(color, topLeft = Offset(x - 1.6f * unit, y - 1.15f * unit), size = Size(3.2f * unit, 2.3f * unit))
+        }
+        val stemX = x + 1.35f * unit
+        val top = y - 6.5f * unit
+        drawLine(color, Offset(stemX, y - 0.3f * unit), Offset(stemX, top), strokeWidth = 0.9f * unit, cap = StrokeCap.Round)
+        // Flag.
+        val flag = Path().apply {
+            moveTo(stemX, top)
+            cubicTo(stemX + 1.2f * unit, top + 1.2f * unit, stemX + 3.2f * unit, top + 1.6f * unit, stemX + 2.4f * unit, top + 4.2f * unit)
+        }
+        drawPath(flag, color, style = Stroke(width = 0.9f * unit, cap = StrokeCap.Round))
+    }
+}
 
 /**
  * The heart, beating once for its animation: a strong "lub" then a softer "dub"
