@@ -308,13 +308,13 @@ private fun NowPlaying(
         val colW = width - colX - SIDE
         val fullW = width - 2 * SIDE
 
-        // Minimize (top-left)
+        // Minimize (top-left), its left edge lined up with the artwork's
         GlassCircleButton(
             icon = R.drawable.ic_keyboard_hide,
             contentDescription = stringResource(R.string.minimize_player),
             size = 130f, glyph = 64f,
             onClick = onMinimize,
-            modifier = Modifier.offset(x = 56.u, y = (48f + shiftY).u).graphicsLayer { this.alpha = alpha },
+            modifier = Modifier.offset(x = ART_FULL_X.u, y = (48f + shiftY).u).graphicsLayer { this.alpha = alpha },
         )
 
         // Where we are in a library / playlist (top-right): "Road trip — 3 of 20".

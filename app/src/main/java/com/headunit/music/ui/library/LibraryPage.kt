@@ -46,7 +46,7 @@ import com.headunit.music.ui.home.TrackRow
 import com.headunit.music.ui.theme.LocalDesignScale
 
 // Header (design px): big name when you open the library, shrinking as the songs scroll up.
-private const val HEADER_TALL = 420f
+private const val HEADER_TALL = 470f
 private const val HEADER_SHORT = 190f
 private const val TITLE_BIG = 132f
 private const val TITLE_SMALL = 76f
@@ -122,11 +122,11 @@ fun LibraryPage(
                 }
             }
 
-            // Back, top-left (same spot as the player's minimize button).
+            // Minimize, top-left (same spot and chevron as the player's minimize button).
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .offset(x = 56.u, y = 48.u)
+                    .offset(x = 96.u, y = 48.u)
                     .size(130.u)
                     .clip(CircleShape)
                     .background(Brush.verticalGradient(listOf(Color(0x2EFFFFFF), Color(0x14FFFFFF))))
@@ -137,15 +137,15 @@ fun LibraryPage(
                         onClick = onBack,
                     ),
             ) {
-                Icon(painterResource(R.drawable.ic_arrow_back), stringResource(R.string.back), tint = Color.White, modifier = Modifier.size(70.u))
+                Icon(painterResource(R.drawable.ic_keyboard_hide), stringResource(R.string.back), tint = Color.White, modifier = Modifier.size(64.u))
             }
 
             // Name (and song count), shrinking toward the back button as you scroll.
             Column(
                 modifier = Modifier
                     .offset(
-                        x = (96f + (230f - 96f) * c).u,
-                        y = (176f + (64f - 176f) * c).u,
+                        x = (96f + (266f - 96f) * c).u,
+                        y = (226f + (64f - 226f) * c).u,
                     )
                     .padding(end = 120.u),
             ) {
