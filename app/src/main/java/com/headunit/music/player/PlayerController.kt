@@ -1,6 +1,8 @@
 package com.headunit.music.player
 
 import android.content.Context
+import android.os.SystemClock
+import android.util.Log
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -93,6 +95,10 @@ class PlayerController(context: Context) {
     private var skipJob: Job? = null
     /** One fresh-link retry per song (links expire after a few hours). */
     private var retriedVideoId: String? = null
+
+    // Load timing for the log: tap → audio link found → first sound. Filter Logcat by "MuZ".
+    private var tapAt = 0L
+    private var linkMs = 0L
 
     private val exo: ExoPlayer = ExoPlayer.Builder(context.applicationContext)
         .setMediaSourceFactory(
@@ -203,10 +209,12 @@ class PlayerController(context: Context) {
         durationSeconds = (track.durationSeconds ?: 0).toFloat()
         isBuffering = true
         exo.stop()
+        tapAt = SystemClock.elapsedRealtime()
 
         loadJob = scope.launch {
             try {
                 val url = AudioStreams.urlFor(track.videoId)
+                linkMs = SystemClock.elapsedRealtime() - tapAt
                 if (current?.videoId != track.videoId) return@launch // moved on meanwhile
                 exo.setMediaItem(MediaItem.fromUri(url), resumeAtMs)
                 exo.prepare()
@@ -241,6 +249,11 @@ class PlayerController(context: Context) {
     private inner class Listener : Player.Listener {
         override fun onIsPlayingChanged(playing: Boolean) {
             isPlaying = playing
+            if (playing && tapAt > 0) {
+                val total = SystemClock.elapsedRealtime() - tapAt
+                Log.d(TAG, "Load \"${current?.title}\": find audio ${linkMs} ms + buffer ${total - linkMs} ms = ${total} ms")
+                tapAt = 0
+            }
         }
 
         override fun onPlaybackStateChanged(state: Int) {
@@ -269,6 +282,8 @@ class PlayerController(context: Context) {
         }
     }
 }
+
+private const val TAG = "MuZ"
 
 /** Why a song couldn't be played, in words for the screen. */
 enum class PlayerError(val message: String, val skippable: Boolean) {
