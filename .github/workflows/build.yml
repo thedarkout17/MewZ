@@ -103,14 +103,6 @@ jobs:
             :phone:iosSimulatorArm64Test --tests 'com.headunit.music.phone.flow.*' 2>&1 | tee ios-tests.log
           exit ${PIPESTATUS[0]}
 
-      - name: Diagnose old iPhone calls (informational)
-        if: ${{ !cancelled() }}
-        continue-on-error: true
-        shell: bash
-        run: |
-          ./gradlew --no-daemon :phone:iosSimulatorArm64Test --tests 'com.headunit.music.phone.diag.*' 2>&1 | tee ios-diag.log
-          exit ${PIPESTATUS[0]}
-
       - name: Build the app
         if: ${{ !cancelled() }}
         shell: bash
@@ -139,8 +131,6 @@ jobs:
         run: |
           python3 .github/scripts/report.py ios-tests.log "iOS tests"
           python3 .github/scripts/report.py ios-tests.log "iOS test results" notice
-          python3 .github/scripts/report.py ios-diag.log "iOS diagnosis" notice
-          python3 .github/scripts/report.py ios-diag.log "iOS diagnosis log"
           python3 .github/scripts/report.py ios.log "Xcode build"
 
       - name: Publish (draft release ios-app)
@@ -148,4 +138,4 @@ jobs:
         shell: bash
         run: |
           bash .github/scripts/publish.sh ios-app "MewZ for iPhone: install MewZ.ipa with Sideloadly or AltStore (docs/IPHONE.md)" \
-            MewZ.ipa ios.log ios-tests.log ios-diag.log
+            MewZ.ipa ios.log ios-tests.log
