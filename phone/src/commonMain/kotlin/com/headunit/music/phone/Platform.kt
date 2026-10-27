@@ -3,6 +3,9 @@ package com.headunit.music.phone
 /** Writes to the device log (Xcode console / Console.app on the iPhone; filter by "MewZ"). */
 expect fun log(message: String)
 
+/** Text on the clipboard (to paste an API key), or null. */
+expect fun readClipboardText(): String?
+
 /** The app's bundle id (com.headunit.music.phone, or what a sideloading tool changed it to). */
 expect fun appBundleId(): String
 

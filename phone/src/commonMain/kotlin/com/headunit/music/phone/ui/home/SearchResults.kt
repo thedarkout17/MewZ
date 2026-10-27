@@ -1,6 +1,6 @@
 package com.headunit.music.phone.ui.home
 
-import androidx.compose.ui.platform.LocalClipboardManager
+import com.headunit.music.phone.readClipboardText
 import com.headunit.music.phone.data.ApiKey
 
 import com.headunit.music.phone.ui.theme.SecondaryText
@@ -452,12 +452,11 @@ internal fun LoadingRows() {
 }
 
 @Composable
-@Suppress("DEPRECATION") // LocalClipboardManager: plain text is all that's needed here
 private fun FailureMessage(reason: Reason, onRetry: () -> Unit) {
-    val clipboard = LocalClipboardManager.current
     // Paste a YouTube Data API key (saved on the phone), then search again.
+    // (The clipboard is read directly: Compose's LocalClipboardManager isn't dependable on iOS.)
     val pasteKey = "Paste API key" to {
-        val text = clipboard.getText()?.text?.trim().orEmpty()
+        val text = readClipboardText()?.trim().orEmpty()
         if (text.startsWith("AIza") && text.length in 30..60) {
             ApiKey.set(text)
             onRetry()

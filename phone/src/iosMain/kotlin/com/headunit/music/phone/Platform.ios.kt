@@ -3,10 +3,15 @@ package com.headunit.music.phone
 import platform.Foundation.NSBundle
 import platform.Foundation.NSLog
 import platform.Foundation.NSUserDefaults
+import platform.UIKit.UIPasteboard
 
 actual fun log(message: String) {
-    NSLog("MewZ: %@", message)
+    // No "%@" + argument: passing a Kotlin string through NSLog's C varargs is fragile.
+    // The message itself is the format, with any % escaped.
+    NSLog(("MewZ: $message").replace("%", "%%"))
 }
+
+actual fun readClipboardText(): String? = UIPasteboard.generalPasteboard.string
 
 actual fun appBundleId(): String = NSBundle.mainBundle.bundleIdentifier ?: "com.headunit.music.phone"
 
