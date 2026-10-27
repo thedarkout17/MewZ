@@ -70,7 +70,7 @@ class SearchFlowTest {
         field.performClick()
         field.performTextInput("starboy")
         field.performImeAction()
-        waitUntil(10_000) { onAllNodes(hasText("Add a YouTube API key to search")).fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = 10_000) { onAllNodes(hasText("Add a YouTube API key to search")).fetchSemanticsNodes().isNotEmpty() }
         println("MEWZ: ios UI: missing-key message shown")
         // Albums arrive a moment later and are matched (and logged): give them time.
         val until = kotlin.time.TimeSource.Monotonic.markNow()
