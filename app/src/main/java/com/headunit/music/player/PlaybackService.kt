@@ -2,6 +2,9 @@ package com.headunit.music.player
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.util.Log
+import android.view.KeyEvent
+import androidx.core.content.IntentCompat
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.headunit.music.MainActivity
@@ -32,7 +35,39 @@ class PlaybackService : MediaSessionService() {
         )
         session = MediaSession.Builder(this, player.sessionPlayer)
             .setSessionActivity(openApp)
+            .setCallback(SteeringWheelKeys(player))
             .build()
+    }
+
+    /**
+     * Steering-wheel / Bluetooth next and previous go straight to our queue.
+     * (Left to Media3, they're checked against what ExoPlayer itself thinks it
+     * can skip to, which is nothing, since it only ever holds the one song
+     * playing; so the buttons did nothing.) Everything else (play / pause, …)
+     * is handled by Media3 as usual.
+     */
+    private class SteeringWheelKeys(private val player: PlayerController) : MediaSession.Callback {
+        override fun onMediaButtonEvent(
+            session: MediaSession,
+            controllerInfo: MediaSession.ControllerInfo,
+            intent: Intent,
+        ): Boolean {
+            val key = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
+                ?: return false
+            // Filter Logcat by "MuZ" to see which button the car sends.
+            Log.d("MuZ", "Media button: ${KeyEvent.keyCodeToString(key.keyCode)} (repeat ${key.repeatCount}) from ${controllerInfo.packageName}")
+            return when (key.keyCode) {
+                KeyEvent.KEYCODE_MEDIA_NEXT, KeyEvent.KEYCODE_MEDIA_SKIP_FORWARD -> {
+                    if (key.repeatCount == 0) player.next() // holding the button skips once, not repeatedly
+                    true
+                }
+                KeyEvent.KEYCODE_MEDIA_PREVIOUS, KeyEvent.KEYCODE_MEDIA_SKIP_BACKWARD -> {
+                    if (key.repeatCount == 0) player.previous()
+                    true
+                }
+                else -> false
+            }
+        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session

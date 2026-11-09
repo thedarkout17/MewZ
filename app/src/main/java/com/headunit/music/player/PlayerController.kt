@@ -258,6 +258,26 @@ class PlayerController private constructor(context: Context) {
 
         override fun isCommandAvailable(command: Int): Boolean = getAvailableCommands().contains(command)
 
+        // ExoPlayer only ever holds the one song playing, so when it tells the media session
+        // which commands work, it never includes next / previous: the car's display and the
+        // system then grey those buttons out. Listeners hear our list instead.
+        private val wrapped = HashMap<Player.Listener, Player.Listener>()
+
+        override fun addListener(listener: Player.Listener) {
+            val w = wrapped.getOrPut(listener) { WithOurCommands(listener) }
+            super.addListener(w)
+        }
+
+        override fun removeListener(listener: Player.Listener) {
+            wrapped.remove(listener)?.let { super.removeListener(it) }
+        }
+
+        private inner class WithOurCommands(private val inner: Player.Listener) : Player.Listener by inner {
+            override fun onAvailableCommandsChanged(availableCommands: Player.Commands) {
+                inner.onAvailableCommandsChanged(getAvailableCommands())
+            }
+        }
+
         override fun play() {
             if (needsLoad()) loadAndPlay() else super.play()
         }
