@@ -22,6 +22,8 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import com.headunit.music.data.HISTORY_ID
 import com.headunit.music.data.LIKED_ID
 import com.headunit.music.data.Library
+import com.headunit.music.data.DownloadState
+import com.headunit.music.data.Downloads
 import com.headunit.music.data.LibraryStore
 import com.headunit.music.ui.library.LibraryGrid
 import com.headunit.music.ui.library.LibraryPage
@@ -140,6 +142,9 @@ fun HomeScreen(
     /** Bump this to send the screen back to the idle "Listen..." home (e.g. after minimizing the player). */
     goHomeRequests: Int = 0,
 ) {
+    // Liked songs saved on the device (status shown on the Liked page).
+    val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    val downloads = remember { Downloads.get(appContext) }
     var query by rememberSaveable { mutableStateOf("") }
     var open by rememberSaveable { mutableStateOf(false) }       // search panel open
     var keyboard by rememberSaveable { mutableStateOf(false) }   // our keyboard showing
@@ -468,6 +473,9 @@ fun HomeScreen(
                                 else -> libraries.removeFrom(pageLibrary.id, t)
                             }
                         },
+                        // Liked = your downloads: each song's download, and the space they take.
+                        rowLabel = { t -> if (pageLibrary.id == LIKED_ID) downloadLabel(downloads.states[t.videoId]) else null },
+                        subtitle = if (pageLibrary.id == LIKED_ID) likedSubtitle(pageLibrary.tracks, downloads) else null,
                         dockInset = dockInset,
                         modifier = Modifier.graphicsLayer {
                             alpha = libP
@@ -672,5 +680,25 @@ private fun squishConnection(
             }
         }
         return Velocity.Zero
+    }
+}
+
+/** A Liked row's download, in words (nothing once it's saved). */
+private fun downloadLabel(state: DownloadState?): String? = when (state) {
+    null, DownloadState.Done -> null
+    DownloadState.Queued -> "Waiting to download"
+    is DownloadState.Downloading -> "Downloading ${(state.fraction * 100).toInt()}%"
+    DownloadState.Failed -> "Download paused (retries when online)"
+}
+
+/** Under "Liked": "12 songs · 48 MB on this device", or how many are still downloading. */
+private fun likedSubtitle(tracks: List<Track>, downloads: Downloads): String {
+    val count = if (tracks.size == 1) "1 song" else "${tracks.size} songs"
+    val left = tracks.count { !downloads.isDownloaded(it.videoId) }
+    val mb = downloads.bytesUsed / (1024 * 1024)
+    return when {
+        tracks.isEmpty() -> count
+        left > 0 -> "$count · $left left to download"
+        else -> "$count · $mb MB on this device"
     }
 }

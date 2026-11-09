@@ -68,6 +68,10 @@ fun LibraryPage(
     onQueue: (Track) -> Unit = {},
     /** If set, each row gets an × (like the queue's) that takes the song out of this library. */
     onRemove: ((Track) -> Unit)? = null,
+    /** Shown before a row's artist (Liked: "Downloading 40%", "Waiting to download", …). */
+    rowLabel: (Track) -> String? = { null },
+    /** Under the name, instead of just the song count (Liked: how much is on the device). */
+    subtitle: String? = null,
     dockInset: Float,
     modifier: Modifier = Modifier,
 ) {
@@ -90,7 +94,7 @@ fun LibraryPage(
                 Message(
                     title = "No songs yet",
                     detail = when (library.id) {
-                        LIKED_ID -> "Tap the heart on Now Playing to like a song."
+                        LIKED_ID -> "Tap the heart on Now Playing to like a song. Liked songs download to this device and play offline."
                         HISTORY_ID -> "Songs you play show up here."
                         else -> "Tap + on Now Playing to add the song that's playing."
                     },
@@ -129,6 +133,7 @@ fun LibraryPage(
                             track, i,
                             onClick = { onPlay(i) },
                             onLongClick = { onQueue(track) },
+                            label = rowLabel(track),
                             trailing = onRemove?.let { remove -> { RemoveButton { remove(track) } } },
                         )
                     }
@@ -156,7 +161,7 @@ fun LibraryPage(
                     ),
                 )
                 Text(
-                    songCount(library.tracks.size),
+                    subtitle ?: songCount(library.tracks.size),
                     style = TextStyle(LibrarySecondary, fontSize = 46.usp, shadow = LibraryTextShadow),
                     modifier = Modifier.graphicsLayer { alpha = 1f - c },
                 )

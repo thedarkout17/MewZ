@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Liked-song downloads carry on when the connection comes back -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Background playback: a media foreground service, kept awake while playing -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />

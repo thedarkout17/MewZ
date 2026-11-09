@@ -23,7 +23,11 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import coil.Coil
+import coil.ImageLoader
+import com.headunit.music.data.Downloads
 import com.headunit.music.data.LibraryStore
+import com.headunit.music.data.OfflineImages
 import com.headunit.music.data.SearchHistory
 import com.headunit.music.data.Track
 import com.headunit.music.ui.library.NewLibrarySheet
@@ -49,6 +53,12 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         goImmersive()
         NewPipeDownloader.init()
+        // Liked songs' pictures come from their saved copies (offline, and no data used).
+        Coil.setImageLoader(
+            ImageLoader.Builder(applicationContext)
+                .components { add(OfflineImages(Downloads.get(this@MainActivity))) }
+                .build()
+        )
         player = PlayerController.get(this)
         libraries = LibraryStore.get(this)
         // History: songs that played for 3 seconds or more.

@@ -36,7 +36,9 @@ const val HISTORY_ID = "history"
 
 /**
  * Your libraries, saved on the device:
- * - **Liked**: songs you've hearted, newest first.
+ * - **Liked**: songs you've hearted, newest first. These are your downloads:
+ *   liking saves the song on the device ([Downloads]) so it plays offline, and
+ *   unliking deletes it.
  * - **History**: the last [HISTORY_SIZE] songs that played for at least 3 seconds, newest first.
  *   Playing a song again moves it back to the top instead of listing it twice.
  * - Libraries you make, in the order you made them.
@@ -62,6 +64,7 @@ class LibraryStore(context: Context) {
     }
 
     private val prefs = context.getSharedPreferences("libraries", Context.MODE_PRIVATE)
+    private val downloads = Downloads.get(context)
 
     var liked by mutableStateOf(readTracks(KEY_LIKED))
         private set
@@ -70,6 +73,11 @@ class LibraryStore(context: Context) {
     /** Libraries you've made (not Liked or History). */
     var custom by mutableStateOf(readCustom())
         private set
+
+    init {
+        // Finish any downloads cut off last time; delete songs that aren't liked any more.
+        downloads.sync(liked)
+    }
 
     fun byId(id: String): Library? = when (id) {
         LIKED_ID -> Library(LIKED_ID, "Liked", liked)
@@ -89,11 +97,13 @@ class LibraryStore(context: Context) {
         if (isLiked(track)) return
         liked = listOf(track) + liked
         writeTracks(KEY_LIKED, liked)
+        downloads.add(track) // save it for offline
     }
 
     fun unlike(track: Track) {
         liked = liked.filterNot { it.videoId == track.videoId }
         writeTracks(KEY_LIKED, liked)
+        downloads.remove(track) // no longer on the device
     }
 
     // ---- History ----

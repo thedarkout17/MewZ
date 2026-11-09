@@ -58,6 +58,12 @@ Use `with(LocalDesignScale.current) { 232.u }` for sizes and `92.usp` for text.
   shrinks as you scroll; nothing plays until you pick a song, then the library loops and
   Now Playing shows "Name — 3 of 20". On Now Playing, ♡ likes the song and + adds it to one
   of your libraries (which likes it too). Saved on the device.
+- Offline play: **Liked is your downloads.** Liking a song saves its audio (~1 MB a minute)
+  and artwork in the app's private storage; unliking deletes them. Downloads run one at a
+  time in 1 MB pieces, pause while the playing song needs to load, resume after the app
+  closes or the signal drops, and retry when the connection comes back. Saved songs play
+  from the file (no internet, no data); offline, songs that aren't saved are skipped for the
+  next one that is. The Liked page shows each song's download and the space used.
 
 ## Branches
 - `main`: this version (YouTube Data API search + audio-only playback).

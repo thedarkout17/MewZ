@@ -22,12 +22,15 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.CacheWriter
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import com.headunit.music.data.Downloads
 import com.headunit.music.data.Track
 import com.headunit.music.data.toJson
 import com.headunit.music.data.toTracks
@@ -57,6 +60,10 @@ import kotlinx.coroutines.withContext
  *
  * For dead zones, the song playing buffers up to 5 minutes ahead, and once
  * it has, the next song's first 5 minutes download into the disk cache.
+ *
+ * Liked songs are saved on the device ([Downloads]); those play from the saved
+ * file, with no internet needed. Offline, a song that isn't saved is skipped
+ * for the next one that is.
  *
  * There's one for the whole app ([get]); [PlaybackService] keeps it playing in
  * the background and exposes it ([sessionPlayer]) to the steering wheel,
@@ -183,6 +190,11 @@ class PlayerController private constructor(context: Context) {
         )
         .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
 
+    /** Liked songs saved on the device: played from there, no internet needed. */
+    private val downloads = Downloads.get(context)
+    /** Plays saved files straight from storage (not through the streaming cache). */
+    private val localSources = ProgressiveMediaSource.Factory(DefaultDataSource.Factory(context.applicationContext))
+
     /** Downloading the next song's first seconds (cancelled if you move on). */
     private var preloadJob: Job? = null
     @Volatile private var preloadWriter: CacheWriter? = null
@@ -268,6 +280,8 @@ class PlayerController private constructor(context: Context) {
 
     init {
         restoreState()
+        // Liked-song downloads wait while the song playing is loading, so they never make it stutter.
+        downloads.shouldYield = { exo.isLoading }
         // Seek bar / timer: read the position a few times a second while playing.
         scope.launch {
             while (isActive) {
@@ -608,11 +622,23 @@ class PlayerController private constructor(context: Context) {
         tapAt = SystemClock.elapsedRealtime()
 
         loadJob = scope.launch {
+            // Saved on the device (liked): play the file. Instant, and works offline.
+            downloads.audioFile(track.videoId)?.let { file ->
+                linkMs = 0L
+                exo.setMediaSource(
+                    localSources.createMediaSource(mediaItem(track, Uri.fromFile(file).toString(), cacheKey = null)),
+                    resumeAtMs,
+                )
+                exo.prepare()
+                exo.play()
+                preloadNext()
+                return@launch
+            }
             try {
                 val url = AudioStreams.urlFor(track.videoId)
                 linkMs = SystemClock.elapsedRealtime() - tapAt
                 if (current?.videoId != track.videoId) return@launch // moved on meanwhile
-                exo.setMediaItem(mediaItem(track, url), resumeAtMs)
+                exo.setMediaItem(mediaItem(track, url, cacheKey(track.videoId, url)), resumeAtMs)
                 exo.prepare()
                 exo.play()
                 preloadNext()
@@ -669,6 +695,7 @@ class PlayerController private constructor(context: Context) {
      * costs nothing; failures just mean no head start.
      */
     private suspend fun cacheStart(track: Track, bytes: (url: String) -> Long) {
+        if (downloads.isDownloaded(track.videoId)) return // saved on the device: nothing to fetch
         waitForPlayingSong()
         val url = runCatching { AudioStreams.urlFor(track.videoId) }.getOrNull() ?: return
         while (true) {
@@ -705,17 +732,23 @@ class PlayerController private constructor(context: Context) {
         }
     }
 
-    /** The song for ExoPlayer, with its title / artist / artwork for the car's media display. */
-    private fun mediaItem(track: Track, url: String): MediaItem =
+    /**
+     * The song for ExoPlayer, with its title / artist / artwork for the car's media display.
+     * [cacheKey]: streamed songs go through the disk cache under it; saved ones (null) don't.
+     */
+    private fun mediaItem(track: Track, url: String, cacheKey: String?): MediaItem =
         MediaItem.Builder()
             .setMediaId(track.videoId)
             .setUri(url)
-            .setCustomCacheKey(cacheKey(track.videoId, url))
+            .apply { if (cacheKey != null) setCustomCacheKey(cacheKey) }
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(track.title)
                     .setArtist(track.artist)
-                    .setArtworkUri(Uri.parse(track.artworkUrl))
+                    // Saved artwork if the song is downloaded, so the car's display has it offline too.
+                    .setArtworkUri(
+                        downloads.localImage(track.artworkUrl)?.let { Uri.fromFile(it) } ?: Uri.parse(track.artworkUrl)
+                    )
                     .setAlbumTitle(queueName)
                     .build(),
             )
@@ -747,6 +780,17 @@ class PlayerController private constructor(context: Context) {
         "$videoId:" + (ITAG.find(url)?.groupValues?.get(1) ?: "audio")
 
     private fun fail(e: PlayerError) {
+        // No internet: carry on with the next song that's saved on the device, if there is one.
+        if (e == PlayerError.Offline) nextDownloaded()?.let { j ->
+            error = PlayerError.OfflineSkipping
+            isPlaying = false
+            isBuffering = false
+            skipJob = scope.launch {
+                delay(2500)
+                playAt(j)
+            }
+            return
+        }
         error = e
         isPlaying = false
         isBuffering = false
@@ -757,6 +801,21 @@ class PlayerController private constructor(context: Context) {
                 next()
             }
         }
+    }
+
+    /** The next song in the queue (looping round in a library) that's saved on the device. */
+    private fun nextDownloaded(): Int? {
+        if (queue.isEmpty() || index < 0) return null
+        for (k in 1 until queue.size) {
+            val j = index + k
+            val at = when {
+                j < queue.size -> j
+                wrapQueue -> j % queue.size
+                else -> return null
+            }
+            if (downloads.isDownloaded(queue[at].videoId)) return at
+        }
+        return null
     }
 
     private inner class Listener : Player.Listener {
@@ -786,6 +845,14 @@ class PlayerController private constructor(context: Context) {
 
         override fun onPlayerError(e: PlaybackException) {
             val track = current ?: return
+            if (downloads.isDownloaded(track.videoId) && retriedVideoId != track.videoId) {
+                // The saved copy won't play (damaged): stream it instead, and save it again.
+                retriedVideoId = track.videoId
+                val at = exo.currentPosition
+                downloads.redownload(track)
+                playAt(index, resumeAtMs = at)
+                return
+            }
             if (retriedVideoId != track.videoId) {
                 // Most often an expired link: fetch a fresh one and carry on from here.
                 retriedVideoId = track.videoId
@@ -836,6 +903,8 @@ enum class PlayerError(val message: String, val skippable: Boolean) {
     Unavailable("This song isn't available", skippable = true),
     AgeRestricted("This song is age-restricted on YouTube", skippable = true),
     Offline("No internet connection", skippable = false),
+    /** No internet, but a liked (saved) song is coming up: the player skips to it. */
+    OfflineSkipping("No internet: playing your downloaded songs", skippable = true),
     RateLimited("YouTube is limiting requests; try again shortly", skippable = false),
     ExtractorOutdated("YouTube changed something; the app needs an update", skippable = false),
     Other("Couldn't play this song", skippable = true);
