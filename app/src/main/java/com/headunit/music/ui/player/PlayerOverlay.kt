@@ -609,8 +609,8 @@ private fun Dock(player: PlayerController, width: Float, modifier: Modifier) {
             // every Android version), heavily blurred on 12+, brightened, ~95% opaque.
             val context = LocalContext.current
             val artRequest = remember(track.thumbnailUrl) {
-                // Tinier still (12x7) and blurred harder than Now Playing: just a wash of colour.
-                ImageRequest.Builder(context).data(track.thumbnailUrl).size(12, 7).build()
+                // Tinier still (8x5) and blurred harder than Now Playing: just a wash of colour.
+                ImageRequest.Builder(context).data(track.thumbnailUrl).size(8, 5).build()
             }
             AsyncImage(
                 model = artRequest,
@@ -623,8 +623,8 @@ private fun Dock(player: PlayerController, width: Float, modifier: Modifier) {
                     .graphicsLayer {
                         alpha = 0.95f
                         // Zoom hides the soft edges the blur leaves.
-                        scaleX = 1.4f; scaleY = 1.4f
-                        if (Build.VERSION.SDK_INT >= 31) renderEffect = BlurEffect(170f, 170f, TileMode.Clamp)
+                        scaleX = 1.6f; scaleY = 1.6f
+                        if (Build.VERSION.SDK_INT >= 31) renderEffect = BlurEffect(240f, 240f, TileMode.Clamp)
                     },
             )
             Box(
